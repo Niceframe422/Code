@@ -1,50 +1,31 @@
 local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 local screenGui = Instance.new("ScreenGui", playerGui)
 
-
+-- Main GUI frame
 local guiFrame = Instance.new("Frame")
-guiFrame.Size = UDim2.new(0, 300, 0, 200)
-guiFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
-guiFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-guiFrame.BorderSizePixel = 2
+guiFrame.Size = UDim2.new(0, 400, 0, 350)
+guiFrame.Position = UDim2.new(0.5, -200, 0.5, -175)
+guiFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+guiFrame.BorderSizePixel = 4
+guiFrame.BorderColor3 = Color3.fromRGB(0, 255, 255)
 guiFrame.Parent = screenGui
 
-
+-- Minimize button
 local minimizeButton = Instance.new("TextButton")
 minimizeButton.Size = UDim2.new(0, 30, 0, 30)
 minimizeButton.Position = UDim2.new(1, -35, 0, 5)
 minimizeButton.Text = "-"
+minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 minimizeButton.Parent = guiFrame
 
-
-local slider = Instance.new("Frame")
-slider.Size = UDim2.new(0, 200, 0, 20)
-slider.Position = UDim2.new(0, 50, 0, 50)
-slider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-slider.Parent = guiFrame
-
-
-local dragHandle = Instance.new("TextButton")
-dragHandle.Size = UDim2.new(0, 30, 0, 30)
-dragHandle.Position = UDim2.new(0, 5, 0, 5)
-dragHandle.Text = "O"
-dragHandle.Parent = screenGui
-dragHandle.Visible = true
-
-
-local buttonContainer = Instance.new("Frame")
-buttonContainer.Size = UDim2.new(0, 300, 0, 150)
-buttonContainer.Position = UDim2.new(0, 0, 0, 50)
-buttonContainer.BackgroundTransparency = 1
-buttonContainer.Parent = guiFrame
-
-
-local function createButton(parent, buttonText, callback)
+-- Function to create buttons
+local function createButton(parent, buttonText, callback, size, bgColor, textColor)
     local button = Instance.new("TextButton")
-    button.Size = UDim2.new(1, -20, 0, 30)
+    button.Size = size or UDim2.new(1, -20, 0, 30)
     button.Text = buttonText
-    button.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.BackgroundColor3 = bgColor or Color3.fromRGB(80, 80, 80)
+    button.TextColor3 = textColor or Color3.fromRGB(255, 255, 255)
     button.BorderSizePixel = 2
     button.Parent = parent
 
@@ -61,39 +42,51 @@ local function createButton(parent, buttonText, callback)
     return button
 end
 
+-- Chapter frames and buttons
+local chaptersFrame = Instance.new("Frame")
+chaptersFrame.Size = UDim2.new(1, 0, 1, -50)
+chaptersFrame.Position = UDim2.new(0, 0, 0, 50)
+chaptersFrame.BackgroundTransparency = 1
+chaptersFrame.Parent = guiFrame
 
-local autoClickRunning = false
-local function autoClickAction()
-    autoClickRunning = not autoClickRunning
-    if autoClickRunning then
-        print("Auto Click started!")
-        spawn(function()
-            while autoClickRunning do
-                local args = {
-                    [1] = 0,
-                    [2] = {
-                        ["__args"] = {},
-                        ["__tree"] = {
-                            [1] = "QuickTimeService",
-                            [2] = "Clicked"
-                        },
-                        ["__callType"] = 0
-                    }
-                }
-                game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Packet"):WaitForChild("PacketFunction"):InvokeServer(unpack(args))
-                wait(1) -- Adjust interval as needed
-            end
-        end)
-    else
-        print("Auto Click stopped!")
-    end
-end
+-- Chapter 1 Frame
+local chapter1Frame = Instance.new("Frame")
+chapter1Frame.Size = UDim2.new(1, -20, 0, 200)
+chapter1Frame.Position = UDim2.new(0, 10, 0, 10)
+chapter1Frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+chapter1Frame.BorderSizePixel = 2
+chapter1Frame.Parent = chaptersFrame
 
+local chapter1Button = createButton(chapter1Frame, "Chapter 1", nil, UDim2.new(1, -20, 0, 40), Color3.fromRGB(100, 100, 255), Color3.fromRGB(255, 255, 255))
 
-local buttons = {
+local chapter1ButtonContainer = Instance.new("Frame")
+chapter1ButtonContainer.Size = UDim2.new(1, -20, 0, 140)
+chapter1ButtonContainer.Position = UDim2.new(0, 10, 0, 50)
+chapter1ButtonContainer.BackgroundTransparency = 1
+chapter1ButtonContainer.Parent = chapter1Frame
+
+local chapter1Buttons = {
     {
         text = "Auto Click",
-        action = autoClickAction
+        action = function()
+            local run = true
+            local args = {
+                [1] = 0,
+                [2] = {
+                    ["__args"] = {},
+                    ["__tree"] = {
+                        [1] = "QuickTimeService",
+                        [2] = "Clicked"
+                    },
+                    ["__callType"] = 0
+                }
+            }
+            spawn(function()
+                while run do
+                    game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Packet"):WaitForChild("PacketFunction"):InvokeServer(unpack(args))
+                end
+            end)
+        end
     },
     {
         text = "Test Button",
@@ -109,18 +102,49 @@ local buttons = {
     }
 }
 
-
-for _, buttonData in ipairs(buttons) do
-    createButton(buttonContainer, buttonData.text, buttonData.action)
+for _, buttonData in ipairs(chapter1Buttons) do
+    createButton(chapter1ButtonContainer, buttonData.text, buttonData.action)
 end
 
+-- Chapter 2 Frame (Example, you can add more frames similarly)
+local chapter2Frame = Instance.new("Frame")
+chapter2Frame.Size = UDim2.new(1, -20, 0, 200)
+chapter2Frame.Position = UDim2.new(0, 10, 0, 220)
+chapter2Frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+chapter2Frame.BorderSizePixel = 2
+chapter2Frame.Parent = chaptersFrame
 
+local chapter2Button = createButton(chapter2Frame, "Chapter 2", nil, UDim2.new(1, -20, 0, 40), Color3.fromRGB(255, 100, 100), Color3.fromRGB(255, 255, 255))
+
+local chapter2ButtonContainer = Instance.new("Frame")
+chapter2ButtonContainer.Size = UDim2.new(1, -20, 0, 140)
+chapter2ButtonContainer.Position = UDim2.new(0, 10, 0, 50)
+chapter2ButtonContainer.BackgroundTransparency = 1
+chapter2ButtonContainer.Parent = chapter2Frame
+
+local chapter2Buttons = {
+    { text = "Start Adventure", action = function() print("Adventure started!") end },
+    { text = "Settings", action = function() print("Settings clicked!") end },
+}
+
+for _, buttonData in ipairs(chapter2Buttons) do
+    createButton(chapter2ButtonContainer, buttonData.text, buttonData.action)
+end
+
+-- Minimize button functionality
 minimizeButton.MouseButton1Click:Connect(function()
     guiFrame.Visible = not guiFrame.Visible
 end)
 
-
+-- Dragging functionality
 local dragging, dragStart, startPos
+local dragHandle = Instance.new("TextButton")
+dragHandle.Size = UDim2.new(0, 30, 0, 30)
+dragHandle.Position = UDim2.new(0, 5, 0, 5)
+dragHandle.Text = "O"
+dragHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+dragHandle.TextColor3 = Color3.fromRGB(0, 0, 0)
+dragHandle.Parent = guiFrame
 
 dragHandle.MouseButton1Down:Connect(function(input)
     dragging = true
