@@ -228,12 +228,13 @@ if not getgenv().Network then
     EnablePartControl()
 end
 
-local radius = 50
+local radius = 10
 local Max = 100
-local Min = 8
+local Min = 10
+local amount = 5
 local height = 100
-local rotationSpeed = 5
-local attractionStrength = 1000
+local rotationSpeed = 15
+local attractionStrength = 1100
 local ringPartsEnabled = false
 
 local function RetainPart(Part)
@@ -305,13 +306,13 @@ ToggleButton.MouseButton1Click:Connect(function()
 end)
 
 DecreaseRadius.MouseButton1Click:Connect(function()
-    radius = math.max(Min, radius - 5)
+    radius = math.max(Min, radius - amount)
     RadiusDisplay.Text = "Radius: " .. radius
     playSound("12221967")
 end)
 
 IncreaseRadius.MouseButton1Click:Connect(function()
-    radius = math.min(Max, radius + 5)
+    radius = math.min(Max, radius + amount)
     RadiusDisplay.Text = "Radius: " .. radius
     playSound("12221967")
 end)
