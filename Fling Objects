@@ -117,7 +117,7 @@ RadiusCorner.Parent = RadiusDisplay
 local Watermark = Instance.new("TextLabel")
 Watermark.Size = UDim2.new(1, 0, 0, 20)
 Watermark.Position = UDim2.new(0, 0, 1, -20)
-Watermark.Text = "Super Ring [V3] - Cracked By Projeto LKB"
+Watermark.Text = "Super Ring [V3]"
 Watermark.TextColor3 = Color3.fromRGB(101, 67, 33) -- Dark brown
 Watermark.BackgroundTransparency = 1
 Watermark.Font = Enum.Font.Fondamento
@@ -228,13 +228,13 @@ if not getgenv().Network then
     EnablePartControl()
 end
 
-local radius = 10
+local radius = 50
 local Max = 100
 local Min = 10
 local amount = 5
 local height = 100
-local rotationSpeed = 15
-local attractionStrength = 1100
+local rotationSpeed = 10
+local attractionStrength = 1050
 local ringPartsEnabled = false
 
 local function RetainPart(Part)
@@ -321,7 +321,7 @@ end)
 StarterGui:SetCore("SendNotification", {
     Title = "Join me Discord !",
     Text = "For More Op Scripts !",
-    Duration = 5
+    Duration = 1
 })
 
 -- Get player thumbnail
@@ -348,4 +348,4 @@ local function SendChatMessage(message)
 end
 
 -- Send the chat message
-SendChatMessage("")
+
