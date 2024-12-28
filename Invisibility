@@ -1,0 +1,88 @@
+local invis_on = false
+local player = game.Players.LocalPlayer
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+local frame = Instance.new("Frame", screenGui)
+local toggleButton = Instance.new("TextButton", frame)
+local closeButton = Instance.new("TextButton", frame)
+local signatureLabel = Instance.new("TextLabel", frame)
+
+frame.Size = UDim2.new(0, 220, 0, 120)
+frame.Position = UDim2.new(0.5, -110, 0.5, -60)
+frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+frame.Active = true
+frame.Draggable = true
+
+toggleButton.Size = UDim2.new(0, 200, 0, 50)
+toggleButton.Position = UDim2.new(0, 10, 0, 30)
+toggleButton.Text = "Toggle Invisibility"
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.SourceSans
+toggleButton.TextSize = 24
+
+closeButton.Size = UDim2.new(0, 20, 0, 20)
+closeButton.Position = UDim2.new(1, -30, 0, 5)
+closeButton.Text = "X"
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Font = Enum.Font.SourceSans
+closeButton.TextSize = 18
+
+signatureLabel.Size = UDim2.new(0, 200, 0, 20)
+signatureLabel.Position = UDim2.new(0, 10, 1, -25)
+signatureLabel.Text = "By Me"
+signatureLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+signatureLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+signatureLabel.Font = Enum.Font.SourceSans
+signatureLabel.TextSize = 14
+
+local sound = Instance.new("Sound", player:WaitForChild("PlayerGui"))
+sound.SoundId = "rbxassetid://942127495"
+sound.Volume = 1
+
+local function setTransparency(character, transparency)
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("Decal") then
+            part.Transparency = transparency
+        end
+    end
+end
+
+local function toggleInvisibility()
+    invis_on = not invis_on
+    sound:Play()
+    if invis_on then
+        local savedpos = player.Character.HumanoidRootPart.CFrame
+        wait()
+        player.Character:MoveTo(Vector3.new(-25.95, 84, 3537.55))
+        wait(.15)
+        local Seat = Instance.new('Seat', workspace)
+        Seat.Anchored = false
+        Seat.CanCollide = false
+        Seat.Name = 'invischair'
+        Seat.Transparency = 1
+        Seat.Position = Vector3.new(-25.95, 84, 35370.55)
+        local Weld = Instance.new("Weld", Seat)
+        Weld.Part0 = Seat
+        Weld.Part1 = player.Character:FindFirstChild("Torso") or player.Character.UpperTorso
+        wait()
+        Seat.CFrame = savedpos
+        setTransparency(player.Character, 0.5)
+        game.StarterGui:SetCore("SendNotification", { Title = "Invis On"; Duration = 1; Text = "" })
+    else
+        local invisChair = workspace:FindFirstChild('invischair')
+        if invisChair then
+            invisChair:Destroy()
+        end
+        setTransparency(player.Character, 0)
+        game.StarterGui:SetCore("SendNotification", { Title = "Invis Off"; Duration = 1; Text = "" })
+    end
+end
+
+toggleButton.MouseButton1Click:Connect(toggleInvisibility)
+
+local function closeMenu()
+    frame.Visible = false
+end
+
+closeButton.MouseButton1Click:Connect(closeMenu)
