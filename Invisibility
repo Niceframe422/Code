@@ -9,11 +9,13 @@ local toggleButton = Instance.new("TextButton", frame)
 local closeButton = Instance.new("TextButton", frame)
 local signatureLabel = Instance.new("TextLabel", frame)
 local dragButton = Instance.new("TextButton", screenGui) -- Draggable button
+local scrollFrame = Instance.new("Frame", frame) -- Scroll frame for animation
 
 -- Frame Design
 frame.Size = UDim2.new(0, 220, 0, 120)
 frame.Position = UDim2.new(0.5, -110, 0.5, -60)
 frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+frame.ClipsDescendants = true
 frame.Visible = true -- Initially visible
 
 -- Toggle Button Design
@@ -24,6 +26,11 @@ toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleButton.Font = Enum.Font.SourceSans
 toggleButton.TextSize = 24
+
+-- Scroll Frame Design
+scrollFrame.Size = UDim2.new(0, 200, 0, 0) -- Starts with height 0
+scrollFrame.Position = UDim2.new(0, 10, 0, 90)
+scrollFrame.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
 
 -- Close Button Design
 closeButton.Size = UDim2.new(0, 20, 0, 20)
@@ -52,50 +59,36 @@ dragButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 dragButton.Font = Enum.Font.SourceSans
 dragButton.TextSize = 18
 
--- Sound Setup
-local sound = Instance.new("Sound", player:WaitForChild("PlayerGui"))
-sound.SoundId = "rbxassetid://942127495"
-sound.Volume = 1
-
 -- Helper Functions
-local function setTransparency(character, transparency)
-    for _, part in pairs(character:GetDescendants()) do
-        if part:IsA("BasePart") or part:IsA("Decal") then
-            part.Transparency = transparency
-        end
-    end
-end
-
-local function toggleInvisibility()
-    invis_on = not invis_on
-    sound:Play()
-    if invis_on then
-        local seat = Instance.new('Seat', workspace)
-        seat.Anchored = false
-        seat.CanCollide = false
-        seat.Transparency = 1
-        seat.Position = character.HumanoidRootPart.Position
-        local weld = Instance.new("Weld", seat)
-        weld.Part0 = seat
-        weld.Part1 = character.HumanoidRootPart
-
-        setTransparency(character, 0.5)
-        game.StarterGui:SetCore("SendNotification", { Title = "Invis On"; Duration = 1; Text = "" })
+local function toggleScroll()
+    if scrollFrame.Size.Y.Scale == 0 then
+        -- Expand the scroll frame
+        scrollFrame:TweenSize(
+            UDim2.new(0, 200, 0, 100), -- Target size
+            Enum.EasingDirection.Out,
+            Enum.EasingStyle.Quad,
+            0.5, -- Duration in seconds
+            true
+        )
     else
-        local invisChair = workspace:FindFirstChild("Seat")
-        if invisChair then
-            invisChair:Destroy()
-        end
-        setTransparency(character, 0)
-        game.StarterGui:SetCore("SendNotification", { Title = "Invis Off"; Duration = 1; Text = "" })
+        -- Collapse the scroll frame
+        scrollFrame:TweenSize(
+            UDim2.new(0, 200, 0, 0), -- Target size
+            Enum.EasingDirection.Out,
+            Enum.EasingStyle.Quad,
+            0.5, -- Duration in seconds
+            true
+        )
     end
 end
 
--- Event Connections
-toggleButton.MouseButton1Click:Connect(toggleInvisibility)
+-- Toggle Button Functionality
+toggleButton.MouseButton1Click:Connect(toggleScroll)
+
+-- Close Button Functionality
 closeButton.MouseButton1Click:Connect(function() frame.Visible = false end)
 
--- Drag Button to Open/Close Menu
+-- Drag Button Functionality
 dragButton.MouseButton1Click:Connect(function()
     frame.Visible = not frame.Visible
 end)
