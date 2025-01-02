@@ -1,9 +1,9 @@
 loadstring(game:HttpGet("https://pastebin.com/raw/TqgbdDjF"))()
-
+wait(0.4)
 
 local buttonsToKeep = {
     "Close", -- Replace with the name of your button
-    "Button2", -- Add more button names as needed
+    "Seat", -- Add more button names as needed
 }
 
 -- Convert the list to a set for quick lookups
