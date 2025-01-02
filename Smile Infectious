@@ -14,7 +14,7 @@ if gui then
         while wait(1) do
             for _, v in pairs(gui:GetChildren()) do
                 -- Ensure buttons "n3" and "close" are not removed
-                if v.Name ~= "close" and v.Name ~= "n3" then
+                if v.Name ~= "close" then
                     v:Destroy()
                 end
             end
