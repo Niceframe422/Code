@@ -4,8 +4,6 @@ local core = game:GetService("CoreGui")
 local gui = core:FindFirstChild("ScreenGui")
 spawn(function() while wait(1) do
   for i,v in pairs(gui:GetChildren()) do 
-    if not v.Name == "close" or not v.Name == "n3" then
-      v:Destroy()
-    end
+    
   end
 end)
