@@ -1,34 +1,9 @@
 loadstring(game:HttpGet("https://pastebin.com/raw/TqgbdDjF"))()
 wait(0.4)
-
-local buttonsToKeep = {
-    "Close", -- Replace with the name of your button
-    "Seat", -- Add more button names as needed
-}
-
--- Convert the list to a set for quick lookups
-local buttonSet = {}
-for _, buttonName in ipairs(buttonsToKeep) do
-    buttonSet[buttonName] = true
+local core = game:GetService("CoreGui")
+local gui = core:FindFirstChild("screengui")
+for i,v in pairs(gui:GetChildren()) do 
+ if not v.Name == "Close" or not v.Name == "seat" then
+   v:Destroy()
+ end
 end
-
--- Function to clean up ScreenGui objects in CoreGui
-local function cleanCoreGui()
-    local CoreGui = game:GetService("CoreGui")
-
-    -- Iterate through all children of CoreGui
-    for _, child in ipairs(CoreGui:GetChildren()) do
-        if child:IsA("ScreenGui") then
-            -- Iterate through all children of the ScreenGui
-            for _, guiChild in ipairs(child:GetChildren()) do
-                -- Remove the child if it's not a button in the set
-                if not buttonSet[guiChild.Name] or not guiChild:IsA("GuiButton") then
-                    guiChild:Destroy()
-                end
-            end
-        end
-    end
-end
-
--- Run the cleanup function
-cleanCoreGui()
