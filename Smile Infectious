@@ -1,9 +1,9 @@
 loadstring(game:HttpGet("https://pastebin.com/raw/TqgbdDjF"))()
 wait(0.4)
 local core = game:GetService("CoreGui")
-local gui = core:FindFirstChild("screengui")
+local gui = core:FindFirstChild("ScreenGui")
 for i,v in pairs(gui:GetChildren()) do 
- if not v.Name == "Close" or not v.Name == "seat" then
+ if not v.Name == "close" or not v.Name == "n3" then
    v:Destroy()
  end
 end
