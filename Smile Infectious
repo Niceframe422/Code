@@ -1,7 +1,6 @@
 loadstring(game:HttpGet("https://pastebin.com/raw/TqgbdDjF"))()
-
+wait(1)
 local core = game:GetService("CoreGui")
-local done = false
 local gui = core:FindFirstChild("ScreenGui")
 spawn(function() while wait(1) do
   for i,v in pairs(gui:GetChildren()) do 
