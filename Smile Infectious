@@ -1,5 +1,5 @@
 loadstring(game:HttpGet("https://pastebin.com/raw/TqgbdDjF"))()
-wait(0.4)
+Task.wait(1.5)
 local core = game:GetService("CoreGui")
 local gui = core:FindFirstChild("ScreenGui")
 for i,v in pairs(gui:GetChildren()) do 
