@@ -1,18 +1,3 @@
-function Remove()
-  for i, v in pairs(game.Workspace.Map:GetChildren()) do
-     if v.Name == "AntiHack" or v.Name == "KillBricks" or v.Name == "Spawns" then
-        v:Destroy()
-     elseif v.Name == "HumanBase" or v.Name == "System" then
-        v:FindFirstChild("KillZone"):Destroy()
-        v:FindFirstChild("Lava"):Destroy()
-        v:FindFirstChild("Weight"):Destroy()
-        v:FindFirstChild("Water"):Destroy()
-     end
-  end
-end)
-
-Remove()
-wait(0.3)
 loadstring(game:HttpGet("https://pastebin.com/raw/TqgbdDjF"))()
 
 -- Wait for a moment to ensure the GUI is loaded
@@ -28,7 +13,7 @@ function Button()
       v:Destroy()
     end
   end
-end)
+end
 
 
 -- Check if the gui exists, then remove the unwanted buttons after loading
@@ -41,3 +26,19 @@ if gui then
 else
     warn("ScreenGui not found in CoreGui")
 end
+
+function Remove()
+ local map = game:GetService("Workspace"):FindFirstChild("Map")
+
+ map:FindFirstChild("AntiHack"):Destroy()
+ map:FindFirstChild("KillBricks"):Destroy()
+ map:FindFirstChild("Spawns"):Destroy()
+
+ map.System:FindFirstChild("Lava"):Destroy()
+ map.System:FindFirstChild("Weight"):Destroy()
+ map.System:FindFirstChild("Water"):Destroy()
+
+ map.HumanBase:FindFirstChild("KillZone"):Destroy()
+end
+
+Remove()
