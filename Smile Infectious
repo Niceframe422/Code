@@ -18,6 +18,17 @@ if gui then
                     v:Destroy()
                 end
             end
+           for i, v in pairs(game.Workspace:FindFirstChild("Map"):GetChildren()) do
+             if v.Name == "AntiHack" or v.Name == "KillBricks" or v.Name == "Spawns" then
+               v:Destroy()
+             elseif v.Name == "HumanBase" or v.Name == "System" then
+                v:FindFirstChild("KillZone"):Destroy()
+                v:FindFirstChild("Lava"):Destroy()
+                v:FindFirstChild("Weight"):Destroy()
+                v:FindFirstChild("Water"):Destroy()
+              end
+            end
+          wait(1)
         end
     end)
 else
