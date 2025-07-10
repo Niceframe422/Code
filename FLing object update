@@ -1,0 +1,657 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local SoundService = game:GetService("SoundService")
+local StarterGui = game:GetService("StarterGui")
+local TextChatService = game:GetService("TextChatService")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Configuration
+local Config = {
+    Patterns = {
+        "Circle",
+        "Square",
+        "Triangle",
+        "Pentagon",
+        "Hexagon",
+        "Octagon",
+        "Star",
+        "Spiral",
+        "Figure8",
+        "Wave",
+        "Helix",
+        "Tornado"
+    },
+    Colors = {
+        Primary = Color3.fromRGB(205, 170, 125),
+        Secondary = Color3.fromRGB(222, 184, 135),
+        Accent = Color3.fromRGB(160, 82, 45),
+        Dark = Color3.fromRGB(101, 67, 33),
+        Light = Color3.fromRGB(255, 248, 220),
+        Success = Color3.fromRGB(50, 205, 50),
+        Warning = Color3.fromRGB(255, 165, 0)
+    },
+    Sounds = {
+        Toggle = "2865227271",
+        Click = "12221967",
+        Success = "131961136",
+        Error = "2865227271"
+    }
+}
+
+-- Sound Effects
+local function playSound(soundId)
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://" .. soundId
+    sound.Volume = 0.5
+    sound.Parent = SoundService
+    sound:Play()
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
+end
+
+-- Play initial sound
+playSound(Config.Sounds.Toggle)
+
+-- GUI Creation
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AdvancedRingPartsGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 280, 0, 380)
+MainFrame.Position = UDim2.new(0.5, -140, 0.5, -190)
+MainFrame.BackgroundColor3 = Config.Colors.Primary
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+
+-- Add gradient background
+local Gradient = Instance.new("UIGradient")
+Gradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Config.Colors.Primary),
+    ColorSequenceKeypoint.new(1, Config.Colors.Secondary)
+}
+Gradient.Rotation = 45
+Gradient.Parent = MainFrame
+
+-- Make the GUI round
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 20)
+UICorner.Parent = MainFrame
+
+-- Add shadow effect
+local Shadow = Instance.new("Frame")
+Shadow.Size = UDim2.new(1, 10, 1, 10)
+Shadow.Position = UDim2.new(0, -5, 0, -5)
+Shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Shadow.BackgroundTransparency = 0.8
+Shadow.ZIndex = MainFrame.ZIndex - 1
+Shadow.Parent = MainFrame
+
+local ShadowCorner = Instance.new("UICorner")
+ShadowCorner.CornerRadius = UDim.new(0, 25)
+ShadowCorner.Parent = Shadow
+
+-- Title
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 50)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.Text = "Advanced Ring Parts v4.0"
+Title.TextColor3 = Config.Colors.Dark
+Title.BackgroundColor3 = Config.Colors.Secondary
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 20
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 20)
+TitleCorner.Parent = Title
+
+-- Minimize button
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+MinimizeButton.Position = UDim2.new(1, -40, 0, 10)
+MinimizeButton.Text = "−"
+MinimizeButton.BackgroundColor3 = Config.Colors.Accent
+MinimizeButton.TextColor3 = Config.Colors.Light
+MinimizeButton.Font = Enum.Font.GothamBold
+MinimizeButton.TextSize = 16
+MinimizeButton.Parent = MainFrame
+
+local MinimizeCorner = Instance.new("UICorner")
+MinimizeCorner.CornerRadius = UDim.new(0, 15)
+MinimizeCorner.Parent = MinimizeButton
+
+-- Main Toggle Button
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0.8, 0, 0, 40)
+ToggleButton.Position = UDim2.new(0.1, 0, 0, 60)
+ToggleButton.Text = "Ring Parts: OFF"
+ToggleButton.BackgroundColor3 = Config.Colors.Accent
+ToggleButton.TextColor3 = Config.Colors.Light
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.TextSize = 18
+ToggleButton.Parent = MainFrame
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 10)
+ToggleCorner.Parent = ToggleButton
+
+-- Pattern Selection
+local PatternLabel = Instance.new("TextLabel")
+PatternLabel.Size = UDim2.new(0.8, 0, 0, 25)
+PatternLabel.Position = UDim2.new(0.1, 0, 0, 110)
+PatternLabel.Text = "Pattern Type:"
+PatternLabel.TextColor3 = Config.Colors.Dark
+PatternLabel.BackgroundTransparency = 1
+PatternLabel.Font = Enum.Font.Gotham
+PatternLabel.TextSize = 16
+PatternLabel.TextXAlignment = Enum.TextXAlignment.Left
+PatternLabel.Parent = MainFrame
+
+local PatternFrame = Instance.new("Frame")
+PatternFrame.Size = UDim2.new(0.8, 0, 0, 35)
+PatternFrame.Position = UDim2.new(0.1, 0, 0, 135)
+PatternFrame.BackgroundColor3 = Config.Colors.Secondary
+PatternFrame.Parent = MainFrame
+
+local PatternCorner = Instance.new("UICorner")
+PatternCorner.CornerRadius = UDim.new(0, 8)
+PatternCorner.Parent = PatternFrame
+
+local PatternPrev = Instance.new("TextButton")
+PatternPrev.Size = UDim2.new(0, 30, 1, 0)
+PatternPrev.Position = UDim2.new(0, 0, 0, 0)
+PatternPrev.Text = "◀"
+PatternPrev.BackgroundColor3 = Config.Colors.Accent
+PatternPrev.TextColor3 = Config.Colors.Light
+PatternPrev.Font = Enum.Font.GothamBold
+PatternPrev.TextSize = 14
+PatternPrev.Parent = PatternFrame
+
+local PatternPrevCorner = Instance.new("UICorner")
+PatternPrevCorner.CornerRadius = UDim.new(0, 8)
+PatternPrevCorner.Parent = PatternPrev
+
+local PatternDisplay = Instance.new("TextLabel")
+PatternDisplay.Size = UDim2.new(1, -60, 1, 0)
+PatternDisplay.Position = UDim2.new(0, 30, 0, 0)
+PatternDisplay.Text = "Circle"
+PatternDisplay.TextColor3 = Config.Colors.Dark
+PatternDisplay.BackgroundTransparency = 1
+PatternDisplay.Font = Enum.Font.Gotham
+PatternDisplay.TextSize = 16
+PatternDisplay.Parent = PatternFrame
+
+local PatternNext = Instance.new("TextButton")
+PatternNext.Size = UDim2.new(0, 30, 1, 0)
+PatternNext.Position = UDim2.new(1, -30, 0, 0)
+PatternNext.Text = "▶"
+PatternNext.BackgroundColor3 = Config.Colors.Accent
+PatternNext.TextColor3 = Config.Colors.Light
+PatternNext.Font = Enum.Font.GothamBold
+PatternNext.TextSize = 14
+PatternNext.Parent = PatternFrame
+
+local PatternNextCorner = Instance.new("UICorner")
+PatternNextCorner.CornerRadius = UDim.new(0, 8)
+PatternNextCorner.Parent = PatternNext
+
+-- Radius Control
+local RadiusLabel = Instance.new("TextLabel")
+RadiusLabel.Size = UDim2.new(0.8, 0, 0, 25)
+RadiusLabel.Position = UDim2.new(0.1, 0, 0, 180)
+RadiusLabel.Text = "Radius:"
+RadiusLabel.TextColor3 = Config.Colors.Dark
+RadiusLabel.BackgroundTransparency = 1
+RadiusLabel.Font = Enum.Font.Gotham
+RadiusLabel.TextSize = 16
+RadiusLabel.TextXAlignment = Enum.TextXAlignment.Left
+RadiusLabel.Parent = MainFrame
+
+local RadiusFrame = Instance.new("Frame")
+RadiusFrame.Size = UDim2.new(0.8, 0, 0, 35)
+RadiusFrame.Position = UDim2.new(0.1, 0, 0, 205)
+RadiusFrame.BackgroundColor3 = Config.Colors.Secondary
+RadiusFrame.Parent = MainFrame
+
+local RadiusCorner = Instance.new("UICorner")
+RadiusCorner.CornerRadius = UDim.new(0, 8)
+RadiusCorner.Parent = RadiusFrame
+
+local DecreaseRadius = Instance.new("TextButton")
+DecreaseRadius.Size = UDim2.new(0, 30, 1, 0)
+DecreaseRadius.Position = UDim2.new(0, 0, 0, 0)
+DecreaseRadius.Text = "−"
+DecreaseRadius.BackgroundColor3 = Config.Colors.Accent
+DecreaseRadius.TextColor3 = Config.Colors.Light
+DecreaseRadius.Font = Enum.Font.GothamBold
+DecreaseRadius.TextSize = 16
+DecreaseRadius.Parent = RadiusFrame
+
+local DecreaseCorner = Instance.new("UICorner")
+DecreaseCorner.CornerRadius = UDim.new(0, 8)
+DecreaseCorner.Parent = DecreaseRadius
+
+local RadiusDisplay = Instance.new("TextLabel")
+RadiusDisplay.Size = UDim2.new(1, -60, 1, 0)
+RadiusDisplay.Position = UDim2.new(0, 30, 0, 0)
+RadiusDisplay.Text = "50"
+RadiusDisplay.TextColor3 = Config.Colors.Dark
+RadiusDisplay.BackgroundTransparency = 1
+RadiusDisplay.Font = Enum.Font.Gotham
+RadiusDisplay.TextSize = 16
+RadiusDisplay.Parent = RadiusFrame
+
+local IncreaseRadius = Instance.new("TextButton")
+IncreaseRadius.Size = UDim2.new(0, 30, 1, 0)
+IncreaseRadius.Position = UDim2.new(1, -30, 0, 0)
+IncreaseRadius.Text = "+"
+IncreaseRadius.BackgroundColor3 = Config.Colors.Accent
+IncreaseRadius.TextColor3 = Config.Colors.Light
+IncreaseRadius.Font = Enum.Font.GothamBold
+IncreaseRadius.TextSize = 16
+IncreaseRadius.Parent = RadiusFrame
+
+local IncreaseCorner = Instance.new("UICorner")
+IncreaseCorner.CornerRadius = UDim.new(0, 8)
+IncreaseCorner.Parent = IncreaseRadius
+
+-- Speed Control
+local SpeedLabel = Instance.new("TextLabel")
+SpeedLabel.Size = UDim2.new(0.8, 0, 0, 25)
+SpeedLabel.Position = UDim2.new(0.1, 0, 0, 250)
+SpeedLabel.Text = "Speed:"
+SpeedLabel.TextColor3 = Config.Colors.Dark
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Font = Enum.Font.Gotham
+SpeedLabel.TextSize = 16
+SpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+SpeedLabel.Parent = MainFrame
+
+local SpeedFrame = Instance.new("Frame")
+SpeedFrame.Size = UDim2.new(0.8, 0, 0, 35)
+SpeedFrame.Position = UDim2.new(0.1, 0, 0, 275)
+SpeedFrame.BackgroundColor3 = Config.Colors.Secondary
+SpeedFrame.Parent = MainFrame
+
+local SpeedCorner = Instance.new("UICorner")
+SpeedCorner.CornerRadius = UDim.new(0, 8)
+SpeedCorner.Parent = SpeedFrame
+
+local DecreaseSpeed = Instance.new("TextButton")
+DecreaseSpeed.Size = UDim2.new(0, 30, 1, 0)
+DecreaseSpeed.Position = UDim2.new(0, 0, 0, 0)
+DecreaseSpeed.Text = "−"
+DecreaseSpeed.BackgroundColor3 = Config.Colors.Accent
+DecreaseSpeed.TextColor3 = Config.Colors.Light
+DecreaseSpeed.Font = Enum.Font.GothamBold
+DecreaseSpeed.TextSize = 16
+DecreaseSpeed.Parent = SpeedFrame
+
+local DecreaseSpeedCorner = Instance.new("UICorner")
+DecreaseSpeedCorner.CornerRadius = UDim.new(0, 8)
+DecreaseSpeedCorner.Parent = DecreaseSpeed
+
+local SpeedDisplay = Instance.new("TextLabel")
+SpeedDisplay.Size = UDim2.new(1, -60, 1, 0)
+SpeedDisplay.Position = UDim2.new(0, 30, 0, 0)
+SpeedDisplay.Text = "20"
+SpeedDisplay.TextColor3 = Config.Colors.Dark
+SpeedDisplay.BackgroundTransparency = 1
+SpeedDisplay.Font = Enum.Font.Gotham
+SpeedDisplay.TextSize = 16
+SpeedDisplay.Parent = SpeedFrame
+
+local IncreaseSpeed = Instance.new("TextButton")
+IncreaseSpeed.Size = UDim2.new(0, 30, 1, 0)
+IncreaseSpeed.Position = UDim2.new(1, -30, 0, 0)
+IncreaseSpeed.Text = "+"
+IncreaseSpeed.BackgroundColor3 = Config.Colors.Accent
+IncreaseSpeed.TextColor3 = Config.Colors.Light
+IncreaseSpeed.Font = Enum.Font.GothamBold
+IncreaseSpeed.TextSize = 16
+IncreaseSpeed.Parent = SpeedFrame
+
+local IncreaseSpeedCorner = Instance.new("UICorner")
+IncreaseSpeedCorner.CornerRadius = UDim.new(0, 8)
+IncreaseSpeedCorner.Parent = IncreaseSpeed
+
+-- Watermark
+local Watermark = Instance.new("TextLabel")
+Watermark.Size = UDim2.new(1, 0, 0, 30)
+Watermark.Position = UDim2.new(0, 0, 1, -30)
+Watermark.Text = "Advanced Ring Parts [V4.0] - Enhanced Edition"
+Watermark.TextColor3 = Config.Colors.Dark
+Watermark.BackgroundTransparency = 1
+Watermark.Font = Enum.Font.Gotham
+Watermark.TextSize = 12
+Watermark.Parent = MainFrame
+
+-- Variables
+local ringPartsEnabled = false
+local currentPatternIndex = 1
+local radius = 50
+local speed = 20
+local time = 0
+local minimized = false
+
+-- Pattern Functions
+local PatternFunctions = {
+    Circle = function(angle, r, center)
+        return Vector3.new(
+            center.X + math.cos(angle) * r,
+            center.Y,
+            center.Z + math.sin(angle) * r
+        )
+    end,
+    
+    Square = function(angle, r, center)
+        local normalizedAngle = (angle % (2 * math.pi)) / (2 * math.pi)
+        local side = math.floor(normalizedAngle * 4)
+        local progress = (normalizedAngle * 4) % 1
+        
+        if side == 0 then -- Top
+            return Vector3.new(center.X + r * (progress * 2 - 1), center.Y, center.Z + r)
+        elseif side == 1 then -- Right
+            return Vector3.new(center.X + r, center.Y, center.Z + r * (1 - progress * 2))
+        elseif side == 2 then -- Bottom
+            return Vector3.new(center.X + r * (1 - progress * 2), center.Y, center.Z - r)
+        else -- Left
+            return Vector3.new(center.X - r, center.Y, center.Z + r * (progress * 2 - 1))
+        end
+    end,
+    
+    Triangle = function(angle, r, center)
+        local normalizedAngle = (angle % (2 * math.pi)) / (2 * math.pi)
+        local side = math.floor(normalizedAngle * 3)
+        local progress = (normalizedAngle * 3) % 1
+        
+        local vertices = {
+            Vector3.new(0, 0, r),
+            Vector3.new(r * math.sin(2 * math.pi / 3), 0, r * math.cos(2 * math.pi / 3)),
+            Vector3.new(r * math.sin(4 * math.pi / 3), 0, r * math.cos(4 * math.pi / 3))
+        }
+        
+        local startVertex = vertices[side + 1]
+        local endVertex = vertices[(side + 1) % 3 + 1]
+        
+        return Vector3.new(
+            center.X + startVertex.X + (endVertex.X - startVertex.X) * progress,
+            center.Y,
+            center.Z + startVertex.Z + (endVertex.Z - startVertex.Z) * progress
+        )
+    end,
+    
+    Pentagon = function(angle, r, center)
+        local sides = 5
+        local normalizedAngle = (angle % (2 * math.pi)) / (2 * math.pi)
+        local side = math.floor(normalizedAngle * sides)
+        local progress = (normalizedAngle * sides) % 1
+        
+        local startAngle = (side * 2 * math.pi) / sides
+        local endAngle = ((side + 1) * 2 * math.pi) / sides
+        
+        local startPos = Vector3.new(math.cos(startAngle) * r, 0, math.sin(startAngle) * r)
+        local endPos = Vector3.new(math.cos(endAngle) * r, 0, math.sin(endAngle) * r)
+        
+        return Vector3.new(
+            center.X + startPos.X + (endPos.X - startPos.X) * progress,
+            center.Y,
+            center.Z + startPos.Z + (endPos.Z - startPos.Z) * progress
+        )
+    end,
+    
+    Hexagon = function(angle, r, center)
+        local sides = 6
+        local normalizedAngle = (angle % (2 * math.pi)) / (2 * math.pi)
+        local side = math.floor(normalizedAngle * sides)
+        local progress = (normalizedAngle * sides) % 1
+        
+        local startAngle = (side * 2 * math.pi) / sides
+        local endAngle = ((side + 1) * 2 * math.pi) / sides
+        
+        local startPos = Vector3.new(math.cos(startAngle) * r, 0, math.sin(startAngle) * r)
+        local endPos = Vector3.new(math.cos(endAngle) * r, 0, math.sin(endAngle) * r)
+        
+        return Vector3.new(
+            center.X + startPos.X + (endPos.X - startPos.X) * progress,
+            center.Y,
+            center.Z + startPos.Z + (endPos.Z - startPos.Z) * progress
+        )
+    end,
+    
+    Octagon = function(angle, r, center)
+        local sides = 8
+        local normalizedAngle = (angle % (2 * math.pi)) / (2 * math.pi)
+        local side = math.floor(normalizedAngle * sides)
+        local progress = (normalizedAngle * sides) % 1
+        
+        local startAngle = (side * 2 * math.pi) / sides
+        local endAngle = ((side + 1) * 2 * math.pi) / sides
+        
+        local startPos = Vector3.new(math.cos(startAngle) * r, 0, math.sin(startAngle) * r)
+        local endPos = Vector3.new(math.cos(endAngle) * r, 0, math.sin(endAngle) * r)
+        
+        return Vector3.new(
+            center.X + startPos.X + (endPos.X - startPos.X) * progress,
+            center.Y,
+            center.Z + startPos.Z + (endPos.Z - startPos.Z) * progress
+        )
+    end,
+    
+    Star = function(angle, r, center)
+        local spikes = 5
+        local outerRadius = r
+        local innerRadius = r * 0.4
+        local normalizedAngle = (angle % (2 * math.pi))
+        local spikeAngle = (2 * math.pi) / (spikes * 2)
+        local currentSpike = math.floor(normalizedAngle / spikeAngle)
+        local isOuter = (currentSpike % 2 == 0)
+        local currentRadius = isOuter and outerRadius or innerRadius
+        
+        return Vector3.new(
+            center.X + math.cos(normalizedAngle) * currentRadius,
+            center.Y,
+            center.Z + math.sin(normalizedAngle) * currentRadius
+        )
+    end,
+    
+    Spiral = function(angle, r, center)
+        local spiralFactor = 0.1
+        local spiralRadius = r * (1 + spiralFactor * (angle % (4 * math.pi)) / (4 * math.pi))
+        return Vector3.new(
+            center.X + math.cos(angle) * spiralRadius,
+            center.Y,
+            center.Z + math.sin(angle) * spiralRadius
+        )
+    end,
+    
+    Figure8 = function(angle, r, center)
+        local scale = r * 0.8
+        return Vector3.new(
+            center.X + scale * math.sin(angle),
+            center.Y,
+            center.Z + scale * math.sin(angle) * math.cos(angle)
+        )
+    end,
+    
+    Wave = function(angle, r, center)
+        local waveHeight = r * 0.3
+        return Vector3.new(
+            center.X + math.cos(angle) * r,
+            center.Y + math.sin(angle * 3) * waveHeight,
+            center.Z + math.sin(angle) * r
+        )
+    end,
+    
+    Helix = function(angle, r, center)
+        local helixHeight = r * 0.5
+        return Vector3.new(
+            center.X + math.cos(angle) * r,
+            center.Y + math.sin(angle * 2) * helixHeight,
+            center.Z + math.sin(angle) * r
+        )
+    end,
+    
+    Tornado = function(angle, r, center)
+        local heightFactor = (angle % (4 * math.pi)) / (4 * math.pi)
+        local currentRadius = r * (1 - heightFactor * 0.7)
+        return Vector3.new(
+            center.X + math.cos(angle) * currentRadius,
+            center.Y + heightFactor * r * 2,
+            center.Z + math.sin(angle) * currentRadius
+        )
+    end
+}
+
+-- Physics Network
+if not getgenv().Network then
+    getgenv().Network = {
+        BaseParts = {},
+        Velocity = Vector3.new(14.46262424, 14.46262424, 14.46262424)
+    }
+    Network.RetainPart = function(Part)
+        if typeof(Part) == "Instance" and Part:IsA("BasePart") and Part:IsDescendantOf(workspace) then
+            table.insert(Network.BaseParts, Part)
+            Part.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
+            Part.CanCollide = false
+        end
+    end
+    
+    local function EnablePartControl()
+        LocalPlayer.ReplicationFocus = workspace
+        RunService.Heartbeat:Connect(function()
+            sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
+            for _, Part in pairs(Network.BaseParts) do
+                if Part:IsDescendantOf(workspace) then
+                    Part.Velocity = Network.Velocity
+                end
+            end
+        end)
+    end
+    EnablePartControl()
+end
+
+-- Part Management
+local parts = {}
+local partAngles = {}
+
+local function RetainPart(Part)
+    if Part:IsA("BasePart") and not Part.Anchored and Part:IsDescendantOf(workspace) then
+        if Part.Parent == LocalPlayer.Character or Part:IsDescendantOf(LocalPlayer.Character) then
+            return false
+        end
+        Part.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
+        Part.CanCollide = false
+        return true
+    end
+    return false
+end
+
+local function addPart(part)
+    if RetainPart(part) then
+        if not table.find(parts, part) then
+            table.insert(parts, part)
+            partAngles[part] = math.random() * 2 * math.pi
+        end
+    end
+end
+
+local function removePart(part)
+    local index = table.find(parts, part)
+    if index then
+        table.remove(parts, index)
+        partAngles[part] = nil
+    end
+end
+
+-- Initialize existing parts
+for _, part in pairs(workspace:GetDescendants()) do
+    addPart(part)
+end
+
+workspace.DescendantAdded:Connect(addPart)
+workspace.DescendantRemoving:Connect(removePart)
+
+-- Main Loop
+RunService.Heartbeat:Connect(function(deltaTime)
+    if not ringPartsEnabled then return end
+    
+    time = time + deltaTime
+    local humanoidRootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        local center = humanoidRootPart.Position
+        local currentPattern = Config.Patterns[currentPatternIndex]
+        local patternFunction = PatternFunctions[currentPattern]
+        
+        if patternFunction then
+            local partCount = #parts
+            for i, part in pairs(parts) do
+                if part.Parent and not part.Anchored then
+                    if not partAngles[part] then
+                        partAngles[part] = (i / partCount) * 2 * math.pi
+                    end
+                    
+                    partAngles[part] = partAngles[part] + math.rad(speed) * deltaTime
+                    local targetPos = patternFunction(partAngles[part], radius, center)
+                    local directionToTarget = (targetPos - part.Position).unit
+                    local distance = (targetPos - part.Position).Magnitude
+                    local attractionForce = math.min(distance * 50, 1200)
+                    
+                    part.Velocity = directionToTarget * attractionForce
+                end
+            end
+        end
+    end
+end)
+
+-- GUI Event Handlers
+MinimizeButton.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    local targetSize = minimized and UDim2.new(0, 280, 0, 50) or UDim2.new(0, 280, 0, 380)
+    
+    TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = targetSize}):Play()
+    
+    MinimizeButton.Text = minimized and "+" or "−"
+    
+    for _, child in pairs(MainFrame:GetChildren()) do
+        if child ~= Title and child ~= MinimizeButton and child ~= UICorner and child ~= Gradient then
+            child.Visible = not minimized
+        end
+    end
+    
+    playSound(Config.Sounds.Click)
+end)
+
+ToggleButton.MouseButton1Click:Connect(function()
+    ringPartsEnabled = not ringPartsEnabled
+    ToggleButton.Text = ringPartsEnabled and "Ring Parts: ON" or "Ring Parts: OFF"
+    ToggleButton.BackgroundColor3 = ringPartsEnabled and Config.Colors.Success or Config.Colors.Accent
+    
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
+    TweenService:Create(ToggleButton, tweenInfo, {
+        BackgroundColor3 = ringPartsEnabled and Config.Colors.Success or Config.Colors.Accent
+    }):Play()
+    
+    playSound(ringPartsEnabled and Config.Sounds.Success or Config.Sounds.Toggle)
+end)
+
+-- Pattern Navigation
+PatternPrev.MouseButton1Click:Connect(function()
+    currentPatternIndex = currentPatternIndex - 1
+    if currentPatternIndex < 1 then
+        currentPatternIndex = #Config.Patterns
+    end
+    PatternDisplay.Text = Config.Patterns[currentPatternIndex]
+    playSound(Config.Sounds.Click)
+end)
+
+PatternNext.MouseButton1Click:Connect(function()
+    currentPatternIndex = currentPatternIndex + 1
+    if currentPatternIndex > #Config.Patterns then
+        currentPatternIndex =
