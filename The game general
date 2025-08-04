@@ -1,8 +1,89 @@
-local Data = {
-      ["Grow a Garden"] = {
-             id = 126884695634066,
-             code = 000
-      } 
+-- 📦 SERVICES
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
+local player = Players.LocalPlayer
+local gui = script.Parent
+local frame = gui:WaitForChild("MainFrame")
+local templateButton = frame:WaitForChild("TemplateButton")
+local currentGameId = game.PlaceId
 
+-- 🔁 MENU DATA (Game-specific Actions)
+local gameActions = {
+    [5985232436] = { -- Replace with real game IDs
+        {
+            Name = "Smile Infectious",
+            Action = function()
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/Niceframe422/Code/refs/heads/main/Smile%20Infectious"))()
+            end
+        },
+        {
+            Name = "Print Hello",
+            Action = function()
+                print("Hi", player.Name)
+            end
+        }
+    }
 }
+
+-- 💡 DRAG FUNCTIONALITY
+local dragging, dragInput, dragStart, startPos
+
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+frame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- 💻 TOGGLE WITH KEY
+local isVisible = true
+UserInputService.InputBegan:Connect(function(input, processed)
+    if not processed and input.KeyCode == Enum.KeyCode.M then
+        isVisible = not isVisible
+        frame.Visible = isVisible
+    end
+end)
+
+-- 🔨 BUTTON CREATOR
+local function createButton(name, action)
+    local btn = templateButton:Clone()
+    btn.Name = name
+    btn.Text = name
+    btn.Visible = true
+    btn.Parent = frame
+
+    btn.MouseButton1Click:Connect(function()
+        local success, err = pcall(action)
+        if not success then
+            warn("Failed to run:", err)
+        end
+    end)
+end
+
+-- 🚀 BUILD MENU
+templateButton.Visible = false
+for _, actionData in ipairs(gameActions[currentGameId] or {}) do
+    createButton(actionData.Name, actionData.Action)
+end
