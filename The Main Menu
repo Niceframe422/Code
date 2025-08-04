@@ -4,14 +4,57 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
-local gui = script.Parent
-local frame = gui:WaitForChild("MainFrame")
-local templateButton = frame:WaitForChild("TemplateButton")
 local currentGameId = game.PlaceId
+
+-- 🌐 GUI CREATION
+local gui = Instance.new("ScreenGui")
+gui.Name = "GameMenuUI"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Name = "MainFrame"
+frame.Size = UDim2.new(0, 250, 0, 300)
+frame.Position = UDim2.new(0.5, -125, 0.5, -150)
+frame.AnchorPoint = Vector2.new(0.5, 0.5)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = false -- We’ll handle dragging manually
+frame.Parent = gui
+
+local uiCorner = Instance.new("UICorner", frame)
+uiCorner.CornerRadius = UDim.new(0, 8)
+
+local stroke = Instance.new("UIStroke", frame)
+stroke.Thickness = 1.5
+stroke.Color = Color3.fromRGB(255, 255, 255)
+
+local layout = Instance.new("UIListLayout")
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(0, 5)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.Parent = frame
+
+local templateButton = Instance.new("TextButton")
+templateButton.Name = "TemplateButton"
+templateButton.Size = UDim2.new(0.9, 0, 0, 40)
+templateButton.Position = UDim2.new(0.05, 0, 0, 0)
+templateButton.Text = "TemplateButton"
+templateButton.TextScaled = true
+templateButton.Font = Enum.Font.Gotham
+templateButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+templateButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+templateButton.BorderSizePixel = 0
+templateButton.Visible = false
+templateButton.Parent = frame
+
+Instance.new("UICorner", templateButton).CornerRadius = UDim.new(0, 6)
 
 -- 🔁 MENU DATA (Game-specific Actions)
 local gameActions = {
-    [5985232436] = { -- Replace with real game IDs
+    [5985232436] = {
         {
             Name = "Smile Infectious",
             Action = function()
@@ -53,7 +96,10 @@ end)
 UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
-        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        frame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
     end
 end)
 
