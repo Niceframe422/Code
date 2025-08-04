@@ -1,84 +1,50 @@
--- 🧠 Load base scripts
-local success1, err1 = pcall(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
-end)
-if not success1 then warn("Infinite Yield failed:", err1) end
+loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+wait(0.3)
+loadstring(game:HttpGet("https://pastebin.com/raw/TqgbdDjF"))()
 
-wait(0.5)
+-- Wait for a moment to ensure the GUI is loaded
+wait(2)
 
-local success2, err2 = pcall(function()
-    loadstring(game:HttpGet("https://pastebin.com/raw/TqgbdDjF"))()
-end)
-if not success2 then warn("Second script failed:", err2) end
+-- Access CoreGui and the ScreenGui
+local core = game:GetService("CoreGui")
+local gui = core:FindFirstChild("ScreenGui")
 
--- 🧪 Wait until GUI is loaded into CoreGui
-local CoreGui = game:GetService("CoreGui")
-local guiLoaded = nil
-
-for _ = 1, 10 do
-    guiLoaded = CoreGui:FindFirstChildOfClass("ScreenGui")
-    if guiLoaded then break end
-    wait(1)
-end
-
--- 🧹 Clean up CoreGui UI (optional)
-local function CleanGUI()
-    for _, v in pairs(CoreGui:GetChildren()) do
-        if v:IsA("ScreenGui") and v.Name ~= "close" then
-            pcall(function() v:Destroy() end)
-        end
+function Button()
+  for _, v in pairs(gui:GetChildren()) do
+    if v.Name ~= "close" then
+      v:Destroy()
     end
+  end
 end
 
-if guiLoaded then
+
+-- Check if the gui exists, then remove the unwanted buttons after loading
+if gui then
     spawn(function()
         while wait(1) do
-            pcall(CleanGUI)
+         Button()    
         end
     end)
 else
-    warn("No GUI found in CoreGui to clean.")
+    warn("ScreenGui not found in CoreGui")
 end
 
--- 🧱 Remove anti elements from Workspace
-local function RemoveMapStuff()
-    local map = workspace:FindFirstChild("Map")
-    if not map then return end
+function Remove()
+ local map = game:GetService("Workspace"):FindFirstChild("Map")
 
-    local function tryDestroy(obj)
-        if obj and obj:IsA("Instance") then
-            pcall(function() obj:Destroy() end)
-        end
-    end
+ map:FindFirstChild("AntiHack"):Destroy()
+ map:FindFirstChild("KillBricks"):Destroy()
+ map:FindFirstChild("Spawns"):Destroy()
 
-    tryDestroy(map:FindFirstChild("AntiHack"))
-    tryDestroy(map:FindFirstChild("KillBricks"))
-    tryDestroy(map:FindFirstChild("Spawns"))
+ map.System:FindFirstChild("Lava"):Destroy()
+ map.System:FindFirstChild("Weight"):Destroy()
+ map.System:FindFirstChild("Water"):Destroy()
 
-    if map:FindFirstChild("System") then
-        tryDestroy(map.System:FindFirstChild("Lava"))
-        tryDestroy(map.System:FindFirstChild("Weight"))
-        tryDestroy(map.System:FindFirstChild("Water"))
-    end
-
-    if map:FindFirstChild("HumanBase") then
-        tryDestroy(map.HumanBase:FindFirstChild("KillZone"))
-    end
+ map.HumanBase:FindFirstChild("KillZone"):Destroy()
 end
 
-pcall(RemoveMapStuff)
-
--- 🌀 Load additional scripts
-wait(0.3)
-
-local success3, err3 = pcall(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/Niceframe422/Code/refs/heads/main/Fling%20Objects"))()
-end)
-if not success3 then warn("Fling script failed:", err3) end
-
-wait(0.3)
-
-local success4, err4 = pcall(function()
-    loadstring(game:HttpGet("https://pastefy.app/Vf5POrA6/raw"))()
-end)
-if not success4 then warn("Final script failed:", err4) end
+Remove()
+wait(0.2)
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Niceframe422/Code/refs/heads/main/Fling%20Objects"))()
+wait(.2)
+loadstring(game:HttpGet("https://pastefy.app/Vf5POrA6/raw"))()
