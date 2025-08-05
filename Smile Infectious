@@ -63,7 +63,7 @@ end
 -- Recursive search and remove matching objects
 local function RemoveDangerousStuff()
     for _, obj in ipairs(game:GetService("Workspace"):GetDescendants()) do
-        if ShouldRemove(obj.Name) then
+        if ShouldRemove(obj.Name) or obj:IsA("BasePart") and obj.Color == Color3.fromRGB(213, 115, 61) then
             pcall(function()
                 obj:Destroy()
             end)
