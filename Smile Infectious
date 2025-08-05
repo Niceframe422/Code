@@ -71,10 +71,10 @@ local function RemoveDangerousStuff()
     end
 end
 
-spawn(function()
-while wait(0.4) do
-RemoveDangerousStuff()
-end
+task.spawn(function()
+   while task.wait(3) do
+        RemoveDangerousStuff()
+   end
 end)
 
 -- Load additional external scripts
