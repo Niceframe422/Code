@@ -37,10 +37,10 @@ end
 -- Dynamic remover for workspace objects
 local keywords = {
     exact = {
-        "AntiHack", "KillBricks", "Spawns", "Lava", "Weight", "Water", "KillZone"
+        "AntiHack", "KillBricks", "Spawns", "Lava", "Weight", "Water", "KillZone","Flood"
     },
     contains = {
-        "kill", "lava", "antihack", "void", "death", "spike", "trap"
+        "kill", "lava", "antihack"
     }
 }
 
