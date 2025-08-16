@@ -64,9 +64,9 @@ end
 local function RemoveDangerousStuff()
     for _, obj in ipairs(game:GetService("Workspace"):GetDescendants()) do
         if ShouldRemove(obj.Name) or obj:IsA("BasePart") and obj.Color == Color3.fromRGB(213, 115, 61) then
-            pcall(function()
-                obj:Destroy()
-            end)
+           if obj then
+              obj:Destroy()
+           end
         end
     end
 end
