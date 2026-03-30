@@ -74,8 +74,8 @@ local ClientSettings = {
         WhitelistUserIds = {},
     },
     CooldownSecondsPerUser = 0,
-    MaxMessagesPerSecond = 10,
-    MaxQueuePerUser = 10,
+    MaxMessagesPerSecond = 15,
+    MaxQueuePerUser = 15,
     AutoReply = false,
     PerUserMemory = false, -- New: Separate history per user
     BlacklistUserIds = {},
