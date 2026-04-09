@@ -52,3 +52,70 @@ end)
         ClaimEvent:FireServer(closestBooth)
     end
 end
+
+if game.PlaceId == 126884695634066 then
+
+ local StarterGui = game:GetService("StarterGui")
+    local CoreGui = game:GetService("CoreGui")
+
+    -- Create a small notification frame
+    local screenGui = Instance.new("ScreenGui", CoreGui)
+    screenGui.ResetOnSpawn = false
+
+    local frame = Instance.new("Frame", screenGui)
+    frame.Size = UDim2.new(0, 300, 0, 120)
+    frame.Position = UDim2.new(0.5, -150, 0.5, -60)
+    frame.BackgroundColor3 = Color3.fromRGB(52, 52, 52)
+    frame.BorderSizePixel = 0
+    frame.AnchorPoint = Vector2.new(0.5, 0.5)
+
+    local title = Instance.new("TextLabel", frame)
+    title.Size = UDim2.new(1, 0, 0.3, 0)
+    title.Position = UDim2.new(0,0,0,0)
+    title.BackgroundTransparency = 1
+    title.Text = "Confirmation"
+    title.TextScaled = true
+    title.TextColor3 = Color3.fromRGB(255,255,255)
+    title.Font = Enum.Font.SourceSansBold
+
+    local message = Instance.new("TextLabel", frame)
+    message.Size = UDim2.new(1, -10, 0.4, 0)
+    message.Position = UDim2.new(0,5,0.3,0)
+    message.BackgroundTransparency = 1
+    message.Text = "Do you want to run the booth script?"
+    message.TextScaled = true
+    message.TextColor3 = Color3.fromRGB(200,200,200)
+    message.Font = Enum.Font.SourceSans
+
+    local yesBtn = Instance.new("TextButton", frame)
+    yesBtn.Size = UDim2.new(0.45, 0, 0.25, 0)
+    yesBtn.Position = UDim2.new(0.05, 0, 0.75, 0)
+    yesBtn.Text = "YES"
+    yesBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
+    yesBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    yesBtn.TextScaled = true
+
+    local noBtn = Instance.new("TextButton", frame)
+    noBtn.Size = UDim2.new(0.45, 0, 0.25, 0)
+    noBtn.Position = UDim2.new(0.5, 0, 0.75, 0)
+    noBtn.Text = "NO"
+    noBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+    noBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    noBtn.TextScaled = true
+
+    -- YES action
+    yesBtn.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+        print("User clicked YES")
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua", true))()
+    end)
+
+    -- NO action
+    noBtn.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+        print("User clicked NO")
+        -- Do nothing
+    end)
+
+
+end
