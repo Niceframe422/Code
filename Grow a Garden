@@ -1,83 +1,87 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TweenService = game:GetService("TweenService")
+
+-- Place 1: Booth place
 if game.PlaceId == 129954712878723 then
+    -- Anti-AFK (no jump)
+    task.spawn(function()
+        while true do
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F15, false, game)
+            task.wait(0.05)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F15, false, game)
+            task.wait(math.random(2,5))
+        end
+    end)
 
+    -- Booth claiming logic
+    local function claimClosestBooth()
+        local TradeWorld = Workspace:WaitForChild("TradeWorld")
+        local Booths = TradeWorld:WaitForChild("Booths")
+        local Sign = TradeWorld:WaitForChild("ArtisanContainerSign")
+        local ClaimEvent = ReplicatedStorage:WaitForChild("GameEvents")
+            :WaitForChild("TradeEvents")
+            :WaitForChild("Booths")
+            :WaitForChild("ClaimBooth")
 
--- Anti-AFK (no jump, using VirtualInputManager)
-local vim = game:GetService("VirtualInputManager")
+        -- Find closest empty booth
+        local closestBooth = nil
+        local shortestDistance = math.huge
+        local signPos = Sign:GetPivot().Position
 
-task.spawn(function()
-    while true do
-        vim:SendKeyEvent(true, Enum.KeyCode.F15, false, game)
-        task.wait(0.05)
-        vim:SendKeyEvent(false, Enum.KeyCode.F15, false, game)
-
-        task.wait(math.random(2,5))
-    end
-end)
-
-
--- Booth claimer
-
-    
-    local TradeWorld = workspace:WaitForChild("TradeWorld")
-    local Booths = TradeWorld:WaitForChild("Booths")
-    local Sign = TradeWorld:WaitForChild("ArtisanContainerSign")
-
-    local ClaimEvent = game:GetService("ReplicatedStorage")
-        :WaitForChild("GameEvents")
-        :WaitForChild("TradeEvents")
-        :WaitForChild("Booths")
-        :WaitForChild("ClaimBooth")
-
-    local closestBooth = nil
-    local shortestDistance = math.huge
-
-    local signPos = Sign:GetPivot().Position
-
-    for _, booth in ipairs(Booths:GetChildren()) do
-        local dynamic = booth:FindFirstChild("DynamicInstances")
-
-        if booth:IsA("Model") and dynamic and #dynamic:GetChildren() == 0 then
-            
-            local boothPos = booth:GetPivot().Position
-            local distance = (boothPos - signPos).Magnitude
-
-            if distance < shortestDistance then
-                shortestDistance = distance
-                closestBooth = booth
+        for _, booth in ipairs(Booths:GetChildren()) do
+            if booth:IsA("Model") then
+                local dynamic = booth:FindFirstChild("DynamicInstances")
+                if dynamic and #dynamic:GetChildren() == 0 then
+                    local boothPos
+                    pcall(function()
+                        boothPos = booth:GetPivot().Position
+                    end)
+                    if boothPos then
+                        local distance = (boothPos - signPos).Magnitude
+                        if distance < shortestDistance then
+                            shortestDistance = distance
+                            closestBooth = booth
+                        end
+                    end
+                end
             end
+        end
+
+        if closestBooth then
+            print("Claiming booth:", closestBooth.Name)
+            ClaimEvent:FireServer(closestBooth.Name) -- use Name instead of model
+        else
+            print("No empty booths near the sign.")
         end
     end
 
-    if closestBooth then
-        ClaimEvent:FireServer(closestBooth)
-    end
+    -- Optional: you can auto-claim or show Yes/No popup
+    task.wait(1)
+    claimClosestBooth()
 end
 
+-- Place 2: Hub place with Yes/No notification
 if game.PlaceId == 126884695634066 then
-
- local CoreGui = game:GetService("CoreGui")
-    local TweenService = game:GetService("TweenService")
-
+    local CoreGui = game:GetService("CoreGui")
     local screenGui = Instance.new("ScreenGui", CoreGui)
     screenGui.ResetOnSpawn = false
 
-    -- Notification frame
     local frame = Instance.new("Frame", screenGui)
     frame.Size = UDim2.new(0, 300, 0, 100)
-    frame.Position = UDim2.new(1, -310, 1, -110) -- bottom-right
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.Position = UDim2.new(1, -310, 1, -110)
+    frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
     frame.BorderSizePixel = 0
     frame.AnchorPoint = Vector2.new(0,0)
     frame.ClipsDescendants = true
-    frame.Rotation = 10 -- start rotated for animation
+    frame.Rotation = 10
 
-    -- Rounded corners
     local corner = Instance.new("UICorner", frame)
-    corner.CornerRadius = UDim.new(0, 12)
+    corner.CornerRadius = UDim.new(0,12)
 
-    -- Title
     local title = Instance.new("TextLabel", frame)
-    title.Size = UDim2.new(1, -20, 0, 30)
+    title.Size = UDim2.new(1,-20,0,30)
     title.Position = UDim2.new(0,10,0,10)
     title.BackgroundTransparency = 1
     title.Text = "Confirmation"
@@ -86,9 +90,8 @@ if game.PlaceId == 126884695634066 then
     title.TextScaled = true
     title.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Message
     local msg = Instance.new("TextLabel", frame)
-    msg.Size = UDim2.new(1, -20, 0, 40)
+    msg.Size = UDim2.new(1,-20,0,40)
     msg.Position = UDim2.new(0,10,0,40)
     msg.BackgroundTransparency = 1
     msg.Text = "Do you want to run the booth script?"
@@ -98,7 +101,6 @@ if game.PlaceId == 126884695634066 then
     msg.TextWrapped = true
     msg.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Buttons
     local yesBtn = Instance.new("TextButton", frame)
     yesBtn.Size = UDim2.new(0.45,0,0.25,0)
     yesBtn.Position = UDim2.new(0.05,0,0.7,0)
@@ -121,25 +123,20 @@ if game.PlaceId == 126884695634066 then
     local noCorner = Instance.new("UICorner", noBtn)
     noCorner.CornerRadius = UDim.new(0,8)
 
-    -- Animation: slide in
+    -- Slide-in animation
     local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    TweenService:Create(frame, tweenInfo, {Position = UDim2.new(1, -310, 1, -120), Rotation = 0}):Play()
+    TweenService:Create(frame, tweenInfo, {Position = UDim2.new(1,-310,1,-120), Rotation = 0}):Play()
 
-    -- YES click
     yesBtn.MouseButton1Click:Connect(function()
-        -- Slide out
-        TweenService:Create(frame, TweenInfo.new(0.3), {Position = UDim2.new(1, 310, 1, -120), Rotation = 10}):Play()
+        TweenService:Create(frame, TweenInfo.new(0.3), {Position = UDim2.new(1,310,1,-120), Rotation = 10}):Play()
         task.delay(0.35,function() screenGui:Destroy() end)
         print("User clicked YES")
-       loadstring(game:HttpGet("https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua", true))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua", true))()
     end)
 
-    -- NO click
     noBtn.MouseButton1Click:Connect(function()
-        TweenService:Create(frame, TweenInfo.new(0.3), {Position = UDim2.new(1, 310, 1, -120), Rotation = 10}):Play()
+        TweenService:Create(frame, TweenInfo.new(0.3), {Position = UDim2.new(1,310,1,-120), Rotation = 10}):Play()
         task.delay(0.35,function() screenGui:Destroy() end)
         print("User clicked NO")
     end)
-
-
 end
