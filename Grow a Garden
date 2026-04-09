@@ -55,66 +55,90 @@ end
 
 if game.PlaceId == 126884695634066 then
 
- local StarterGui = game:GetService("StarterGui")
-    local CoreGui = game:GetService("CoreGui")
+ local CoreGui = game:GetService("CoreGui")
+    local TweenService = game:GetService("TweenService")
 
-    -- Create a small notification frame
     local screenGui = Instance.new("ScreenGui", CoreGui)
     screenGui.ResetOnSpawn = false
 
+    -- Notification frame
     local frame = Instance.new("Frame", screenGui)
-    frame.Size = UDim2.new(0, 300, 0, 120)
-    frame.Position = UDim2.new(0.5, -150, 0.5, -60)
-    frame.BackgroundColor3 = Color3.fromRGB(52, 52, 52)
+    frame.Size = UDim2.new(0, 300, 0, 100)
+    frame.Position = UDim2.new(1, -310, 1, -110) -- bottom-right
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     frame.BorderSizePixel = 0
-    frame.AnchorPoint = Vector2.new(0.5, 0.5)
+    frame.AnchorPoint = Vector2.new(0,0)
+    frame.ClipsDescendants = true
+    frame.Rotation = 10 -- start rotated for animation
 
+    -- Rounded corners
+    local corner = Instance.new("UICorner", frame)
+    corner.CornerRadius = UDim.new(0, 12)
+
+    -- Title
     local title = Instance.new("TextLabel", frame)
-    title.Size = UDim2.new(1, 0, 0.3, 0)
-    title.Position = UDim2.new(0,0,0,0)
+    title.Size = UDim2.new(1, -20, 0, 30)
+    title.Position = UDim2.new(0,10,0,10)
     title.BackgroundTransparency = 1
     title.Text = "Confirmation"
-    title.TextScaled = true
     title.TextColor3 = Color3.fromRGB(255,255,255)
-    title.Font = Enum.Font.SourceSansBold
+    title.Font = Enum.Font.GothamBold
+    title.TextScaled = true
+    title.TextXAlignment = Enum.TextXAlignment.Left
 
-    local message = Instance.new("TextLabel", frame)
-    message.Size = UDim2.new(1, -10, 0.4, 0)
-    message.Position = UDim2.new(0,5,0.3,0)
-    message.BackgroundTransparency = 1
-    message.Text = "Do you want to run the booth script?"
-    message.TextScaled = true
-    message.TextColor3 = Color3.fromRGB(200,200,200)
-    message.Font = Enum.Font.SourceSans
+    -- Message
+    local msg = Instance.new("TextLabel", frame)
+    msg.Size = UDim2.new(1, -20, 0, 40)
+    msg.Position = UDim2.new(0,10,0,40)
+    msg.BackgroundTransparency = 1
+    msg.Text = "Do you want to run the booth script?"
+    msg.TextColor3 = Color3.fromRGB(200,200,200)
+    msg.Font = Enum.Font.Gotham
+    msg.TextScaled = true
+    msg.TextWrapped = true
+    msg.TextXAlignment = Enum.TextXAlignment.Left
 
+    -- Buttons
     local yesBtn = Instance.new("TextButton", frame)
-    yesBtn.Size = UDim2.new(0.45, 0, 0.25, 0)
-    yesBtn.Position = UDim2.new(0.05, 0, 0.75, 0)
+    yesBtn.Size = UDim2.new(0.45,0,0.25,0)
+    yesBtn.Position = UDim2.new(0.05,0,0.7,0)
     yesBtn.Text = "YES"
     yesBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
     yesBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    yesBtn.Font = Enum.Font.GothamBold
     yesBtn.TextScaled = true
+    local yesCorner = Instance.new("UICorner", yesBtn)
+    yesCorner.CornerRadius = UDim.new(0,8)
 
     local noBtn = Instance.new("TextButton", frame)
-    noBtn.Size = UDim2.new(0.45, 0, 0.25, 0)
-    noBtn.Position = UDim2.new(0.5, 0, 0.75, 0)
+    noBtn.Size = UDim2.new(0.45,0,0.25,0)
+    noBtn.Position = UDim2.new(0.5,0,0.7,0)
     noBtn.Text = "NO"
     noBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
     noBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    noBtn.Font = Enum.Font.GothamBold
     noBtn.TextScaled = true
+    local noCorner = Instance.new("UICorner", noBtn)
+    noCorner.CornerRadius = UDim.new(0,8)
 
-    -- YES action
+    -- Animation: slide in
+    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    TweenService:Create(frame, tweenInfo, {Position = UDim2.new(1, -310, 1, -120), Rotation = 0}):Play()
+
+    -- YES click
     yesBtn.MouseButton1Click:Connect(function()
-        screenGui:Destroy()
+        -- Slide out
+        TweenService:Create(frame, TweenInfo.new(0.3), {Position = UDim2.new(1, 310, 1, -120), Rotation = 10}):Play()
+        task.delay(0.35,function() screenGui:Destroy() end)
         print("User clicked YES")
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua", true))()
+       loadstring(game:HttpGet("https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua", true))()
     end)
 
-    -- NO action
+    -- NO click
     noBtn.MouseButton1Click:Connect(function()
-        screenGui:Destroy()
+        TweenService:Create(frame, TweenInfo.new(0.3), {Position = UDim2.new(1, 310, 1, -120), Rotation = 10}):Play()
+        task.delay(0.35,function() screenGui:Destroy() end)
         print("User clicked NO")
-        -- Do nothing
     end)
 
 
