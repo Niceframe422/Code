@@ -1,0 +1,54 @@
+if game.PlaceId == 129954712878723 then
+
+
+-- Anti-AFK (no jump, using VirtualInputManager)
+local vim = game:GetService("VirtualInputManager")
+
+task.spawn(function()
+    while true do
+        vim:SendKeyEvent(true, Enum.KeyCode.F15, false, game)
+        task.wait(0.05)
+        vim:SendKeyEvent(false, Enum.KeyCode.F15, false, game)
+
+        task.wait(math.random(2,5))
+    end
+end)
+
+
+-- Booth claimer
+
+    
+    local TradeWorld = workspace:WaitForChild("TradeWorld")
+    local Booths = TradeWorld:WaitForChild("Booths")
+    local Sign = TradeWorld:WaitForChild("ArtisanContainerSign")
+
+    local ClaimEvent = game:GetService("ReplicatedStorage")
+        :WaitForChild("GameEvents")
+        :WaitForChild("TradeEvents")
+        :WaitForChild("Booths")
+        :WaitForChild("ClaimBooth")
+
+    local closestBooth = nil
+    local shortestDistance = math.huge
+
+    local signPos = Sign:GetPivot().Position
+
+    for _, booth in ipairs(Booths:GetChildren()) do
+        local dynamic = booth:FindFirstChild("DynamicInstances")
+
+        if booth:IsA("Model") and dynamic and #dynamic:GetChildren() == 0 then
+            
+            local boothPos = booth:GetPivot().Position
+            local distance = (boothPos - signPos).Magnitude
+
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestBooth = booth
+            end
+        end
+    end
+
+    if closestBooth then
+        ClaimEvent:FireServer(closestBooth)
+    end
+end
