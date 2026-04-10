@@ -1,0 +1,83 @@
+--// SERVICES
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local vim = game:GetService("VirtualInputManager")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+--// SETTINGS
+local ENABLED = false
+local MIN_CPS = 8
+local MAX_CPS = 12
+
+-- detect device
+local IS_MOBILE = UIS.TouchEnabled and not UIS.KeyboardEnabled
+
+--------------------------------------------------
+-- 🧠 UI BUTTON (works on mobile + PC)
+--------------------------------------------------
+
+local gui = Instance.new("ScreenGui", playerGui)
+
+local button = Instance.new("TextButton", gui)
+button.Size = UDim2.new(0,120,0,50)
+button.Position = UDim2.new(0,20,0,200)
+button.Text = "AutoClick: OFF"
+button.BackgroundColor3 = Color3.fromRGB(40,40,40)
+button.TextColor3 = Color3.new(1,1,1)
+
+Instance.new("UICorner", button)
+
+button.MouseButton1Click:Connect(function()
+	ENABLED = not ENABLED
+	button.Text = "AutoClick: " .. (ENABLED and "ON" or "OFF")
+	button.BackgroundColor3 = ENABLED and Color3.fromRGB(0,170,0) or Color3.fromRGB(40,40,40)
+end)
+
+--------------------------------------------------
+-- 📍 GET CLICK POSITION
+--------------------------------------------------
+
+local function getPos()
+	local cam = workspace.CurrentCamera
+	local vp = cam.ViewportSize
+	return vp.X/2, vp.Y/2
+end
+
+--------------------------------------------------
+-- 🚀 CLICK FUNCTION (AUTO SWITCH)
+--------------------------------------------------
+
+local function click()
+	local x, y = getPos()
+
+	if IS_MOBILE then
+		-- touch tap
+		vim:SendTouchEvent(1, 0, x, y)
+		task.wait(0.01)
+		vim:SendTouchEvent(1, 2, x, y)
+	else
+		-- mouse click
+		vim:SendMouseButtonEvent(x, y, 0, true, game, 0)
+		task.wait(0.01)
+		vim:SendMouseButtonEvent(x, y, 0, false, game, 0)
+	end
+end
+
+--------------------------------------------------
+-- ⚡ MAIN LOOP (OPTIMIZED)
+--------------------------------------------------
+
+task.spawn(function()
+	while true do
+		if ENABLED then
+			click()
+
+			local cps = math.random(MIN_CPS, MAX_CPS)
+			task.wait(1 / cps)
+		else
+			task.wait(0.2)
+		end
+	end
+end)
