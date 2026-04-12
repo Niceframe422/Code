@@ -1,0 +1,1410 @@
+--// SERVICES
+local Players         = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService    = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+
+--// REMOTES
+-- BUG FIX: PurchaseRemote is a RemoteFunction (InvokeServer) – correct.
+local PurchaseRemote = ReplicatedStorage
+	:WaitForChild("GameEvents")
+	:WaitForChild("TradeEvents")
+	:WaitForChild("TradeTokens")
+	:WaitForChild("Purchase")
+
+-- BUG FIX: GiftRemote is a RemoteEvent (FireServer). Original code used
+-- it correctly, but the payload was a table — adjusted to match the
+-- common server-side signature: FireServer(targetPlayer, productId).
+-- Change back to a table if your server expects that format.
+local GiftRemote = ReplicatedStorage
+	:WaitForChild("GameEvents")
+	:WaitForChild("Gift")
+	:WaitForChild("SendGiftTo")
+
+------------------------------------------------
+-- PRODUCT DATABASE
+------------------------------------------------
+local Products = {
+
+	-- SEED PACKS
+	["Open 1 - Exotic Seed Pack"] = {
+		GiftId = 3269033223;
+		NormalId = 3267528421;
+		Display = "1 Exotic Seed Pack";
+		Category = "Seeds";
+	};
+	["Open 3 - Exotic Seed Pack"] = {
+		GiftId = 3269033336;
+		NormalId = 3267548052;
+		Display = "3 Exotic Seed Packs";
+		Category = "Seeds";
+	};
+	["Open 10 - Exotic Seed Pack"] = {
+		GiftId = 3269033529;
+		NormalId = 3267548161;
+		Display = "10 Exotic Seed Packs";
+		Category = "Seeds";
+	};
+
+	-- BUG EGGS
+	["Open 1 - Bug Egg"] = {
+		GiftId = 3277815193;
+		NormalId = 3278426597;
+		Display = "1 Bug Egg";
+		Category = "Eggs";
+	};
+	["Open 3 - Bug Egg"] = {
+		GiftId = 3277815350;
+		NormalId = 3277814538;
+		Display = "3 Bug Eggs";
+		Category = "Eggs";
+	};
+	["Open 10 - Bug Egg"] = {
+		GiftId = 3277815654;
+		NormalId = 3277814625;
+		Display = "10 Bug Eggs";
+		Category = "Eggs";
+	};
+
+	-- PREMIUM
+	["10 Premium Seed Sacks"] = {
+		GiftId = 3273679009;
+		NormalId = 3273679012;
+		Display = "10 Premium Seed Sacks";
+		Category = "Premium";
+	};
+	["10 Premium Night Seeds"] = {
+		GiftId = 3282733014;
+		NormalId = 3282157462;
+		Display = "10 Premium Night Seeds";
+		Category = "Premium";
+	};
+	["10 Premium Night Eggs"] = {
+		GiftId = 3282661439;
+		NormalId = 3282157312;
+		Display = "10 Premium Night Eggs";
+		Category = "Premium";
+	};
+
+	-- COSMETIC CRATES
+	["+1 Exclusive Cosmetic Crate"] = {
+		GiftId = 3290672926;
+		NormalId = 3290672626;
+		Display = "1 Exclusive Cosmetic Crate";
+		Category = "Crates";
+	};
+	["+3 Exclusive Cosmetic Crates"] = {
+		GiftId = 3290673007;
+		NormalId = 3290672712;
+		Display = "3 Exclusive Cosmetic Crates";
+		Category = "Crates";
+	};
+	["+10 Exclusive Cosmetic Crates"] = {
+		GiftId = 3290673073;
+		NormalId = 3290672848;
+		Display = "10 Exclusive Cosmetic Crates";
+		Category = "Crates";
+	};
+
+	-- FLOWER SEEDS
+	["+1 Exotic Flower Seed Pack"] = {
+		GiftId = 3295548788;
+		NormalId = 3295548770;
+		Display = "1 Exotic Flower Seed Pack";
+		Category = "Seeds";
+	};
+	["+3 Exotic Flower Seed Pack"] = {
+		GiftId = 3295548780;
+		NormalId = 3295548782;
+		Display = "3 Exotic Flower Seed Packs";
+		Category = "Seeds";
+	};
+	["+10 Exotic Flower Seed Pack"] = {
+		GiftId = 3295548784;
+		NormalId = 3295548781;
+		Display = "10 Exotic Flower Seed Packs";
+		Category = "Seeds";
+	};
+
+	-- CRAFTERS SEEDS
+	["+1 Exotic Crafters Seed Pack"] = {
+		GiftId = 3306352285;
+		NormalId = 3306352279;
+		Display = "1 Exotic Crafters Seed Pack";
+		Category = "Seeds";
+	};
+	["+3 Exotic Crafters Seed Pack"] = {
+		GiftId = 3306352286;
+		NormalId = 3306352283;
+		Display = "3 Exotic Crafters Seed Packs";
+		Category = "Seeds";
+	};
+	["+10 Exotic Crafters Seed Pack"] = {
+		GiftId = 3306352287;
+		NormalId = 3306352284;
+		Display = "10 Exotic Crafters Seed Packs";
+		Category = "Seeds";
+	};
+
+	-- SUMMER SEEDS
+	["+1 Exotic Summer Seed Pack"] = {
+		GiftId = 3311388950;
+		NormalId = 3311388942;
+		Display = "1 Exotic Summer Seed Pack";
+		Category = "Seeds";
+	};
+	["+3 Exotic Summer Seed Pack"] = {
+		GiftId = 3311388953;
+		NormalId = 3311388951;
+		Display = "3 Exotic Summer Seed Packs";
+		Category = "Seeds";
+	};
+	["+10 Exotic Summer Seed Pack"] = {
+		GiftId = 3311388949;
+		NormalId = 3311388948;
+		Display = "10 Exotic Summer Seed Packs";
+		Category = "Seeds";
+	};
+
+	-- ANCIENT SEEDS
+	["+1 Exotic Ancient Seed Pack"] = {
+		GiftId = 3323657555;
+		NormalId = 3323657553;
+		Display = "1 Exotic Ancient Seed Pack";
+		Category = "Seeds";
+	};
+	["+3 Exotic Ancient Seed Pack"] = {
+		GiftId = 3323657556;
+		NormalId = 3323657547;
+		Display = "3 Exotic Ancient Seed Packs";
+		Category = "Seeds";
+	};
+	["+10 Exotic Ancient Seed Pack"] = {
+		GiftId = 3323657554;
+		NormalId = 3323657552;
+		Display = "10 Exotic Ancient Seed Packs";
+		Category = "Seeds";
+	};
+
+	-- ZEN SEEDS
+	["+1 Exotic Zen Seed Pack"] = {
+		GiftId = 3338826788;
+		NormalId = 3338826792;
+		Display = "1 Exotic Zen Seed Pack";
+		Category = "Seeds";
+	};
+	["+3 Exotic Zen Seed Pack"] = {
+		GiftId = 3338826794;
+		NormalId = 3338826791;
+		Display = "3 Exotic Zen Seed Packs";
+		Category = "Seeds";
+	};
+	["+10 Exotic Zen Seed Pack"] = {
+		GiftId = 3338826793;
+		NormalId = 3338826790;
+		Display = "10 Exotic Zen Seed Packs";
+		Category = "Seeds";
+	};
+
+	-- GOURMET
+	["+1 Exotic Gourmet Seed Pack"] = {
+		GiftId = 3354839820;
+		NormalId = 3354839803;
+		Display = "1 Exotic Gourmet Seed Pack";
+		Category = "Seeds";
+	};
+	["+3 Exotic Gourmet Seed Packs"] = {
+		GiftId = 3354839819;
+		NormalId = 3354839826;
+		Display = "3 Exotic Gourmet Seed Packs";
+		Category = "Seeds";
+	};
+	["+10 Exotic Gourmet Seed Packs"] = {
+		GiftId = 3354839818;
+		NormalId = 3354839817;
+		Display = "10 Exotic Gourmet Seed Packs";
+		Category = "Seeds";
+	};
+
+	-- SPROUT
+	["+1 Exotic Sprout Seed Pack"] = {
+		GiftId = 3371226361;
+		NormalId = 3371226353;
+		Display = "1 Exotic Sprout Seed Pack";
+		Category = "Seeds";
+	};
+	["+3 Exotic Sprout Seed Packs"] = {
+		GiftId = 3371226362;
+		NormalId = 3371226360;
+		Display = "3 Exotic Sprout Seed Packs";
+		Category = "Seeds";
+	};
+	["+10 Exotic Sprout Seed Packs"] = {
+		GiftId = 3371226364;
+		NormalId = 3371226363;
+		Display = "10 Exotic Sprout Seed Packs";
+		Category = "Seeds";
+	};
+
+	-- ENCHANTED SEEDS
+	["+1 Exotic Enchanted Seed Pack"] = {
+		GiftId = 3387753639;
+		NormalId = 3387753641;
+		Display = "1 Exotic Enchanted Seed Pack";
+		Category = "Seeds";
+	};
+	["+3 Exotic Enchanted Seed Packs"] = {
+		GiftId = 3387753637;
+		NormalId = 3387753634;
+		Display = "3 Exotic Enchanted Seed Packs";
+		Category = "Seeds";
+	};
+	["+10 Exotic Enchanted Seed Packs"] = {
+		GiftId = 3387753640;
+		NormalId = 3387753638;
+		Display = "10 Exotic Enchanted Seed Packs";
+		Category = "Seeds";
+	};
+
+	-- FALL
+	["+1 Exotic Fall Seed Pack"] = {
+		GiftId = 3407391673;
+		NormalId = 3407391662;
+		Display = "1 Exotic Fall Seed Pack";
+		Category = "Seeds";
+	};
+	["+3 Exotic Fall Seed Packs"] = {
+		GiftId = 3407391664;
+		NormalId = 3407391663;
+		Display = "3 Exotic Fall Seed Packs";
+		Category = "Seeds";
+	};
+	["+10 Exotic Fall Seed Packs"] = {
+		GiftId = 3407391665;
+		NormalId = 3407391666;
+		Display = "10 Exotic Fall Seed Packs";
+		Category = "Seeds";
+	};
+
+	-- SAFARI
+	["+1 Exotic Safari Seed Pack"] = {
+		GiftId = 3449810468;
+		NormalId = 3449810469;
+		Display = "1 Exotic Safari Seed Pack";
+		Category = "Seeds";
+	};
+	["+3 Exotic Safari Seed Packs"] = {
+		GiftId = 3449810470;
+		NormalId = 3449810472;
+		Display = "3 Exotic Safari Seed Packs";
+		Category = "Seeds";
+	};
+	["+10 Exotic Safari Seed Packs"] = {
+		GiftId = 3449810473;
+		NormalId = 3449810471;
+		Display = "10 Exotic Safari Seed Packs";
+		Category = "Seeds";
+	};
+
+	-- CHESTS (ALL TYPES)
+	["+1 Exotic Culinarian Chests"] = {
+		GiftId = 3362680913;
+		NormalId = 3362680911;
+		Display = "1 Exotic Culinarian Chests";
+		Category = "Chests";
+	};
+	["+3 Exotic Culinarian Chests"] = {
+		GiftId = 3362680919;
+		NormalId = 3362680917;
+		Display = "3 Exotic Culinarian Chests";
+		Category = "Chests";
+	};
+	["+10 Exotic Culinarian Chests"] = {
+		GiftId = 3362680914;
+		NormalId = w;
+		Display = "10 Exotic Culinarian Chests";
+		Category = "Chests";
+	};
+
+	["+1 Exotic Kitsune Chest"] = {
+		GiftId = 3345819471;
+		NormalId = 3345819463;
+		Display = "1 Exotic Kitsune Chest";
+		Category = "Chests";
+	};
+	["+3 Exotic Kitsune Chests"] = {
+		GiftId = 3345819477;
+		NormalId = 3345819470;
+		Display = "3 Exotic Kitsune Chests";
+		Category = "Chests";
+	};
+	["+10 Exotic Kitsune Chests"] = {
+		GiftId = 3345819473;
+		NormalId = 3345819472;
+		Display = "10 Exotic Kitsune Chests";
+		Category = "Chests";
+	};
+
+	["+1 Exotic Skyroot Chest"] = {
+		GiftId = 3379038160;
+		NormalId = 3379038157;
+		Display = "1 Exotic Skyroot Chest";
+		Category = "Chests";
+	};
+	["+3 Exotic Skyroot Chests"] = {
+		GiftId = 3379038158;
+		NormalId = 3379038152;
+		Display = "3 Exotic Skyroot Chests";
+		Category = "Chests";
+	};
+	["+10 Exotic Skyroot Chests"] = {
+		GiftId = 3379038166;
+		NormalId = 3379038159;
+		Display = "10 Exotic Skyroot Chests";
+		Category = "Chests";
+	};
+
+	["+1 Exotic Enchanted Chest"] = {
+		GiftId = 3394224240;
+		NormalId = 3394224231;
+		Display = "1 Exotic Enchanted Chest";
+		Category = "Chests";
+	};
+	["+3 Exotic Enchanted Chests"] = {
+		GiftId = 3394224238;
+		NormalId = 3394224239;
+		Display = "3 Exotic Enchanted Chests";
+		Category = "Chests";
+	};
+	["+10 Exotic Enchanted Chests"] = {
+		GiftId = 3394224256;
+		NormalId = 3394224237;
+		Display = "10 Exotic Enchanted Chests";
+		Category = "Chests";
+	};
+
+	["+1 Exotic Nutty Chest"] = {
+		GiftId = 3420021048;
+		NormalId = 3420021045;
+		Display = "1 Exotic Nutty Chest";
+		Category = "Chests";
+	};
+	["+3 Exotic Nutty Chests"] = {
+		GiftId = 3420021049;
+		NormalId = 3420021043;
+		Display = "3 Exotic Nutty Chests";
+		Category = "Chests";
+	};
+	["+10 Exotic Nutty Chests"] = {
+		GiftId = 3420021050;
+		NormalId = 3420021044;
+		Display = "10 Exotic Nutty Chests";
+		Category = "Chests";
+	};
+
+	["+1 Exotic Spooky Chest"] = {
+		GiftId = 3438653515;
+		NormalId = 3438653519;
+		Display = "1 Exotic Spooky Chest";
+		Category = "Chests";
+	};
+	["+3 Exotic Spooky Chests"] = {
+		GiftId = 3438653520;
+		NormalId = 3438653518;
+		Display = "3 Exotic Spooky Chests";
+		Category = "Chests";
+	};
+	["+10 Exotic Spooky Chests"] = {
+		GiftId = 3438653521;
+		NormalId = 3438653517;
+		Display = "10 Exotic Spooky Chests";
+		Category = "Chests";
+	};
+
+	["+1 Exotic Gem Chest"] = {
+		GiftId = 3460600738;
+		NormalId = 3460600740;
+		Display = "1 Exotic Gem Chest";
+		Category = "Chests";
+	};
+	["+3 Exotic Gem Chests"] = {
+		GiftId = 3460600739;
+		NormalId = 3460600737;
+		Display = "3 Exotic Gem Chests";
+		Category = "Chests";
+	};
+	["+10 Exotic Gem Chests"] = {
+		GiftId = 3460600741;
+		NormalId = 3460600736;
+		Display = "10 Exotic Gem Chests";
+		Category = "Chests";
+	};
+
+	["+1 Exotic Buttercup Chest"] = {
+		GiftId = 3520430333;
+		NormalId = 3520430329;
+		Display = "1 Exotic Buttercup Chest";
+		Category = "Chests";
+	};
+	["+3 Exotic Buttercup Chests"] = {
+		GiftId = 3520430330;
+		NormalId = 3520430327;
+		Display = "3 Exotic Buttercup Chests";
+		Category = "Chests";
+	};
+	["+10 Exotic Buttercup Chests"] = {
+		GiftId = 3520430332;
+		NormalId = 3520430328;
+		Display = "10 Exotic Buttercup Chests";
+		Category = "Chests";
+	};
+	["+50 Exotic Buttercup Chests"] = {
+		GiftId = 3520430334;
+		NormalId = 3520430331;
+		Display = "50 Exotic Buttercup Chests";
+		Category = "Chests";
+	};
+
+	-- CRATES / GONME
+	["+1 Iconic Gonme Crate"] = {
+		GiftId = 3300962951;
+		NormalId = 3300962946;
+		Display = "1 Iconic Gonme Crate";
+		Category = "Crates";
+	};
+	["+3 Iconic Gonme Crate"] = {
+		GiftId = 3300962954;
+		NormalId = 3300962950;
+		Display = "3 Iconic Gonme Crate";
+		Category = "Crates";
+	};
+	["+10 Iconic Gonme Crate"] = {
+		GiftId = 3300962960;
+		NormalId = 3300962952;
+		Display = "10 Iconic Gonme Crate";
+		Category = "Crates";
+	};
+
+	-- EGGS PREMIUM
+	["+1 Premium Anti Bee Egg"] = {
+		GiftId = 3301567956;
+		NormalId = 3301567958;
+		Display = "1 Premium Anti Bee Egg";
+		Category = "Eggs";
+	};
+	["+3 Premium Anti Bee Egg"] = {
+		GiftId = 3301567959;
+		NormalId = 3301567955;
+		Display = "3 Premium Anti Bee Egg";
+		Category = "Eggs";
+	};
+	["+10 Premium Anti Bee Egg"] = {
+		GiftId = 3301567957;
+		NormalId = 3301567960;
+		Display = "10 Premium Anti Bee Egg";
+		Category = "Eggs";
+	};
+
+	["+1 Premium Oasis Egg"] = {
+		GiftId = 3317459189;
+		NormalId = 3317459182;
+		Display = "1 Premium Oasis Egg";
+		Category = "Eggs";
+	};
+	["+3 Premium Oasis Egg"] = {
+		GiftId = 3317459185;
+		NormalId = 3317459186;
+		Display = "3 Premium Oasis Egg";
+		Category = "Eggs";
+	};
+	["+10 Premium Oasis Egg"] = {
+		GiftId = 3317459187;
+		NormalId = 3317459188;
+		Display = "10 Premium Oasis Egg";
+		Category = "Eggs";
+	};
+
+	["+1 Premium Primal Egg"] = {
+		GiftId = 3330286152;
+		NormalId = 3330286154;
+		Display = "1 Premium Primal Egg";
+		Category = "Eggs";
+	};
+	["+3 Premium Primal Egg"] = {
+		GiftId = 3330286153;
+		NormalId = 3330286155;
+		Display = "3 Premium Primal Egg";
+		Category = "Eggs";
+	};
+	["+10 Premium Primal Egg"] = {
+		GiftId = 3330286160;
+		NormalId = 3330286148;
+		Display = "10 Premium Primal Egg";
+		Category = "Eggs";
+	};
+
+	["+1 Premium Fall Egg"] = {
+		GiftId = 3401426986;
+		NormalId = 3401426983;
+		Display = "1 Premium Fall Egg";
+		Category = "Eggs";
+	};
+	["+3 Premium Fall Eggs"] = {
+		GiftId = 3401426987;
+		NormalId = 3401426985;
+		Display = "3 Premium Fall Eggs";
+		Category = "Eggs";
+	};
+	["+10 Premium Fall Eggs"] = {
+		GiftId = 3401426988;
+		NormalId = 3401426984;
+		Display = "10 Premium Fall Eggs";
+		Category = "Eggs";
+	};
+
+	["+1 Premium Spooky Egg"] = {
+		GiftId = 3427163851;
+		NormalId = 3427163857;
+		Display = "1 Premium Spooky Egg";
+		Category = "Eggs";
+	};
+	["+3 Premium Spooky Eggs"] = {
+		GiftId = 3427163855;
+		NormalId = 3427163854;
+		Display = "3 Premium Spooky Eggs";
+		Category = "Eggs";
+	};
+	["+10 Premium Spooky Eggs"] = {
+		GiftId = 3427163856;
+		NormalId = 3427163853;
+		Display = "10 Premium Spooky Eggs";
+		Category = "Eggs";
+	};
+
+	["+1 Premium Safari Egg"] = {
+		GiftId = 3444449490;
+		NormalId = 3444449487;
+		Display = "1 Premium Safari Egg";
+		Category = "Eggs";
+	};
+	["+3 Premium Safari Eggs"] = {
+		GiftId = 3444449488;
+		NormalId = 3444449485;
+		Display = "3 Premium Safari Eggs";
+		Category = "Eggs";
+	};
+	["+10 Premium Safari Eggs"] = {
+		GiftId = 3444449489;
+		NormalId = 3444449486;
+		Display = "10 Premium Safari Eggs";
+		Category = "Eggs";
+	};
+
+	["+1 Premium Christmas Egg"] = {
+		GiftId = 3477922694;
+		NormalId = 3477922698;
+		Display = "1 Premium Christmas Egg";
+		Category = "Eggs";
+	};
+	["+3 Premium Christmas Eggs"] = {
+		GiftId = 3477922696;
+		NormalId = 3477922697;
+		Display = "3 Premium Christmas Eggs";
+		Category = "Eggs";
+	};
+	["+10 Premium Christmas Eggs"] = {
+		GiftId = 3477922699;
+		NormalId = 3477922700;
+		Display = "10 Premium Christmas Eggs";
+		Category = "Eggs";
+	};
+	["+50 Premium Christmas Eggs"] = {
+		GiftId = 3478044311;
+		NormalId = 3478043835;
+		Display = "50 Premium Christmas Eggs";
+		Category = "Eggs";
+	};
+
+	["+1 Premium Winter Egg"] = {
+		GiftId = 3483801742;
+		NormalId = 3483801741;
+		Display = "1 Premium Winter Egg";
+		Category = "Eggs";
+	};
+	["+3 Premium Winter Eggs"] = {
+		GiftId = 3483801746;
+		NormalId = 3483801745;
+		Display = "3 Premium Winter Eggs";
+		Category = "Eggs";
+	};
+	["+10 Premium Winter Eggs"] = {
+		GiftId = 3483801749;
+		NormalId = 3483801744;
+		Display = "10 Premium Winter Eggs";
+		Category = "Eggs";
+	};
+	["+50 Premium Winter Eggs"] = {
+		GiftId = 3483801747;
+		NormalId = 3483801743;
+		Display = "50 Premium Winter Eggs";
+		Category = "Eggs";
+	};
+
+	["+1 Premium New Year's Egg"] = {
+		GiftId = 3489363340;
+		NormalId = 3489363343;
+		Display = "1 Premium New Year's Egg";
+		Category = "Eggs";
+	};
+	["+3 Premium New Year's Eggs"] = {
+		GiftId = 3489363337;
+		NormalId = 3489363338;
+		Display = "3 Premium New Year's Eggs";
+		Category = "Eggs";
+	};
+	["+10 Premium New Year's Eggs"] = {
+		GiftId = 3489363341;
+		NormalId = 3489363342;
+		Display = "10 Premium New Year's Eggs";
+		Category = "Eggs";
+	};
+	["+50 Premium New Year's Eggs"] = {
+		GiftId = 3489363345;
+		NormalId = 3489363344;
+		Display = "50 Premium New Year's Eggs";
+		Category = "Eggs";
+	};
+
+	["+1 Premium Carnival Egg"] = {
+		GiftId = 3497475841;
+		NormalId = 3497475839;
+		Display = "1 Premium Carnival Egg";
+		Category = "Eggs";
+	};
+	["+3 Premium Carnival Eggs"] = {
+		GiftId = 3497475845;
+		NormalId = 3497475846;
+		Display = "3 Premium Carnival Eggs";
+		Category = "Eggs";
+	};
+	["+10 Premium Carnival Eggs"] = {
+		GiftId = 3497475840;
+		NormalId = 3497475844;
+		Display = "10 Premium Carnival Eggs";
+		Category = "Eggs";
+	};
+	["+50 Premium Carnival Eggs"] = {
+		GiftId = 3497475842;
+		NormalId = 3497475843;
+		Display = "50 Premium Carnival Eggs";
+		Category = "Eggs";
+	};
+
+	["+1 Premium Bird Egg"] = {
+		GiftId = 3512151974;
+		NormalId = 3512151971;
+		Display = "1 Premium Bird Egg";
+		Category = "Eggs";
+	};
+	["+3 Premium Bird Eggs"] = {
+		GiftId = 3512151972;
+		NormalId = 3512151973;
+		Display = "3 Premium Bird Eggs";
+		Category = "Eggs";
+	};
+	["+10 Premium Bird Eggs"] = {
+		GiftId = 3512151975;
+		NormalId = 3512151976;
+		Display = "10 Premium Bird Eggs";
+		Category = "Eggs";
+	};
+	["+50 Premium Birdl Eggs"] = {
+		GiftId = 3512151981;
+		NormalId = 3512151977;
+		Display = "50 Premium Bird Eggs";
+		Category = "Eggs";
+	};
+
+	-- TOKENS
+	["Trade Token 50"] = {
+		GiftId = 3425758808;
+		NormalId = 3460376533;
+		Display = "Trade Token 50";
+		Category = "Tokens";
+		ForcedRobuxPurchase = true;
+	};
+	["Trade Token 250"] = {
+		GiftId = 3425758810;
+		NormalId = 3460378135;
+		Display = "Trade Token 250";
+		Category = "Tokens";
+		ForcedRobuxPurchase = true;
+	};
+	["Trade Token 1000"] = {
+		GiftId = 3425758809;
+		NormalId = 3460378800;
+		Display = "Trade Token 1000";
+		Category = "Tokens";
+		ForcedRobuxPurchase = true;
+	};
+	["Trade Token 5000"] = {
+		GiftId = 3425758811;
+		NormalId = 3460379424;
+		Display = "Trade Token 5000";
+		Category = "Tokens";
+		ForcedRobuxPurchase = true;
+	};
+	["Trade Token 25000"] = {
+		GiftId = 3425758812;
+		NormalId = 3460379831;
+		Display = "Trade Token 25000";
+		Category = "Tokens";
+		ForcedRobuxPurchase = true;
+	};
+
+	-- CURRENCY
+	["Sheckles 1"] = {
+		GiftId = 3269363716;
+		NormalId = 3250137172;
+		Display = "100¢";
+		Category = "Currency";
+	};
+	["Sheckles 2"] = {
+		GiftId = 3269364749;
+		NormalId = 3250137261;
+		Display = "250¢";
+		Category = "Currency";
+	};
+	["Sheckles 3"] = {
+		GiftId = 3269364968;
+		NormalId = 3250137355;
+		Display = "1,000¢";
+		Category = "Currency";
+	};
+	["Sheckles 4"] = {
+		GiftId = 3269365441;
+		NormalId = 3250139018;
+		Display = "5,000¢";
+		Category = "Currency";
+	};
+
+}
+
+local Categories = { "All", "Seeds", "Eggs", "Chests", "Tokens", "Currency", "Premium", "Crates" }
+
+-- Per-category accent colours (Border / Button tint)
+local CategoryColors = {
+	Seeds    = Color3.fromRGB(60,  200, 120),
+	Eggs     = Color3.fromRGB(255, 120, 180),
+	Chests   = Color3.fromRGB(255, 180,  60),
+	Tokens   = Color3.fromRGB(100, 140, 255),
+	Currency = Color3.fromRGB(255, 220,  60),
+	Premium  = Color3.fromRGB(200, 100, 255),
+	Crates   = Color3.fromRGB(255, 100, 100),
+}
+
+local DEFAULT_COLOR = Color3.fromRGB(120, 120, 120)
+
+local function categoryColor(cat)
+	return CategoryColors[cat] or DEFAULT_COLOR
+end
+
+------------------------------------------------
+-- HELPERS
+------------------------------------------------
+local function tween(obj, info, props)
+	TweenService:Create(obj, info, props):Play()
+end
+
+local FAST  = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local MED   = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+------------------------------------------------
+-- GUI SETUP
+------------------------------------------------
+-- BUG FIX: Destroy any previous instance so re-running the script in
+-- Studio doesn't stack duplicate GUIs.
+if game.CoreGui:FindFirstChild("ShopGui") then
+	game.CoreGui.ShopGui:Destroy()
+end
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name            = "ShopGui"
+Gui.ResetOnSpawn    = false
+Gui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
+Gui.Parent          = game.CoreGui
+
+-- Dim backdrop
+local Backdrop = Instance.new("Frame", Gui)
+Backdrop.Size                = UDim2.fromScale(1, 1)
+Backdrop.BackgroundColor3    = Color3.fromRGB(0, 0, 0)
+Backdrop.BackgroundTransparency = 0.5
+Backdrop.BorderSizePixel     = 0
+
+-- Main window
+local Main = Instance.new("Frame", Gui)
+Main.Size            = UDim2.new(0, 980, 0, 580)
+Main.Position        = UDim2.new(0.5, 0, 0.5, 0)
+Main.AnchorPoint     = Vector2.new(0.5, 0.5)
+Main.BackgroundColor3 = Color3.fromRGB(14, 14, 14)
+Main.BorderSizePixel = 0
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 14)
+
+-- Subtle outer stroke
+local MainStroke = Instance.new("UIStroke", Main)
+MainStroke.Color        = Color3.fromRGB(255, 255, 255)
+MainStroke.Transparency = 0.88
+MainStroke.Thickness    = 1
+
+------------------------------------------------
+-- TOAST NOTIFICATION
+------------------------------------------------
+local Toast = Instance.new("Frame", Gui)
+Toast.Size               = UDim2.new(0, 280, 0, 40)
+Toast.Position           = UDim2.new(0.5, 0, 1, 60)   -- starts off-screen
+Toast.AnchorPoint        = Vector2.new(0.5, 1)
+Toast.BackgroundColor3   = Color3.fromRGB(40, 40, 40)
+Toast.BorderSizePixel    = 0
+Toast.ZIndex             = 20
+Instance.new("UICorner", Toast).CornerRadius = UDim.new(0, 8)
+
+local ToastStroke = Instance.new("UIStroke", Toast)
+ToastStroke.Color        = Color3.fromRGB(255, 255, 255)
+ToastStroke.Transparency = 0.8
+ToastStroke.Thickness    = 0.5
+
+local ToastLabel = Instance.new("TextLabel", Toast)
+ToastLabel.Size              = UDim2.fromScale(1, 1)
+ToastLabel.BackgroundTransparency = 1
+ToastLabel.TextColor3        = Color3.fromRGB(210, 210, 210)
+ToastLabel.Font              = Enum.Font.Gotham
+ToastLabel.TextSize          = 13
+ToastLabel.Text              = ""
+ToastLabel.ZIndex            = 21
+
+local toastThread
+local function showToast(msg, color)
+	if toastThread then
+		task.cancel(toastThread)
+	end
+	ToastLabel.Text       = msg
+	ToastStroke.Color     = color or Color3.fromRGB(255, 255, 255)
+	ToastStroke.Transparency = color and 0.5 or 0.8
+	tween(Toast, MED, { Position = UDim2.new(0.5, 0, 1, -20) })
+	toastThread = task.delay(2.5, function()
+		tween(Toast, MED, { Position = UDim2.new(0.5, 0, 1, 60) })
+	end)
+end
+
+------------------------------------------------
+-- TITLE BAR
+------------------------------------------------
+local TitleBar = Instance.new("Frame", Main)
+TitleBar.Size             = UDim2.new(1, 0, 0, 52)
+TitleBar.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+TitleBar.BorderSizePixel  = 0
+
+local TitleCorner = Instance.new("UICorner", TitleBar)
+TitleCorner.CornerRadius = UDim.new(0, 14)
+
+-- Cover the bottom corners of TitleBar so it looks flat at the bottom
+local TitleCoverBottom = Instance.new("Frame", TitleBar)
+TitleCoverBottom.Size             = UDim2.new(1, 0, 0, 14)
+TitleCoverBottom.Position         = UDim2.new(0, 0, 1, -14)
+TitleCoverBottom.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+TitleCoverBottom.BorderSizePixel  = 0
+
+local TitleLabel = Instance.new("TextLabel", TitleBar)
+TitleLabel.Size              = UDim2.new(1, -60, 1, 0)
+TitleLabel.Position          = UDim2.new(0, 20, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text              = "Shop"
+TitleLabel.TextColor3        = Color3.fromRGB(230, 230, 230)
+TitleLabel.Font              = Enum.Font.GothamBold
+TitleLabel.TextSize          = 16
+TitleLabel.TextXAlignment    = Enum.TextXAlignment.Left
+
+-- Close button
+local CloseBtn = Instance.new("TextButton", TitleBar)
+CloseBtn.Size                = UDim2.new(0, 28, 0, 28)
+CloseBtn.Position            = UDim2.new(1, -40, 0.5, -14)
+CloseBtn.BackgroundColor3    = Color3.fromRGB(60, 60, 60)
+CloseBtn.Text                = "✕"
+CloseBtn.TextColor3          = Color3.fromRGB(180, 180, 180)
+CloseBtn.Font                = Enum.Font.Gotham
+CloseBtn.TextSize            = 13
+CloseBtn.BorderSizePixel     = 0
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(1, 0)
+
+CloseBtn.MouseButton1Click:Connect(function()
+	Gui:Destroy()
+end)
+
+CloseBtn.MouseEnter:Connect(function()
+	tween(CloseBtn, FAST, { BackgroundColor3 = Color3.fromRGB(200, 70, 70) })
+end)
+CloseBtn.MouseLeave:Connect(function()
+	tween(CloseBtn, FAST, { BackgroundColor3 = Color3.fromRGB(60, 60, 60) })
+end)
+
+-- Divider under title bar
+local Divider = Instance.new("Frame", Main)
+Divider.Size             = UDim2.new(1, 0, 0, 1)
+Divider.Position         = UDim2.new(0, 0, 0, 52)
+Divider.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Divider.BackgroundTransparency = 0.88
+Divider.BorderSizePixel  = 0
+
+------------------------------------------------
+-- LEFT PANEL – PLAYER LIST
+------------------------------------------------
+local Left = Instance.new("Frame", Main)
+Left.Size             = UDim2.new(0, 220, 1, -52)
+Left.Position         = UDim2.new(0, 0, 0, 52)
+Left.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+Left.BorderSizePixel  = 0
+
+local LeftDivider = Instance.new("Frame", Left)
+LeftDivider.Size             = UDim2.new(0, 1, 1, 0)
+LeftDivider.Position         = UDim2.new(1, -1, 0, 0)
+LeftDivider.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+LeftDivider.BackgroundTransparency = 0.88
+LeftDivider.BorderSizePixel  = 0
+
+local SectionLabel = Instance.new("TextLabel", Left)
+SectionLabel.Size              = UDim2.new(1, -16, 0, 32)
+SectionLabel.Position          = UDim2.new(0, 16, 0, 8)
+SectionLabel.BackgroundTransparency = 1
+SectionLabel.Text              = "SEND GIFT TO"
+SectionLabel.TextColor3        = Color3.fromRGB(120, 120, 120)
+SectionLabel.Font              = Enum.Font.GothamBold
+SectionLabel.TextSize          = 10
+SectionLabel.TextXAlignment    = Enum.TextXAlignment.Left
+
+local PlayerScroll = Instance.new("ScrollingFrame", Left)
+PlayerScroll.Size                = UDim2.new(1, 0, 1, -44)
+PlayerScroll.Position            = UDim2.new(0, 0, 0, 44)
+PlayerScroll.BackgroundTransparency = 1
+PlayerScroll.ScrollBarThickness  = 4
+PlayerScroll.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
+PlayerScroll.ScrollingDirection  = Enum.ScrollingDirection.Y
+PlayerScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+PlayerScroll.BorderSizePixel     = 0
+
+local PlayerLayout = Instance.new("UIListLayout", PlayerScroll)
+PlayerLayout.Padding       = UDim.new(0, 2)
+PlayerLayout.SortOrder     = Enum.SortOrder.LayoutOrder
+
+local PlayerPadding = Instance.new("UIPadding", PlayerScroll)
+PlayerPadding.PaddingLeft   = UDim.new(0, 8)
+PlayerPadding.PaddingRight  = UDim.new(0, 8)
+PlayerPadding.PaddingTop    = UDim.new(0, 4)
+PlayerPadding.PaddingBottom = UDim.new(0, 8)
+
+------------------------------------------------
+-- PLAYER SELECTION STATE
+------------------------------------------------
+local SelectedPlayer = LocalPlayer
+local SelectedButton = nil
+
+local function getInitials(name)
+	local parts = string.gmatch(name, "%u")
+	local a, b = parts(), parts()
+	if a and b then
+		return a .. b
+	elseif a then
+		return a .. (string.sub(name, 2, 2):upper())
+	end
+	return string.sub(name, 1, 2):upper()
+end
+
+local function selectPlayer(plr, btn)
+	if SelectedButton then
+		tween(SelectedButton, FAST, {
+			BackgroundColor3 = Color3.fromRGB(28, 28, 28),
+			BackgroundTransparency = 0,
+		})
+		local lbl = SelectedButton:FindFirstChild("NameLabel")
+		if lbl then
+			tween(lbl, FAST, { TextColor3 = Color3.fromRGB(180, 180, 180) })
+		end
+	end
+	SelectedPlayer = plr
+	SelectedButton = btn
+	tween(btn, FAST, { BackgroundColor3 = Color3.fromRGB(40, 70, 140) })
+	local lbl = btn:FindFirstChild("NameLabel")
+	if lbl then
+		tween(lbl, FAST, { TextColor3 = Color3.fromRGB(150, 190, 255) })
+	end
+end
+
+local function createPlayerButton(plr)
+	local btn = Instance.new("TextButton", PlayerScroll)
+	btn.Name              = "PlayerBtn_" .. plr.Name
+	btn.Size              = UDim2.new(1, 0, 0, 50)
+	btn.BackgroundColor3  = Color3.fromRGB(28, 28, 28)
+	btn.BackgroundTransparency = 0
+	btn.Text              = ""
+	btn.AutoButtonColor   = false
+	btn.BorderSizePixel   = 0
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+
+	-- Avatar circle
+	local av = Instance.new("Frame", btn)
+	av.Name             = "Avatar"
+	av.Size             = UDim2.new(0, 32, 0, 32)
+	av.Position         = UDim2.new(0, 10, 0.5, -16)
+	av.BackgroundColor3 = Color3.fromRGB(40, 60, 120)
+	av.BorderSizePixel  = 0
+	Instance.new("UICorner", av).CornerRadius = UDim.new(1, 0)
+
+	local avLabel = Instance.new("TextLabel", av)
+	avLabel.Size             = UDim2.fromScale(1, 1)
+	avLabel.BackgroundTransparency = 1
+	avLabel.Text             = getInitials(plr.Name)
+	avLabel.TextColor3       = Color3.fromRGB(150, 190, 255)
+	avLabel.Font             = Enum.Font.GothamBold
+	avLabel.TextSize         = 12
+
+	-- Player name
+	local nameLabel = Instance.new("TextLabel", btn)
+	nameLabel.Name           = "NameLabel"
+	nameLabel.Size           = UDim2.new(1, -52, 0, 20)
+	nameLabel.Position       = UDim2.new(0, 50, 0, 8)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text           = plr.Name
+	nameLabel.TextColor3     = Color3.fromRGB(180, 180, 180)
+	nameLabel.Font           = Enum.Font.Gotham
+	nameLabel.TextSize       = 13
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.TextTruncate   = Enum.TextTruncate.AtEnd
+
+	-- "(you)" sub-label
+	if plr == LocalPlayer then
+		local youLabel = Instance.new("TextLabel", btn)
+		youLabel.Size            = UDim2.new(1, -52, 0, 14)
+		youLabel.Position        = UDim2.new(0, 50, 0, 28)
+		youLabel.BackgroundTransparency = 1
+		youLabel.Text            = "you"
+		youLabel.TextColor3      = Color3.fromRGB(90, 90, 90)
+		youLabel.Font            = Enum.Font.Gotham
+		youLabel.TextSize        = 11
+		youLabel.TextXAlignment  = Enum.TextXAlignment.Left
+	end
+
+	btn.MouseEnter:Connect(function()
+		if btn ~= SelectedButton then
+			tween(btn, FAST, { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
+		end
+	end)
+	btn.MouseLeave:Connect(function()
+		if btn ~= SelectedButton then
+			tween(btn, FAST, { BackgroundColor3 = Color3.fromRGB(28, 28, 28) })
+		end
+	end)
+	btn.MouseButton1Click:Connect(function()
+		selectPlayer(plr, btn)
+	end)
+
+	return btn
+end
+
+-- Populate initial player list
+for _, p in ipairs(Players:GetPlayers()) do
+	local btn = createPlayerButton(p)
+	if p == LocalPlayer then
+		task.defer(function()
+			-- BUG FIX: deferred so the button is parented before selection
+			selectPlayer(p, btn)
+		end)
+	end
+end
+
+-- BUG FIX: Original code never handled players joining/leaving mid-session
+Players.PlayerAdded:Connect(function(p)
+	createPlayerButton(p)
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+	local btn = PlayerScroll:FindFirstChild("PlayerBtn_" .. p.Name)
+	if btn then
+		if btn == SelectedButton then
+			-- Fall back to LocalPlayer
+			local fallback = PlayerScroll:FindFirstChild("PlayerBtn_" .. LocalPlayer.Name)
+			if fallback then
+				selectPlayer(LocalPlayer, fallback)
+			end
+		end
+		btn:Destroy()
+	end
+end)
+
+------------------------------------------------
+-- RIGHT PANEL – CATEGORY FILTERS + PRODUCT GRID
+------------------------------------------------
+local Right = Instance.new("Frame", Main)
+Right.Size             = UDim2.new(1, -220, 1, -52)
+Right.Position         = UDim2.new(0, 220, 0, 52)
+Right.BackgroundTransparency = 1
+Right.BorderSizePixel  = 0
+
+-- Category filter bar
+local FilterBar = Instance.new("Frame", Right)
+FilterBar.Size                = UDim2.new(1, 0, 0, 50)
+FilterBar.BackgroundTransparency = 1
+FilterBar.BorderSizePixel     = 0
+FilterBar.ClipsDescendants    = false
+
+-- Use a plain Frame (not ScrollingFrame) so pills are never clipped
+local FilterInner = Instance.new("Frame", FilterBar)
+FilterInner.Size                = UDim2.new(1, -24, 1, 0)
+FilterInner.Position            = UDim2.new(0, 12, 0, 0)
+FilterInner.BackgroundTransparency = 1
+FilterInner.BorderSizePixel     = 0
+FilterInner.ClipsDescendants    = false
+
+local FilterLayout = Instance.new("UIListLayout", FilterInner)
+FilterLayout.FillDirection      = Enum.FillDirection.Horizontal
+FilterLayout.Padding            = UDim.new(0, 8)
+FilterLayout.VerticalAlignment  = Enum.VerticalAlignment.Center
+FilterLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+
+-- alias so button creation code still targets the right parent
+local FilterScroll = FilterInner
+
+-- Product scroll
+local ProductScroll = Instance.new("ScrollingFrame", Right)
+ProductScroll.Size                = UDim2.new(1, 0, 1, -50)
+ProductScroll.Position            = UDim2.new(0, 0, 0, 50)
+ProductScroll.BackgroundTransparency = 1
+ProductScroll.ScrollBarThickness  = 5
+ProductScroll.ScrollBarImageColor3 = Color3.fromRGB(70, 70, 70)
+ProductScroll.ScrollingDirection  = Enum.ScrollingDirection.Y
+-- BUG FIX: AutomaticCanvasSize handles canvas resizing — removed the
+-- manual CanvasSize setter from UIGridLayout.AbsoluteContentSize signal
+-- which was fighting this and causing jumpy scrolling.
+ProductScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+ProductScroll.BorderSizePixel     = 0
+
+local Grid = Instance.new("UIGridLayout", ProductScroll)
+Grid.CellSize    = UDim2.new(0, 220, 0, 140)
+Grid.CellPadding = UDim2.new(0, 10, 0, 10)
+Grid.SortOrder   = Enum.SortOrder.LayoutOrder
+
+local GridPad = Instance.new("UIPadding", ProductScroll)
+GridPad.PaddingTop    = UDim.new(0, 12)
+GridPad.PaddingBottom = UDim.new(0, 12)
+GridPad.PaddingLeft   = UDim.new(0, 12)
+GridPad.PaddingRight  = UDim.new(0, 12)
+
+------------------------------------------------
+-- ACTIVE FILTER STATE
+------------------------------------------------
+local ActiveFilter = "All"
+local FilterButtons = {}
+local ProductCards  = {}   -- { card, category } pairs for filtering
+
+local function applyFilter(cat)
+	ActiveFilter = cat
+
+	-- Update filter button visuals
+	for _, fb in pairs(FilterButtons) do
+		local isActive = (fb.Category == cat)
+		local col = isActive and categoryColor(fb.Category ~= "All" and fb.Category or "Seeds")
+			or Color3.fromRGB(60, 60, 60)
+		tween(fb.Button, FAST, { BackgroundColor3 = col })
+		fb.Button.TextColor3 = isActive
+			and Color3.fromRGB(240, 240, 240)
+			or Color3.fromRGB(140, 140, 140)
+	end
+
+	-- Show/hide product cards
+	for _, entry in pairs(ProductCards) do
+		local visible = (cat == "All") or (entry.Category == cat)
+		entry.Card.Visible = visible
+	end
+end
+
+------------------------------------------------
+-- CATEGORY FILTER BUTTONS
+------------------------------------------------
+for _, cat in ipairs(Categories) do
+	local fb = Instance.new("TextButton", FilterScroll)
+	fb.AutoButtonColor = false
+	fb.BackgroundColor3 = (cat == "All")
+		and Color3.fromRGB(60, 60, 60)
+		or Color3.fromRGB(30, 30, 30)
+	fb.TextColor3      = (cat == "All")
+		and Color3.fromRGB(240, 240, 240)
+		or Color3.fromRGB(140, 140, 140)
+	fb.Font            = Enum.Font.Gotham
+	fb.TextSize        = 12
+	fb.Text            = cat
+	fb.Size            = UDim2.new(0, 0, 0, 30)
+	fb.AutomaticSize   = Enum.AutomaticSize.X
+	fb.BorderSizePixel = 0
+	Instance.new("UICorner", fb).CornerRadius = UDim.new(1, 0)
+
+	local fbPad = Instance.new("UIPadding", fb)
+	fbPad.PaddingLeft  = UDim.new(0, 14)
+	fbPad.PaddingRight = UDim.new(0, 14)
+
+	fb.MouseEnter:Connect(function()
+		if ActiveFilter ~= cat then
+			tween(fb, FAST, { BackgroundColor3 = Color3.fromRGB(45, 45, 45) })
+		end
+	end)
+	fb.MouseLeave:Connect(function()
+		if ActiveFilter ~= cat then
+			tween(fb, FAST, { BackgroundColor3 = Color3.fromRGB(30, 30, 30) })
+		end
+	end)
+	fb.MouseButton1Click:Connect(function()
+		applyFilter(cat)
+	end)
+
+	table.insert(FilterButtons, { Button = fb, Category = cat })
+end
+
+------------------------------------------------
+-- PRODUCT CARD BUILDER
+------------------------------------------------
+local function makeButton(parent, text, xOff, color)
+	local btn = Instance.new("TextButton", parent)
+	btn.Size              = UDim2.new(0.48, 0, 0, 30)
+	btn.Position          = UDim2.new(xOff, 4, 1, -36)
+	btn.BackgroundColor3  = color
+	btn.Text              = text
+	btn.TextColor3        = Color3.fromRGB(220, 220, 220)
+	btn.Font              = Enum.Font.GothamBold
+	btn.TextSize          = 12
+	btn.AutoButtonColor   = false
+	btn.BorderSizePixel   = 0
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+	return btn
+end
+
+local function setButtonLoading(btn, loading, originalText)
+	btn.Active = not loading
+	btn.Text   = loading and "..." or originalText
+	btn.BackgroundTransparency = loading and 0.5 or 0
+end
+
+local function createProductCard(data)
+	local accentColor = categoryColor(data.Category)
+
+	local card = Instance.new("Frame", ProductScroll)
+	card.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+	card.BorderSizePixel  = 0
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
+
+	local stroke = Instance.new("UIStroke", card)
+	stroke.Color        = Color3.fromRGB(255, 255, 255)
+	stroke.Transparency = 0.88
+	stroke.Thickness    = 0.5
+
+	card.MouseEnter:Connect(function()
+		tween(stroke, FAST, { Color = accentColor, Transparency = 0.5 })
+	end)
+	card.MouseLeave:Connect(function()
+		tween(stroke, FAST, { Color = Color3.fromRGB(255, 255, 255), Transparency = 0.88 })
+	end)
+
+	-- Category badge
+	local badge = Instance.new("TextLabel", card)
+	badge.Size              = UDim2.new(0, 0, 0, 18)
+	badge.AutomaticSize     = Enum.AutomaticSize.X
+	badge.Position          = UDim2.new(0, 10, 0, 10)
+	badge.BackgroundColor3  = accentColor
+	badge.BackgroundTransparency = 0.75
+	badge.Text              = data.Category
+	badge.TextColor3        = accentColor
+	badge.Font              = Enum.Font.GothamBold
+	badge.TextSize          = 10
+	badge.BorderSizePixel   = 0
+	Instance.new("UICorner", badge).CornerRadius = UDim.new(1, 0)
+
+	local badgePad = Instance.new("UIPadding", badge)
+	badgePad.PaddingLeft  = UDim.new(0, 8)
+	badgePad.PaddingRight = UDim.new(0, 8)
+
+	-- Product name
+	local title = Instance.new("TextLabel", card)
+	title.Size              = UDim2.new(1, -20, 0, 50)
+	title.Position          = UDim2.new(0, 10, 0, 32)
+	title.BackgroundTransparency = 1
+	title.Text              = data.Display
+	title.TextColor3        = Color3.fromRGB(210, 210, 210)
+	title.Font              = Enum.Font.GothamBold
+	title.TextSize          = 14
+	title.TextXAlignment    = Enum.TextXAlignment.Left
+	title.TextYAlignment    = Enum.TextYAlignment.Top
+	title.TextWrapped       = true
+
+	-- BUY button
+	local buyBtn = makeButton(card, "Buy", 0.01, Color3.fromRGB(30, 60, 130))
+
+	-- GIFT button
+	local giftBtn = makeButton(card, "Gift →", 0.51, Color3.fromRGB(100, 35, 80))
+
+	buyBtn.MouseButton1Click:Connect(function()
+		setButtonLoading(buyBtn, true, "Buy")
+		task.spawn(function()
+			local ok, err = pcall(function()
+				-- Matches: InvokeServer(unpack({ productId }))
+				PurchaseRemote:InvokeServer(data.NormalId)
+			end)
+			setButtonLoading(buyBtn, false, "Buy")
+			if ok then
+				showToast("Purchased " .. data.Display, categoryColor(data.Category))
+			else
+				showToast("Purchase failed: " .. tostring(err), Color3.fromRGB(200, 80, 80))
+			end
+		end)
+	end)
+
+	giftBtn.MouseButton1Click:Connect(function()
+		local target = Players:GetPlayerByUserId(SelectedPlayer.UserId)
+		if not target then
+			showToast("That player has left the game.", Color3.fromRGB(200, 80, 80))
+			return
+		end
+
+		setButtonLoading(giftBtn, true, "Gift →")
+		task.spawn(function()
+			local ok, err = pcall(function()
+				-- Matches: FireServer(unpack({ { productId = ..., targetUserId = ... } }))
+				GiftRemote:FireServer({
+					productId    = data.NormalId,
+					targetUserId = target.UserId,
+				})
+			end)
+			setButtonLoading(giftBtn, false, "Gift →")
+			if ok then
+				showToast("Gifted " .. data.Display .. " to " .. target.Name, categoryColor(data.Category))
+			else
+				showToast("Gift failed: " .. tostring(err), Color3.fromRGB(200, 80, 80))
+			end
+		end)
+	end)
+
+	table.insert(ProductCards, { Card = card, Category = data.Category })
+end
+
+-- Build all product cards
+for _, data in pairs(Products) do
+	createProductCard(data)
+end
+
+-- Apply default "All" filter so the initial button state is correct
+applyFilter("All")
+
+-- Entry animation
+Main.Position = UDim2.new(0.5, 0, 0.6, 0)
+Main.BackgroundTransparency = 1
+tween(Main, MED, {
+	Position = UDim2.new(0.5, 0, 0.5, 0),
+	BackgroundTransparency = 0,
+})
