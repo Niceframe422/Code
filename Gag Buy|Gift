@@ -726,6 +726,31 @@ local Products = {
 		Display = "50 Premium Bird Eggs";
 		Category = "Premium Eggs";
 	};
+    ["+1 Premium Golden Egg"] = {
+		GiftId = 3568827750;
+		NormalId = 3568827015;
+		Display = "1 Premium Golden Egg";
+		Category = "Premium Eggs";
+	};
+	["+3 Premium Golden Eggs"] = {
+		GiftId = 3568828285;
+		NormalId = 3568827227;
+		Display = "3 Premium Golden Eggs";
+		Category = "Premium Eggs";
+	};
+	["+10 Premium Golden Eggs"] = {
+		GiftId = 3568828441;
+		NormalId = 3568827595;
+		Display = "10 Premium Golden Eggs";
+		Category = "Premium Eggs";
+	};
+	["+50 Premium Golden Eggs"] = {
+		GiftId = 3570157336;
+		NormalId = 3570157250;
+		Display = "50 Premium Golden Eggs";
+		Category = "Premium Eggs";
+	};
+
 
 	-- TOKENS
 	["Trade Token 50"] = {
@@ -789,14 +814,153 @@ local Products = {
 		Display = "5,000¢";
 		Category = "Currency";
 	};
+    ["Artisan Container"] = {
+		GiftId = 3467103686;
+		NormalId = 3460380041;
+		Display = "1 Artisan Container";
+		Category = "Container";
+	};
+	["3 Artisan Containers"] = {
+		GiftId = 3467103689;
+		NormalId = 3467103688;
+		Display = "3 Artisan Containers";
+		Category = "Container";
+	};
+	["10 Artisan Containers"] = {
+		GiftId = 3467103690;
+		NormalId = 3467103687;
+		Display = "10 Artisan Containers";
+		Category = "Container";
+	};
+	["Elemental Container"] = {
+		GiftId = 3467110139;
+		NormalId = 3460380235;
+		Display = "1 Elemental Container";
+		Category = "Container";
+	};
+	["3 Elemental Containers"] = {
+		GiftId = 3467110144;
+		NormalId = 3467110142;
+		Display = "3 Elemental Containers";
+		Category = "Container";
+	};
+	["10 Elemental Containers"] = {
+		GiftId = 3467110143;
+		NormalId = 3467110145;
+		Display = "10 Elemental Containers";
+		Category = "Container";
+	};
+	["Festive Container"] = {
+		GiftId = 3478032198;
+		NormalId = 3478031738;
+		Display = "1 Festive Container";
+		Category = "Container";
+	};
+	["3 Festive Containers"] = {
+		GiftId = 3478032318;
+		NormalId = 3478031853;
+		Display = "3 Festive Containers";
+		Category = "Container";
+	};
+	["10 Festive Containers"] = {
+		GiftId = 3478032404;
+		NormalId = 3478031941;
+		Display = "10 Festive Containers";
+		Category = "Container";
+	};
+	["+1 Exotic Santa's Surprise Present"] = {
+		GiftId = 3472461581;
+		NormalId = 3472461585;
+		Display = "1 Exotic Santa's Surprise Present";
+		Category = "Present";
+	};
+	["+3 Exotic Santa's Surprise Present"] = {
+		GiftId = 3472461582;
+		NormalId = 3472461575;
+		Display = "3 Exotic Santa's Surprise Present";
+        Category = "Present";
+	};
+	["+10 Exotic Santa's Surprise Present"] = {
+		GiftId = 3472461580;
+		NormalId = 3472461579;
+		Display = "10 Exotic Santa's Surprise Present";
+		Category = "Present";
+	};
+	["+50 Exotic Santa's Surprise Present"] = {
+		GiftId = 3472461583;
+		NormalId = 3472461584;
+		Display = "50 Exotic Santa's Surprise Present";
+		Category = "Present";
+	};
+	["+1 Super Seed"] = {
+		GiftId = 3482199804;
+		NormalId = 3482199602;
+		Display = "+1 Super Seed";
+		Category = "Super Seed";
+	};
+	["+3 Super Seed"] = {
+		GiftId = 3482200078;
+		NormalId = 3482199918;
+		Display = "+3 Super Seed";
+		Category = "Super Seed";
+	};
+	["+10 Super Seed"] = {
+		GiftId = 3482200423;
+		NormalId = 3482200241;
+		Display = "+10 Super Seed";
+		Category = "Super Seed";
+	};
+	["+9 Super Seed"] = {
+		GiftId = 3482222113;
+		NormalId = 3249981764;
+		Display = "+9 Super Seed";
+		Category = "Super Seed";
+	};
+	["Rainbow Peppermint Vine Seed"] = {
+		GiftId = 3482271756;
+		NormalId = 3482271454;
+		Display = "Rainbow Peppermint Vine Seed";
+		Category = "Super Seed";
+	};
+	["Firework Fern"] = {
+		GiftId = 3490207392;
+		NormalId = 3490207231;
+		Display = "Firework Fern";
+		Category = "Seeds";
+	};
 
+    ["SaintPatricks Bundle"] = {
+	    NormalId = 3555829934,
+	    Display = "Leaf Clover Pack",
+	    Category = "Bundle Pack"
+   };
+   ["Blacksmith Bundle"] = {
+	    NormalId = 3456989527,
+	    Display = "Blacksmith Pack",
+	    Category = "Bundle Pack"
+   };
+   ["Leaf Clover Pack"] = {
+	    NormalId = 3555829934,
+	    Display = "Leaf Clover Pack",
+	    Category = "Bundle Pack"
+   };
+   ["Twilight Pack"] = {
+	    NormalId = 3432380384,
+	    Display = "Twilight Pack",
+	    Category = "Bundle Pack"
+   };
+   ["Rainbow Shovel Pack"] = {
+	    NormalId = 3560653460,
+	    Display = "Rainbow Shovel + Speed Coil",
+	    Category = "Bundle Pack"
+   };
 }
 
-local Categories = { "All", "Seed Packs", "Regular Eggs", "Chests", "Tokens", "Currency", "Premium Eggs", "Crates","Pet Shard" }
+local Categories = { "All","Seeds", "Seed Pack", "Present","Regular Eggs", "Chests", "Tokens", "Currency", "Premium Eggs", "Crates","Containers","Pet Shard","Bundle Pack" }
 
 -- Per-category accent colours (Border / Button tint)
 local CategoryColors = {
-	["Seed Packs"]    = Color3.fromRGB(60,  200, 120),
+	["Seed Pack"]    = Color3.fromRGB(60,  200, 120),
 	["Regular Eggs"]    = Color3.fromRGB(255, 120, 180),
 	Chests   = Color3.fromRGB(255, 180,  60),
 	Tokens   = Color3.fromRGB(100, 140, 255),
@@ -804,6 +968,11 @@ local CategoryColors = {
 	["Premium Eggs"]  = Color3.fromRGB(200, 100, 255),
 	Crates   = Color3.fromRGB(255, 100, 100),
     ["Pet Shard"] = Color3.fromRGB(255, 125, 150),
+    ["Bundle Pack"] = Color3.fromRGB(100, 250, 90),
+    Present = Color3.fromRGB(100, 250, 90),
+    Containers = Color3.fromRGB(100, 250, 90),
+ 	Seeds = Color3.fromRGB(100, 250, 90),
+	["Pet Shard"] = Color3.fromRGB(100, 250, 90),
 }
 
 local DEFAULT_COLOR = Color3.fromRGB(120, 120, 120)
