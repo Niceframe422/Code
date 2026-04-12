@@ -796,12 +796,12 @@ local Categories = { "All", "Seed Packs", "Regular Eggs", "Chests", "Tokens", "C
 
 -- Per-category accent colours (Border / Button tint)
 local CategoryColors = {
-	Seeds    = Color3.fromRGB(60,  200, 120),
-	Eggs     = Color3.fromRGB(255, 120, 180),
+	["Seed Packs"]    = Color3.fromRGB(60,  200, 120),
+	["Regular Eggs"]    = Color3.fromRGB(255, 120, 180),
 	Chests   = Color3.fromRGB(255, 180,  60),
 	Tokens   = Color3.fromRGB(100, 140, 255),
 	Currency = Color3.fromRGB(255, 220,  60),
-	Premium  = Color3.fromRGB(200, 100, 255),
+	["Premium Eggs"]  = Color3.fromRGB(200, 100, 255),
 	Crates   = Color3.fromRGB(255, 100, 100),
 }
 
