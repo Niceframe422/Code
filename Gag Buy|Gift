@@ -956,7 +956,7 @@ local Products = {
    };
 }
 
-local Categories = { "All","Seeds", "Seed Pack", "Present","Regular Eggs", "Chests", "Tokens", "Currency", "Premium Eggs", "Crates","Containers","Pet Shard","Bundle Pack" }
+local Categories = { "All","Seeds", "Seed Pack", "Present","Regular Eggs", "Chests", "Tokens", "Currency", "Premium Eggs", "Crates","Container","Pet Shard","Bundle Pack" }
 
 -- Per-category accent colours (Border / Button tint)
 local CategoryColors = {
@@ -970,7 +970,7 @@ local CategoryColors = {
     ["Pet Shard"] = Color3.fromRGB(255, 125, 150),
     ["Bundle Pack"] = Color3.fromRGB(100, 250, 90),
     Present = Color3.fromRGB(100, 250, 90),
-    Containers = Color3.fromRGB(100, 250, 90),
+    Container = Color3.fromRGB(100, 250, 90),
  	Seeds = Color3.fromRGB(100, 250, 90),
 	["Pet Shard"] = Color3.fromRGB(100, 250, 90),
 }
