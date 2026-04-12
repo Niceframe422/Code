@@ -792,7 +792,7 @@ local Products = {
 
 }
 
-local Categories = { "All", "Seeds", "Eggs", "Chests", "Tokens", "Currency", "Premium", "Crates" }
+local Categories = { "All", "Seed Packs", "Regular Eggs", "Chests", "Tokens", "Currency", "Premium Eggs", "Crates" }
 
 -- Per-category accent colours (Border / Button tint)
 local CategoryColors = {
