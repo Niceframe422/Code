@@ -175,13 +175,47 @@ local Products = {
 	["Blacksmith Bundle"] = { NormalId = 3456989527; Display = "Blacksmith Pack"; Category = "Bundle Pack" };
 	["Twilight Pack"] = { NormalId = 3432380384; Display = "Twilight Pack"; Category = "Bundle Pack" };
 	["Rainbow Shovel Pack"] = { NormalId = 3560653460; Display = "Rainbow Shovel + Speed Coil"; Category = "Bundle Pack" };
+    -- PASS STORE
+   ["Prime Crate"] = {Display = "Prime Crate"; Category = "Crate"},
+	["Holiday Crate"] = {Display = "Holiday Crate"; Category = "Crate"},
+	["Season 4 Crate"] = {Display = "Season 4 Crate"; Category = "Crate"},
+
+	--////////////////////////////////////////////////////
+	-- 🎁 COSMETICS
+	--////////////////////////////////////////////////////
+	["Egg Yolk Mat"] = {Display = "Egg Yolk Mat"; Category = "Pass"},
+	["Penguin Statue"] = {Display = "Penguin Statue"; Category = "Pass"},
+	["Garden Basin"] = {Display = "Garden Basin"; Category = "Pass"},
+
+	--////////////////////////////////////////////////////
+	-- ⚙️ GEARS
+	--////////////////////////////////////////////////////
+	["Silver Fertilizer"] = {Display = "Silver Fertilizer"; Category = "Pass"},
+	["Levelup Lollipop"] = {Display = "Levelup Lollipop"; Category = "Pass"},
+	["Grow All"] = {Display = "Grow All"; Category = "Pass"},
+	["Smith Hammer of Harvest"] = {Display = "Hammer of Harvest"; Category = "Pass"},
+
+	--////////////////////////////////////////////////////
+	-- 🌱 SEEDS
+	--////////////////////////////////////////////////////
+	["Naval Wort"] = {Display = "Naval Wort"; Category = "Seeds"},
+	["Pollen Cone"] = {Display = "Pollen Cone"; Category = "Seeds"},
+	["Purple Treeshroom"] = {Display = "Purple Treeshroom"; Category = "Seeds"},
+
+	--////////////////////////////////////////////////////
+	-- 🌿 SEED PACKS
+	--////////////////////////////////////////////////////
+	["Prime Seed Pack"] = {Display = "Prime Seed Pack"; Category = "Seed Pack"},
+	["Holiday Seed Pack"] = {Display = "Holiday Seed Pack"; Category = "Seed Pack"},
+	["Season 4 Seed Pack"] = {Display = "Season 4 Seed Pack"; Category = "Seed Pack"},
+   
 }
 
 local Categories = {
 	"All", "Seed Pack", "Seeds", "Super Seed",
 	"Regular Eggs", "Premium Eggs",
 	"Chests", "Crates", "Container", "Present",
-	"Tokens", "Currency", "Bundle Pack",
+	"Tokens", "Currency", "Bundle Pack", "Pass"
 }
 
 local CategoryColors = {
@@ -198,6 +232,7 @@ local CategoryColors = {
 	["Currency"]     = Color3.fromRGB(255, 220,  60),
 	["Bundle Pack"]  = Color3.fromRGB(100, 250,  90),
 	["Pet Shard"]    = Color3.fromRGB(255, 125, 150),
+    ["Pass"]    = Color3.fromRGB(255, 125, 150),
 }
 
 local DEFAULT_COLOR = Color3.fromRGB(120, 120, 120)
@@ -824,7 +859,7 @@ local function createProductCard(data)
 			showToast("That player has left the game.", Color3.fromRGB(200, 80, 80))
 			return
 		end
-		local giftProductId = data.GiftId or data.NormalId
+		local giftProductId = data.NormalId
 		setButtonLoading(giftBtn, true, "Gift →")
 		task.spawn(function()
 			local ok, err = pcall(function()
