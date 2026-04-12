@@ -975,10 +975,155 @@ local function createPanel()
         function() return false end, function() end, 3)
     mkInfo(dcCt, "rejoin delay", Config.RejoinDelay.."s", 4, Theme.MUTED)
 
-    local tokCt = mkSection(playPage, "token / economy watcher", Theme.ORANGE, 3)
-    mkToggle(tokCt, "watch token label",
+    local tokCt = mkSection(playPage, "trade token watcher", Theme.ORANGE, 3)
+
+    -- live display block
+    local tokDisplay = Instance.new("Frame")
+    tokDisplay.Size             = UDim2.new(1,0,0,52)
+    tokDisplay.BackgroundColor3 = Theme.BG3
+    tokDisplay.BorderSizePixel  = 0
+    tokDisplay.LayoutOrder      = 1
+    tokDisplay.Parent           = tokCt
+    mkCorner(tokDisplay, 7)
+
+    -- big current token value
+    local tokBigVal = Instance.new("TextLabel")
+    tokBigVal.Name              = "TokBig"
+    tokBigVal.Text              = "—"
+    tokBigVal.Size              = UDim2.new(0.5,0,1,0)
+    tokBigVal.Position          = UDim2.new(0,10,0,0)
+    tokBigVal.BackgroundTransparency = 1
+    tokBigVal.TextColor3        = Theme.ORANGE
+    tokBigVal.Font              = Enum.Font.GothamBold
+    tokBigVal.TextSize          = 22
+    tokBigVal.TextXAlignment    = Enum.TextXAlignment.Left
+    tokBigVal.Parent            = tokDisplay
+
+    -- "tokens" label under the big value
+    local tokSubLbl = Instance.new("TextLabel")
+    tokSubLbl.Text              = "trade tokens"
+    tokSubLbl.Size              = UDim2.new(0.5,0,0,14)
+    tokSubLbl.Position          = UDim2.new(0,10,1,-16)
+    tokSubLbl.BackgroundTransparency = 1
+    tokSubLbl.TextColor3        = Theme.DIM
+    tokSubLbl.Font              = Enum.Font.Code
+    tokSubLbl.TextSize          = 9
+    tokSubLbl.TextXAlignment    = Enum.TextXAlignment.Left
+    tokSubLbl.Parent            = tokDisplay
+
+    -- delta badge (right side)
+    local tokDelta = Instance.new("TextLabel")
+    tokDelta.Name               = "TokDelta"
+    tokDelta.Text               = ""
+    tokDelta.Size               = UDim2.new(0.45,0,0,22)
+    tokDelta.Position           = UDim2.new(0.53,0,0.5,-11)
+    tokDelta.BackgroundColor3   = Theme.BG
+    tokDelta.TextColor3         = Theme.GREEN
+    tokDelta.Font               = Enum.Font.GothamBold
+    tokDelta.TextSize           = 13
+    tokDelta.TextXAlignment     = Enum.TextXAlignment.Right
+    tokDelta.BackgroundTransparency = 1
+    tokDelta.Parent             = tokDisplay
+
+    -- status row
+    local tokStatusV  = mkInfo(tokCt, "watcher status", "waiting…", 2, Theme.MUTED)
+    local tokLastChgV = mkInfo(tokCt, "last change",    "—",        3, Theme.MUTED)
+    local tokTotalGainV = mkInfo(tokCt, "session gain",  "+0",      4, Theme.GREEN)
+    local tokTotalLossV = mkInfo(tokCt, "session loss",  "−0",      5, Theme.RED)
+    local tokChangesV   = mkInfo(tokCt, "total changes", "0",       6, Theme.MUTED)
+
+    mkDiv(tokCt, 7)
+
+    -- change history scroll
+    local tokHistScroll = Instance.new("ScrollingFrame")
+    tokHistScroll.Size                 = UDim2.new(1,0,0,100)
+    tokHistScroll.BackgroundColor3     = Theme.BG3
+    tokHistScroll.BorderSizePixel      = 0
+    tokHistScroll.ScrollBarThickness   = 2
+    tokHistScroll.ScrollBarImageColor3 = Theme.BORDER
+    tokHistScroll.CanvasSize           = UDim2.new(0,0,0,0)
+    tokHistScroll.AutomaticCanvasSize  = Enum.AutomaticSize.Y
+    tokHistScroll.LayoutOrder          = 8
+    tokHistScroll.Parent               = tokCt
+    mkCorner(tokHistScroll, 6)
+
+    local tokHistLL = Instance.new("UIListLayout", tokHistScroll)
+    tokHistLL.Padding   = UDim.new(0,0)
+    tokHistLL.SortOrder = Enum.SortOrder.LayoutOrder
+
+    local tokHistPad = Instance.new("UIPadding", tokHistScroll)
+    tokHistPad.PaddingLeft   = UDim.new(0,6)
+    tokHistPad.PaddingRight  = UDim.new(0,6)
+    tokHistPad.PaddingTop    = UDim.new(0,3)
+    tokHistPad.PaddingBottom = UDim.new(0,3)
+
+    local tokHistOrder = 0
+    local function addTokHistRow(prev, new, delta)
+        tokHistOrder = tokHistOrder + 1
+        local isGain  = delta > 0
+        local col     = isGain and Theme.GREEN or Theme.RED
+        local sign    = isGain and "+" or ""
+
+        local row = Instance.new("Frame")
+        row.Size             = UDim2.new(1,0,0,15)
+        row.BackgroundTransparency = 1
+        row.BorderSizePixel  = 0
+        row.LayoutOrder      = tokHistOrder
+        row.Parent           = tokHistScroll
+
+        local tsL = Instance.new("TextLabel")
+        tsL.Text            = timeStr()
+        tsL.Size            = UDim2.new(0,58,1,0)
+        tsL.BackgroundTransparency = 1
+        tsL.TextColor3      = Theme.DIM
+        tsL.Font            = Enum.Font.Code
+        tsL.TextSize        = 9
+        tsL.TextXAlignment  = Enum.TextXAlignment.Left
+        tsL.Parent          = row
+
+        local changeL = Instance.new("TextLabel")
+        changeL.Text        = tostring(prev).." → "..tostring(new)
+        changeL.Size        = UDim2.new(1,-110,1,0)
+        changeL.Position    = UDim2.new(0,60,0,0)
+        changeL.BackgroundTransparency = 1
+        changeL.TextColor3  = Theme.MUTED
+        changeL.Font        = Enum.Font.Code
+        changeL.TextSize    = 9
+        changeL.TextXAlignment = Enum.TextXAlignment.Left
+        changeL.Parent      = row
+
+        local deltaL = Instance.new("TextLabel")
+        deltaL.Text         = sign..tostring(delta)
+        deltaL.Size         = UDim2.new(0,46,1,0)
+        deltaL.Position     = UDim2.new(1,-46,0,0)
+        deltaL.BackgroundTransparency = 1
+        deltaL.TextColor3   = col
+        deltaL.Font         = Enum.Font.GothamBold
+        deltaL.TextSize     = 9
+        deltaL.TextXAlignment = Enum.TextXAlignment.Right
+        deltaL.Parent       = row
+
+        task.defer(function()
+            tokHistScroll.CanvasPosition = Vector2.new(0, math.huge)
+        end)
+    end
+
+    mkDiv(tokCt, 9)
+    mkToggle(tokCt, "send embed on token change",
         function() return Config.Modules.TokenWatcher.enabled end,
-        function(v) Config.Modules.TokenWatcher.enabled = v end, 1)
+        function(v) Config.Modules.TokenWatcher.enabled = v end, 10)
+
+    -- expose these refs so setupTokenWatcher can write to them
+    Config._TokUI = {
+        bigVal    = tokBigVal,
+        delta     = tokDelta,
+        status    = tokStatusV,
+        lastChg   = tokLastChgV,
+        totalGain = tokTotalGainV,
+        totalLoss = tokTotalLossV,
+        changes   = tokChangesV,
+        addRow    = addTokHistRow,
+    }
 
     --==============================================
     -- STATUS TRACKER PAGE
@@ -1379,30 +1524,166 @@ local function setupPingMonitor()
 end
 
 local function setupTokenWatcher()
-    if not Config.Modules.TokenWatcher.enabled then return end
-    local ok, label = pcall(function()
-        return LP:WaitForChild("PlayerGui",10)
-            :WaitForChild("TradeTokenCurrency_UI",10)
-            :WaitForChild("TradeTokens",10)
-            :WaitForChild("TextLabel1",10)
-    end)
-    if not ok or not label then logAdd("warn","token label not found"); return end
-    local last = label.Text
-    logAdd("ok","token watcher started — "..last)
-    label:GetPropertyChangedSignal("Text"):Connect(function()
-        local new = label.Text
-        if new ~= last then
-            local prev = last; last = new
-            logAdd("info","tokens: "..prev.." → "..new)
-            sendTo("tokens", buildEmbed({
-                title  = "Tokens Updated",
-                color  = Config.Modules.TokenWatcher.color,
-                fields = commonFields({
-                    field("Before", prev, true),
-                    field("After",  new,  true),
-                })
-            }))
+    -- helper: strip commas and parse as number (handles "1,234" style values)
+    local function parseTokens(txt)
+        if not txt or txt == "" then return nil end
+        local clean = txt:gsub(",", ""):gsub("%s+", "")
+        return tonumber(clean)
+    end
+
+    local ui = Config._TokUI  -- reference to live GUI labels built in createPanel()
+
+    local function setStatus(msg, col)
+        if ui and ui.status then
+            ui.status.Text      = msg
+            ui.status.TextColor3= col or Theme.MUTED
         end
+    end
+
+    -- session accumulators
+    local sessionGain   = 0
+    local sessionLoss   = 0
+    local changeCount   = 0
+
+    local function updateSessionUI()
+        if not ui then return end
+        ui.totalGain.Text       = "+"..tostring(sessionGain)
+        ui.totalGain.TextColor3 = sessionGain > 0 and Theme.GREEN or Theme.MUTED
+        ui.totalLoss.Text       = "−"..tostring(math.abs(sessionLoss))
+        ui.totalLoss.TextColor3 = sessionLoss < 0 and Theme.RED or Theme.MUTED
+        ui.changes.Text         = tostring(changeCount)
+    end
+
+    -- try to locate the label, retrying if the ScreenGui hasn't loaded yet
+    local function findLabel()
+        -- TradeTokenCurrency_UI can appear after character load; poll up to 60s
+        local deadline = tick() + 60
+        while tick() < deadline do
+            local sg  = PG:FindFirstChild("TradeTokenCurrency_UI")
+            if sg then
+                local tt  = sg:FindFirstChild("TradeTokens")
+                if tt then
+                    local lbl = tt:FindFirstChild("TextLabel1")
+                    if lbl then return lbl end
+                end
+            end
+            task.wait(1)
+        end
+        return nil
+    end
+
+    task.spawn(function()
+        setStatus("searching…", Theme.YELLOW)
+        logAdd("info", "token watcher: searching for TradeTokenCurrency_UI…")
+
+        local label = findLabel()
+
+        if not label then
+            setStatus("label not found", Theme.RED)
+            logAdd("warn", "token watcher: TextLabel1 not found after 60s")
+            return
+        end
+
+        -- initial read
+        local lastText = label.Text
+        local lastNum  = parseTokens(lastText)
+
+        -- update big display
+        if ui then
+            ui.bigVal.Text = lastText ~= "" and lastText or "0"
+            ui.lastChg.Text = "just now"
+        end
+        setStatus("active", Theme.GREEN)
+        logAdd("ok", "token watcher started — current: "..(lastText ~= "" and lastText or "0"))
+
+        -- also watch if the label's parent gets destroyed (trade UI closed/reopened)
+        label.AncestryChanged:Connect(function()
+            if not label.Parent then
+                setStatus("label removed, retrying…", Theme.YELLOW)
+                logAdd("warn","token label removed — re-searching")
+                task.spawn(setupTokenWatcher)   -- restart the watcher
+            end
+        end)
+
+        label:GetPropertyChangedSignal("Text"):Connect(function()
+            local newText = label.Text
+            if newText == lastText then return end
+
+            local newNum  = parseTokens(newText)
+            local prevNum = parseTokens(lastText)
+            local prevTxt = lastText
+            lastText = newText
+
+            -- compute delta
+            local delta = 0
+            if newNum and prevNum then
+                delta = newNum - prevNum
+            end
+
+            -- accumulate session stats
+            changeCount = changeCount + 1
+            if delta > 0 then
+                sessionGain = sessionGain + delta
+            elseif delta < 0 then
+                sessionLoss = sessionLoss + delta
+            end
+
+            -- update big display
+            if ui then
+                ui.bigVal.Text = newText ~= "" and newText or "0"
+                ui.bigVal.TextColor3 = delta > 0 and Theme.GREEN
+                                    or delta < 0 and Theme.RED
+                                    or Theme.ORANGE
+
+                -- delta badge: fade back to nothing after 4s
+                if delta ~= 0 then
+                    local sign = delta > 0 and "+" or ""
+                    ui.delta.Text       = sign..tostring(delta)
+                    ui.delta.TextColor3 = delta > 0 and Theme.GREEN or Theme.RED
+                    task.delay(4, function()
+                        if ui.delta.Text == sign..tostring(delta) then
+                            ui.delta.Text = ""
+                            ui.bigVal.TextColor3 = Theme.ORANGE
+                        end
+                    end)
+                end
+
+                ui.lastChg.Text = timeStr()
+                ui.lastChg.TextColor3 = Theme.TEXT
+                updateSessionUI()
+
+                -- add history row
+                ui.addRow(prevTxt ~= "" and prevTxt or "?", newText, delta)
+            end
+
+            -- log
+            local sign = delta > 0 and "+" or ""
+            logAdd(delta >= 0 and "ok" or "warn",
+                "tokens: "..prevTxt.." → "..newText..(delta ~= 0 and " ("..sign..delta..")" or ""))
+
+            -- webhook embed (respects module toggle)
+            if Config.Modules.TokenWatcher.enabled then
+                local embedCol = delta > 0 and 0x44D264 or delta < 0 and 0xED4245 or 0xFFAA00
+                local deltaStr = delta ~= 0 and ((delta > 0 and "+" or "")..tostring(delta)) or "no change"
+                sendTo("tokens", buildEmbed({
+                    title       = delta > 0 and "Tokens Gained" or delta < 0 and "Tokens Lost" or "Tokens Changed",
+                    color       = embedCol,
+                    description = delta > 0
+                        and "Gained **"..tostring(delta).."** tokens"
+                        or  delta < 0
+                        and "Lost **"..tostring(math.abs(delta)).."** tokens"
+                        or  "Token count refreshed",
+                    fields = commonFields({
+                        field("Before",       prevTxt,            true),
+                        field("After",        newText,            true),
+                        field("Change",       deltaStr,           true),
+                        field("Session Gain", "+"..tostring(sessionGain),  true),
+                        field("Session Loss", "−"..tostring(math.abs(sessionLoss)), true),
+                        field("# Changes",    tostring(changeCount),       true),
+                    })
+                }))
+            end
+        end)
     end)
 end
 
