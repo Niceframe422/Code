@@ -1,47 +1,99 @@
 --====================================================
--- WEBHOOK MONITOR v3.2 — executor compatible
+-- WEBHOOK MONITOR v4.0 — multi-route, modular, customizable
+--====================================================
+-- HOW TO ADD A NEW SECTION:
+--   1. Add an entry to Config.Webhooks with a key & url
+--   2. Add a block inside Config.Modules (enabled, label, color, webhookKey)
+--   3. Call sendTo("yourKey", embed) anywhere in your feature code
+--   4. Add a tab/section to the GUI using mkSection() + your content
 --====================================================
 
-local HttpService        = game:GetService("HttpService")
-local Players            = game:GetService("Players")
-local RunService         = game:GetService("RunService")
-local UserInputService   = game:GetService("UserInputService")
-local Stats              = game:GetService("Stats")
+local HttpService       = game:GetService("HttpService")
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local Stats             = game:GetService("Stats")
+local MarketplaceService= game:GetService("MarketplaceService")
 
 local LP  = Players.LocalPlayer
 local PG  = LP:WaitForChild("PlayerGui")
 
 --====================================================
--- CONFIG
+-- CONFIG — edit this block to customize everything
 --====================================================
 local Config = {
-    SaveFile           = "webhook.cfg",
-    Username           = "Server Monitor",
-    AFKThreshold       = 300,
-    PingSpikeThreshold = 200,
-    RejoinDelay        = 5,
+    SaveFile  = "wh_routes.cfg",  -- stores all webhook urls as JSON
 
-    Send = {
-        OnJoin             = true,
-        OnLeave            = true,
-        OnDisconnect       = true,
-        OnAFK              = true,
-        OnAFKReturn        = true,
-        OnPingSpike        = true,
-        AutoRejoin         = true,
+    -- WEBHOOK ROUTES
+    -- Each key maps to a url (loaded from file or set in-app).
+    -- "default" is the fallback if a module has no specific key.
+    Webhooks = {
+        default  = "",   -- general events
+        players  = "",   -- join / leave embeds
+        alerts   = "",   -- ping spikes, disconnects
+        tokens   = "",   -- token changes
+        status   = "",   -- custom status tracker events
+    },
+
+    -- BOT DISPLAY NAMES PER ROUTE
+    BotNames = {
+        default  = "Monitor",
+        players  = "Player Logger",
+        alerts   = "Alert Bot",
+        tokens   = "Economy Tracker",
+        status   = "Status Reporter",
+    },
+
+    -- MODULE TOGGLES — enable/disable entire feature sections
+    Modules = {
+        PlayerEvents  = { enabled = true,  label = "Player Events",    color = 0x57F287, webhookKey = "players" },
+        Disconnect    = { enabled = true,  label = "Disconnect/Rejoin", color = 0xED4245, webhookKey = "alerts"  },
+        PingMonitor   = { enabled = true,  label = "Ping Alerts",       color = 0x5865F2, webhookKey = "alerts"  },
+        AFK           = { enabled = true,  label = "AFK Tracker",       color = 0xFEE75C, webhookKey = "default" },
+        TokenWatcher  = { enabled = true,  label = "Token Watcher",     color = 0xFFAA00, webhookKey = "tokens"  },
+        StatusTracker = { enabled = true,  label = "Status Tracker",    color = 0x00CCFF, webhookKey = "status"  },
+    },
+
+    -- THRESHOLDS
+    AFKThreshold       = 300,   -- seconds idle before AFK
+    PingSpikeThreshold = 200,   -- ms
+    RejoinDelay        = 5,     -- seconds before auto-rejoin
+
+    -- EMBED OPTIONS (global defaults, toggleable per-module in UI)
+    Embed = {
         IncludeTimestamp   = true,
         IncludeGameName    = true,
         IncludePlayerCount = true,
         IncludePing        = false,
-    }
+        IncludePlaceId     = false,
+    },
+
+    -- CUSTOM STATUS TRACKER FIELDS
+    -- Add as many as you want. Each is displayed in the UI and
+    -- can be updated programmatically via StatusTracker.set(key, value)
+    StatusFields = {
+        { key = "matchStatus", label = "Match Status", default = "idle",    color = 0xAAAAAA },
+        { key = "rank",        label = "Rank",         default = "—",       color = 0xFFD700 },
+        { key = "coins",       label = "Coins",        default = "0",       color = 0x00FF99 },
+        { key = "level",       label = "Level",        default = "1",       color = 0xFF88FF },
+        -- Add more entries here following the same pattern
+    },
+
+    -- Custom embeds to send when a status field changes (optional per-field)
+    StatusEmbedOnChange = {
+        matchStatus = true,
+        rank        = true,
+        coins       = false,  -- silent update
+        level       = true,
+    },
 }
 
 --====================================================
--- FILE HELPERS (safe for all executors)
+-- FILE I/O
 --====================================================
 local function fileSave(path, text)
     local ok, err = pcall(writefile, path, text)
-    if not ok then warn("[Monitor] writefile failed:", err) end
+    if not ok then warn("[Monitor] writefile:", err) end
     return ok
 end
 
@@ -51,10 +103,6 @@ local function fileLoad(path)
 end
 
 local function fileExists(path)
-    -- isfile() is safer than readfile for existence check
-    if isfolder ~= nil then
-        -- not relevant but guard
-    end
     if isfile then
         local ok, v = pcall(isfile, path)
         if ok then return v end
@@ -67,13 +115,31 @@ local function fileDel(path)
     if delfile then pcall(delfile, path) end
 end
 
+-- Load saved webhooks from JSON file
+local function loadWebhooks()
+    local raw = fileLoad(Config.SaveFile)
+    if not raw then return end
+    local ok, tbl = pcall(HttpService.JSONDecode, HttpService, raw)
+    if ok and type(tbl) == "table" then
+        for k, v in pairs(tbl) do
+            if Config.Webhooks[k] ~= nil then
+                Config.Webhooks[k] = v
+            end
+        end
+    end
+end
+
+local function saveWebhooks()
+    local ok, json = pcall(HttpService.JSONEncode, HttpService, Config.Webhooks)
+    if ok then fileSave(Config.SaveFile, json) end
+end
+
 --====================================================
 -- UTILITIES
 --====================================================
 local function utcNow()
     local t = os.date("!*t", os.time())
-    return ("%d-%02d-%02dT%02d:%02d:%02dZ"):format(
-        t.year, t.month, t.day, t.hour, t.min, t.sec)
+    return ("%d-%02d-%02dT%02d:%02d:%02dZ"):format(t.year, t.month, t.day, t.hour, t.min, t.sec)
 end
 
 local function timeStr()
@@ -90,11 +156,14 @@ end
 
 local function getPlayerCount() return #Players:GetPlayers() end
 
+local _gameName = nil
 local function getGameName()
+    if _gameName then return _gameName end
     local ok, info = pcall(function()
-        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+        return MarketplaceService:GetProductInfo(game.PlaceId)
     end)
-    return (ok and info and info.Name) and info.Name or tostring(game.PlaceId)
+    _gameName = (ok and info and info.Name) and info.Name or tostring(game.PlaceId)
+    return _gameName
 end
 
 local function getRequest()
@@ -108,197 +177,492 @@ end
 --====================================================
 -- LOG BUFFER
 --====================================================
-local LogBuffer   = {}
-local LogCBs      = {}
+local LogBuffer = {}
+local LogCBs    = {}
 
 local function logAdd(kind, msg)
     local e = { kind = kind, msg = msg, ts = timeStr() }
     table.insert(LogBuffer, 1, e)
-    if #LogBuffer > 60 then table.remove(LogBuffer) end
+    if #LogBuffer > 100 then table.remove(LogBuffer) end
     for _, cb in ipairs(LogCBs) do pcall(cb, e) end
 end
 
 local function onLog(cb) table.insert(LogCBs, cb) end
 
 --====================================================
--- WEBHOOK SEND
+-- SEND ENGINE
 --====================================================
-local WEBHOOK_URL = nil
+local embedsSent  = 0
+local sendErrors  = 0
 
-local function field(n, v, i) return { name = n, value = tostring(v), inline = i == true } end
+-- Build common embed fields
+local function field(n, v, i)
+    return { name = n, value = tostring(v), inline = i == true }
+end
 
 local function commonFields(extra)
     local f = {}
-    if Config.Send.IncludeGameName    then table.insert(f, field("Game",    getGameName(),    true)) end
-    if Config.Send.IncludePlayerCount then table.insert(f, field("Players", getPlayerCount(), true)) end
-    if Config.Send.IncludePing        then table.insert(f, field("Ping",    getPing().."ms",  true)) end
+    if Config.Embed.IncludeGameName    then table.insert(f, field("Game",    getGameName(),      true)) end
+    if Config.Embed.IncludePlayerCount then table.insert(f, field("Players", getPlayerCount(),   true)) end
+    if Config.Embed.IncludePing        then table.insert(f, field("Ping",    getPing().."ms",    true)) end
+    if Config.Embed.IncludePlaceId     then table.insert(f, field("PlaceID", tostring(game.PlaceId), true)) end
     table.insert(f, field("Time", timeStr(), false))
     for _, v in ipairs(extra or {}) do table.insert(f, v) end
     return f
 end
 
 local function buildEmbed(opts)
-    local e = { title = opts.title or "", color = opts.color or 0x5865F2, fields = opts.fields or {} }
-    if Config.Send.IncludeTimestamp then e.timestamp = utcNow() end
+    local e = {
+        title  = opts.title  or "",
+        color  = opts.color  or 0x5865F2,
+        fields = opts.fields or {},
+    }
+    if Config.Embed.IncludeTimestamp then e.timestamp = utcNow() end
+    if opts.description then e.description = opts.description end
     return e
 end
 
-local embedsSent = 0
-local function send(embed)
-    if not WEBHOOK_URL or WEBHOOK_URL == "" then return end
+-- sendTo: route embed to a specific webhook key
+local function sendTo(routeKey, embed)
+    local url = Config.Webhooks[routeKey] or Config.Webhooks["default"] or ""
+    if url == "" then
+        logAdd("warn", "no url for route '"..routeKey.."', embed dropped")
+        return
+    end
     local req = getRequest()
-    if not req then warn("[Monitor] No http request function found") return end
+    if not req then warn("[Monitor] no http request function"); return end
+    local botName = Config.BotNames[routeKey] or Config.BotNames["default"] or "Monitor"
     local ok, err = pcall(function()
         req({
-            Url     = WEBHOOK_URL,
+            Url     = url,
             Method  = "POST",
             Headers = { ["Content-Type"] = "application/json" },
             Body    = HttpService:JSONEncode({
-                username = Config.Username,
-                embeds   = { embed }
+                username = botName,
+                embeds   = { embed },
             })
         })
     end)
     if ok then
         embedsSent = embedsSent + 1
-        logAdd("info", "embed sent — " .. (embed.title or "?"))
+        logAdd("info", "["..routeKey.."] "..tostring(embed.title or "embed"))
     else
-        logAdd("err", "send failed: " .. tostring(err))
+        sendErrors = sendErrors + 1
+        logAdd("err", "send failed ["..routeKey.."]: "..tostring(err))
+    end
+end
+
+-- Convenience: send to default route
+local function send(embed)
+    sendTo("default", embed)
+end
+
+--====================================================
+-- STATUS TRACKER MODULE
+--====================================================
+local StatusTracker = {}
+do
+    local state = {}
+    for _, f in ipairs(Config.StatusFields) do
+        state[f.key] = f.default
+    end
+
+    -- Get current value
+    function StatusTracker.get(key)
+        return state[key]
+    end
+
+    -- Set value; fires webhook if configured
+    function StatusTracker.set(key, value)
+        local old = state[key]
+        if old == value then return end
+        state[key] = value
+        logAdd("info", "status ["..key.."]: "..tostring(old).." → "..tostring(value))
+
+        -- fire change callbacks (for UI)
+        for _, cb in ipairs(StatusTracker._cbs or {}) do
+            pcall(cb, key, value, old)
+        end
+
+        -- optionally send embed
+        if Config.StatusEmbedOnChange[key] and Config.Modules.StatusTracker.enabled then
+            local label = key
+            for _, f in ipairs(Config.StatusFields) do
+                if f.key == key then label = f.label; break end
+            end
+            sendTo("status", buildEmbed({
+                title  = label.." Updated",
+                color  = Config.Modules.StatusTracker.color,
+                fields = commonFields({
+                    field("Before", tostring(old),   true),
+                    field("After",  tostring(value), true),
+                })
+            }))
+        end
+    end
+
+    StatusTracker._cbs = {}
+    function StatusTracker.onChange(cb)
+        table.insert(StatusTracker._cbs, cb)
+    end
+
+    -- Expose state table for UI reads
+    function StatusTracker.getAll()
+        return state
     end
 end
 
 --====================================================
--- SETUP GUI
+-- GUI THEME
 --====================================================
-local function showSetupGUI()
-    -- clean any old instance
-    if PG:FindFirstChild("WHSetup_UI") then PG.WHSetup_UI:Destroy() end
+local Theme = {
+    -- Backgrounds
+    BG      = Color3.fromRGB(18,  18,  30),   -- panel base
+    BG2     = Color3.fromRGB(25,  25,  42),   -- section card
+    BG3     = Color3.fromRGB(12,  12,  22),   -- input bg
+    TOPBAR  = Color3.fromRGB(14,  14,  26),   -- title strip
 
-    local result  = nil
-    local done    = Instance.new("BindableEvent")
+    -- Borders
+    BORDER  = Color3.fromRGB(50,  50,  90),
 
-    local sg = Instance.new("ScreenGui")
-    sg.Name           = "WHSetup_UI"
-    sg.ResetOnSpawn   = false
-    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    sg.DisplayOrder   = 1000
-    sg.Parent         = PG
+    -- Text
+    TEXT    = Color3.fromRGB(200, 200, 240),  -- primary (brighter than before)
+    MUTED   = Color3.fromRGB(120, 120, 170),
+    DIM     = Color3.fromRGB(70,  70,  110),
 
-    -- dim backdrop
-    local backdrop = Instance.new("Frame")
-    backdrop.Size                 = UDim2.new(1,0,1,0)
-    backdrop.BackgroundColor3     = Color3.fromRGB(0,0,0)
-    backdrop.BackgroundTransparency = 0.4
-    backdrop.BorderSizePixel      = 0
-    backdrop.ZIndex               = 1
-    backdrop.Parent               = sg
+    -- Accents
+    ACCENT  = Color3.fromRGB(88,  101, 242),  -- blurple
+    GREEN   = Color3.fromRGB(68,  210, 100),
+    YELLOW  = Color3.fromRGB(220, 200, 60),
+    RED     = Color3.fromRGB(220, 80,  80),
+    BLUE    = Color3.fromRGB(80,  160, 240),
+    CYAN    = Color3.fromRGB(55,  210, 210),
+    PURPLE  = Color3.fromRGB(175, 95,  240),
+    ORANGE  = Color3.fromRGB(240, 150, 55),
 
-    -- card
+    -- Tab accent bar colors per tab
+    TabColors = {
+        monitor  = Color3.fromRGB(68,  210, 100),
+        players  = Color3.fromRGB(88,  101, 242),
+        status   = Color3.fromRGB(55,  210, 210),
+        webhooks = Color3.fromRGB(175, 95,  240),
+        config   = Color3.fromRGB(240, 150, 55),
+        log      = Color3.fromRGB(120, 120, 170),
+    },
+}
+
+--====================================================
+-- GUI BUILDERS
+--====================================================
+local function mkLabel(parent, txt, x, y, w, h, sz, col, xa, font, zidx)
+    local l = Instance.new("TextLabel")
+    l.Text               = txt
+    l.Position           = UDim2.new(0,x,0,y)
+    l.Size               = UDim2.new(0,w,0,h)
+    l.BackgroundTransparency = 1
+    l.TextColor3         = col or Theme.TEXT
+    l.Font               = font or Enum.Font.GothamMedium
+    l.TextSize           = sz or 12
+    l.TextXAlignment     = xa or Enum.TextXAlignment.Left
+    l.ZIndex             = zidx or 3
+    l.Parent             = parent
+    return l
+end
+
+local function mkCorner(parent, r)
+    local c = Instance.new("UICorner", parent)
+    c.CornerRadius = UDim.new(0, r or 8)
+    return c
+end
+
+local function mkSection(parent, title, dotCol, order)
     local card = Instance.new("Frame")
-    card.Size             = UDim2.new(0,440,0,200)
-    card.Position         = UDim2.new(0.5,-220,0.5,-100)
-    card.BackgroundColor3 = Color3.fromRGB(14,14,26)
+    card.BackgroundColor3 = Theme.BG2
     card.BorderSizePixel  = 0
-    card.ZIndex           = 2
-    card.Parent           = sg
-    Instance.new("UICorner", card).CornerRadius = UDim.new(0,12)
+    card.Size             = UDim2.new(1,0,0,0)
+    card.AutomaticSize    = Enum.AutomaticSize.Y
+    card.LayoutOrder      = order or 0
+    card.Parent           = parent
+    mkCorner(card, 8)
 
-    -- topbar
-    local topbar = Instance.new("Frame")
-    topbar.Size             = UDim2.new(1,0,0,36)
-    topbar.BackgroundColor3 = Color3.fromRGB(9,9,20)
-    topbar.BorderSizePixel  = 0
-    topbar.ZIndex           = 3
-    topbar.Parent           = card
-    Instance.new("UICorner", topbar).CornerRadius = UDim.new(0,12)
+    -- colored left accent bar
+    local accent = Instance.new("Frame")
+    accent.Size             = UDim2.new(0,3,1,-8)
+    accent.Position         = UDim2.new(0,0,0,4)
+    accent.BackgroundColor3 = dotCol
+    accent.BorderSizePixel  = 0
+    accent.Parent           = card
+    mkCorner(accent, 2)
 
-    -- fix top corners bleed
-    local topFix = Instance.new("Frame")
-    topFix.Size             = UDim2.new(1,0,0,12)
-    topFix.Position         = UDim2.new(0,0,1,-12)
-    topFix.BackgroundColor3 = Color3.fromRGB(9,9,20)
-    topFix.BorderSizePixel  = 0
-    topFix.ZIndex           = 3
-    topFix.Parent           = topbar
+    -- header
+    local hdr = Instance.new("Frame")
+    hdr.Size             = UDim2.new(1,0,0,30)
+    hdr.BackgroundTransparency = 1
+    hdr.BorderSizePixel  = 0
+    hdr.Parent           = card
 
-    local function mkLabel(parent, txt, x, y, w, h, sz, col, xa)
-        local l = Instance.new("TextLabel")
-        l.Text              = txt
-        l.Position          = UDim2.new(0,x,0,y)
-        l.Size              = UDim2.new(0,w,0,h)
-        l.BackgroundTransparency = 1
-        l.TextColor3        = col or Color3.fromRGB(140,140,200)
-        l.Font              = Enum.Font.GothamMedium
-        l.TextSize          = sz or 12
-        l.TextXAlignment    = xa or Enum.TextXAlignment.Left
-        l.ZIndex            = 4
-        l.Parent            = parent
-        return l
-    end
+    local dot = Instance.new("Frame")
+    dot.Size             = UDim2.new(0,7,0,7)
+    dot.Position         = UDim2.new(0,16,0.5,-3)
+    dot.BackgroundColor3 = dotCol
+    dot.BorderSizePixel  = 0
+    dot.Parent           = hdr
+    mkCorner(dot, 99)
 
-    mkLabel(topbar,  "webhook monitor  —  setup", 12, 0, 400, 36, 12, Color3.fromRGB(120,120,190))
-    mkLabel(card,    "paste your discord webhook url. it will be saved to a local file.", 14, 46, 416, 18, 11, Color3.fromRGB(65,65,110))
+    local tl = Instance.new("TextLabel")
+    tl.Text              = title
+    tl.Size              = UDim2.new(1,-28,1,0)
+    tl.Position          = UDim2.new(0,28,0,0)
+    tl.BackgroundTransparency = 1
+    tl.TextColor3        = Theme.TEXT
+    tl.Font              = Enum.Font.GothamBold
+    tl.TextSize          = 11
+    tl.TextXAlignment    = Enum.TextXAlignment.Left
+    tl.Parent            = hdr
+
+    -- divider
+    local div = Instance.new("Frame")
+    div.Size             = UDim2.new(1,-16,0,1)
+    div.Position         = UDim2.new(0,8,0,30)
+    div.BackgroundColor3 = Theme.BORDER
+    div.BorderSizePixel  = 0
+    div.Parent           = card
+
+    -- content area
+    local ct = Instance.new("Frame")
+    ct.Name           = "Content"
+    ct.Position       = UDim2.new(0,0,0,31)
+    ct.Size           = UDim2.new(1,0,0,0)
+    ct.AutomaticSize  = Enum.AutomaticSize.Y
+    ct.BackgroundTransparency = 1
+    ct.BorderSizePixel= 0
+    ct.Parent         = card
+
+    local ctl = Instance.new("UIListLayout", ct)
+    ctl.Padding   = UDim.new(0,0)
+    ctl.SortOrder = Enum.SortOrder.LayoutOrder
+
+    local ctp = Instance.new("UIPadding", ct)
+    ctp.PaddingLeft   = UDim.new(0,12)
+    ctp.PaddingRight  = UDim.new(0,10)
+    ctp.PaddingTop    = UDim.new(0,4)
+    ctp.PaddingBottom = UDim.new(0,8)
+
+    return ct, hdr, tl
+end
+
+local function mkInfo(parent, lbl, val, order, valCol)
+    local row = Instance.new("Frame")
+    row.Size             = UDim2.new(1,0,0,22)
+    row.BackgroundTransparency = 1
+    row.BorderSizePixel  = 0
+    row.LayoutOrder      = order or 0
+    row.Parent           = parent
+
+    local l = Instance.new("TextLabel")
+    l.Text             = lbl
+    l.Size             = UDim2.new(0.52,0,1,0)
+    l.BackgroundTransparency = 1
+    l.TextColor3       = Theme.MUTED
+    l.Font             = Enum.Font.Gotham
+    l.TextSize         = 11
+    l.TextXAlignment   = Enum.TextXAlignment.Left
+    l.Parent           = row
+
+    local v = Instance.new("TextLabel")
+    v.Text             = val
+    v.Name             = "Val"
+    v.Size             = UDim2.new(0.48,0,1,0)
+    v.Position         = UDim2.new(0.52,0,0,0)
+    v.BackgroundTransparency = 1
+    v.TextColor3       = valCol or Theme.TEXT
+    v.Font             = Enum.Font.Code
+    v.TextSize         = 11
+    v.TextXAlignment   = Enum.TextXAlignment.Right
+    v.Parent           = row
+    return v
+end
+
+local function mkDiv(parent, order)
+    local d = Instance.new("Frame")
+    d.Size             = UDim2.new(1,0,0,1)
+    d.BackgroundColor3 = Theme.BORDER
+    d.BorderSizePixel  = 0
+    d.LayoutOrder      = order or 0
+    d.Parent           = parent
+end
+
+local function mkToggle(parent, lbl, getter, setter, order)
+    local row = Instance.new("Frame")
+    row.Size             = UDim2.new(1,0,0,28)
+    row.BackgroundTransparency = 1
+    row.BorderSizePixel  = 0
+    row.LayoutOrder      = order or 0
+    row.Parent           = parent
+
+    local l = Instance.new("TextLabel")
+    l.Text             = lbl
+    l.Size             = UDim2.new(1,-44,1,0)
+    l.BackgroundTransparency = 1
+    l.TextColor3       = Theme.MUTED
+    l.Font             = Enum.Font.Gotham
+    l.TextSize         = 11
+    l.TextXAlignment   = Enum.TextXAlignment.Left
+    l.Parent           = row
+
+    local function isOn() return getter() end
+
+    local track = Instance.new("Frame")
+    track.Size             = UDim2.new(0,32,0,17)
+    track.Position         = UDim2.new(1,-32,0.5,-8)
+    track.BackgroundColor3 = isOn() and Theme.ACCENT or Theme.BG3
+    track.BorderSizePixel  = 0
+    track.Parent           = row
+    mkCorner(track, 8)
+
+    local thumb = Instance.new("Frame")
+    thumb.Size             = UDim2.new(0,11,0,11)
+    thumb.Position         = isOn() and UDim2.new(1,-13,0.5,-5) or UDim2.new(0,2,0.5,-5)
+    thumb.BackgroundColor3 = isOn() and Theme.TEXT or Theme.DIM
+    thumb.BorderSizePixel  = 0
+    thumb.Parent           = track
+    mkCorner(thumb, 99)
+
+    local click = Instance.new("TextButton")
+    click.Size             = UDim2.new(1,0,1,0)
+    click.BackgroundTransparency = 1
+    click.Text             = ""
+    click.BorderSizePixel  = 0
+    click.Parent           = track
+
+    click.MouseButton1Click:Connect(function()
+        setter(not getter())
+        local on = getter()
+        track.BackgroundColor3 = on and Theme.ACCENT or Theme.BG3
+        thumb.BackgroundColor3 = on and Theme.TEXT or Theme.DIM
+        thumb.Position         = on and UDim2.new(1,-13,0.5,-5) or UDim2.new(0,2,0.5,-5)
+    end)
+    return row
+end
+
+-- Webhook URL input row with inline save/test/clear
+local function mkWebhookRow(parent, routeKey, order, onSaved)
+    local wrap = Instance.new("Frame")
+    wrap.Size             = UDim2.new(1,0,0,0)
+    wrap.AutomaticSize    = Enum.AutomaticSize.Y
+    wrap.BackgroundTransparency = 1
+    wrap.BorderSizePixel  = 0
+    wrap.LayoutOrder      = order or 0
+    wrap.Parent           = parent
+
+    local wl = Instance.new("UIListLayout", wrap)
+    wl.Padding   = UDim.new(0,4)
+    wl.SortOrder = Enum.SortOrder.LayoutOrder
+
+    -- route label
+    local routeLbl = Instance.new("TextLabel")
+    routeLbl.Text             = routeKey
+    routeLbl.Size             = UDim2.new(1,0,0,14)
+    routeLbl.BackgroundTransparency = 1
+    routeLbl.TextColor3       = Theme.MUTED
+    routeLbl.Font             = Enum.Font.Code
+    routeLbl.TextSize         = 10
+    routeLbl.TextXAlignment   = Enum.TextXAlignment.Left
+    routeLbl.LayoutOrder      = 1
+    routeLbl.Parent           = wrap
 
     -- input
     local inp = Instance.new("TextBox")
+    inp.Text             = Config.Webhooks[routeKey] or ""
     inp.PlaceholderText  = "https://discord.com/api/webhooks/..."
-    inp.Size             = UDim2.new(0,412,0,34)
-    inp.Position         = UDim2.new(0,14,0,70)
-    inp.BackgroundColor3 = Color3.fromRGB(8,8,18)
-    inp.TextColor3       = Color3.fromRGB(170,170,235)
-    inp.PlaceholderColor3= Color3.fromRGB(50,50,90)
+    inp.Size             = UDim2.new(1,0,0,28)
+    inp.BackgroundColor3 = Theme.BG3
+    inp.TextColor3       = Theme.TEXT
+    inp.PlaceholderColor3= Theme.DIM
     inp.Font             = Enum.Font.Code
-    inp.TextSize         = 11
+    inp.TextSize         = 10
     inp.ClearTextOnFocus = false
     inp.BorderSizePixel  = 0
-    inp.ZIndex           = 4
-    inp.Parent           = card
-    Instance.new("UICorner", inp).CornerRadius = UDim.new(0,7)
+    inp.LayoutOrder      = 2
+    inp.Parent           = wrap
+    mkCorner(inp, 6)
 
-    -- status label
-    local statusL = mkLabel(card, "", 14, 116, 416, 16, 10, Color3.fromRGB(60,60,100))
+    -- button row
+    local bRow = Instance.new("Frame")
+    bRow.Size             = UDim2.new(1,0,0,24)
+    bRow.BackgroundTransparency = 1
+    bRow.BorderSizePixel  = 0
+    bRow.LayoutOrder      = 3
+    bRow.Parent           = wrap
 
-    -- buttons
-    local function mkBtn(parent, txt, x, y, w, h, bg, tc)
+    local brl = Instance.new("UIListLayout", bRow)
+    brl.FillDirection       = Enum.FillDirection.Horizontal
+    brl.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    brl.Padding             = UDim.new(0,4)
+
+    local function mkSmallBtn(txt, bg, tc, lo)
         local b = Instance.new("TextButton")
         b.Text             = txt
-        b.Size             = UDim2.new(0,w,0,h)
-        b.Position         = UDim2.new(0,x,0,y)
+        b.Size             = UDim2.new(0,70,0,22)
         b.BackgroundColor3 = bg
         b.TextColor3       = tc
         b.Font             = Enum.Font.GothamMedium
-        b.TextSize         = 12
+        b.TextSize         = 9
         b.BorderSizePixel  = 0
         b.AutoButtonColor  = false
-        b.ZIndex           = 4
-        b.Parent           = parent
-        Instance.new("UICorner", b).CornerRadius = UDim.new(0,7)
+        b.LayoutOrder      = lo
+        b.Parent           = bRow
+        mkCorner(b, 5)
         return b
     end
 
-    local saveBtn = mkBtn(card, "save & open panel", 14,  138, 200, 34, Color3.fromRGB(50,50,170), Color3.fromRGB(190,190,255))
-    local skipBtn = mkBtn(card, "skip (no webhook)", 222, 138, 160, 34, Color3.fromRGB(18,18,36),  Color3.fromRGB(80,80,140))
+    local saveBtn  = mkSmallBtn("save",  Color3.fromRGB(10,32,10), Theme.GREEN,  1)
+    local testBtn  = mkSmallBtn("test",  Color3.fromRGB(8,18,38),  Theme.BLUE,   2)
+    local clearBtn = mkSmallBtn("clear", Color3.fromRGB(32,10,10), Theme.RED,    3)
+
+    -- status label
+    local stLbl = Instance.new("TextLabel")
+    stLbl.Text             = ""
+    stLbl.Size             = UDim2.new(1,0,0,12)
+    stLbl.BackgroundTransparency = 1
+    stLbl.TextColor3       = Theme.DIM
+    stLbl.Font             = Enum.Font.Code
+    stLbl.TextSize         = 9
+    stLbl.TextXAlignment   = Enum.TextXAlignment.Left
+    stLbl.LayoutOrder      = 4
+    stLbl.Parent           = wrap
 
     saveBtn.MouseButton1Click:Connect(function()
         local url = inp.Text:gsub("%s+","")
-        if url == "" then
-            statusL.Text      = "url cannot be empty."
-            statusL.TextColor3= Color3.fromRGB(200,70,70)
-            return
-        end
-        fileSave(Config.SaveFile, url)
-        result = url
-        statusL.Text       = "saved. opening panel..."
-        statusL.TextColor3 = Color3.fromRGB(70,200,70)
-        task.delay(0.5, function() done:Fire() end)
+        if url == "" then stLbl.Text = "empty"; stLbl.TextColor3 = Theme.RED; return end
+        Config.Webhooks[routeKey] = url
+        saveWebhooks()
+        stLbl.Text       = "saved"
+        stLbl.TextColor3 = Theme.GREEN
+        logAdd("ok","webhook saved: "..routeKey)
+        if onSaved then onSaved(url) end
     end)
 
-    skipBtn.MouseButton1Click:Connect(function() done:Fire() end)
+    testBtn.MouseButton1Click:Connect(function()
+        sendTo(routeKey, buildEmbed({
+            title  = "Test — "..routeKey,
+            color  = 0x5865F2,
+            fields = commonFields({ field("Route", routeKey, true) })
+        }))
+        stLbl.Text       = "test sent"
+        stLbl.TextColor3 = Theme.BLUE
+    end)
 
-    done.Event:Wait()
-    task.delay(0.1, function() sg:Destroy() end)
-    done:Destroy()
-    return result
+    clearBtn.MouseButton1Click:Connect(function()
+        inp.Text              = ""
+        Config.Webhooks[routeKey] = ""
+        saveWebhooks()
+        stLbl.Text       = "cleared"
+        stLbl.TextColor3 = Theme.RED
+        logAdd("warn","webhook cleared: "..routeKey)
+    end)
+
+    return inp, stLbl
 end
 
 --====================================================
@@ -307,20 +671,6 @@ end
 local function createPanel()
     if PG:FindFirstChild("WHMonitor_UI") then PG.WHMonitor_UI:Destroy() end
 
-    -- colours
-    local BG     = Color3.fromRGB(13,13,22)
-    local BG2    = Color3.fromRGB(9,9,18)
-    local BG3    = Color3.fromRGB(7,7,14)
-    local BORDER = Color3.fromRGB(32,32,60)
-    local TEXT   = Color3.fromRGB(155,155,215)
-    local MUTED  = Color3.fromRGB(75,75,130)
-    local DIM    = Color3.fromRGB(42,42,80)
-    local ACCENT = Color3.fromRGB(75,75,195)
-    local GREEN  = Color3.fromRGB(55,175,75)
-    local YELLOW = Color3.fromRGB(195,195,55)
-    local RED    = Color3.fromRGB(195,65,65)
-    local BLUE   = Color3.fromRGB(55,135,215)
-
     local gui = Instance.new("ScreenGui")
     gui.Name           = "WHMonitor_UI"
     gui.ResetOnSpawn   = false
@@ -328,62 +678,80 @@ local function createPanel()
     gui.DisplayOrder   = 999
     gui.Parent         = PG
 
-    --// ROOT PANEL
-    local panel = Instance.new("Frame")
-    panel.Name            = "Panel"
-    panel.Size            = UDim2.new(0,390,0,460)
-    panel.Position        = UDim2.new(0.5,-195,0.5,-230)
-    panel.BackgroundColor3= BG
-    panel.BorderSizePixel = 0
-    panel.Active          = true
-    panel.ClipsDescendants= true
-    panel.Parent          = gui
-    Instance.new("UICorner", panel).CornerRadius = UDim.new(0,10)
-
-    --// PILL (minimised)
+    --// PILL (minimised state)
     local pill = Instance.new("Frame")
     pill.Name             = "Pill"
-    pill.Size             = UDim2.new(0,120,0,26)
-    pill.Position         = panel.Position
-    pill.BackgroundColor3 = BG
+    pill.Size             = UDim2.new(0,140,0,28)
+    pill.Position         = UDim2.new(0.5,-70,0,12)
+    pill.BackgroundColor3 = Theme.BG2
     pill.BorderSizePixel  = 0
     pill.Visible          = false
     pill.Active           = true
     pill.Parent           = gui
-    Instance.new("UICorner", pill).CornerRadius = UDim.new(0,13)
+    mkCorner(pill, 14)
+
+    -- accent strip on pill
+    local pillStrip = Instance.new("Frame")
+    pillStrip.Size             = UDim2.new(1,0,0,2)
+    pillStrip.Position         = UDim2.new(0,0,0,0)
+    pillStrip.BackgroundColor3 = Theme.ACCENT
+    pillStrip.BorderSizePixel  = 0
+    pillStrip.Parent           = pill
+    mkCorner(pillStrip, 14)
 
     local pillDot = Instance.new("Frame")
     pillDot.Size             = UDim2.new(0,7,0,7)
-    pillDot.Position         = UDim2.new(0,9,0.5,-3)
-    pillDot.BackgroundColor3 = GREEN
+    pillDot.Position         = UDim2.new(0,10,0.5,-3)
+    pillDot.BackgroundColor3 = Theme.GREEN
     pillDot.BorderSizePixel  = 0
     pillDot.Parent           = pill
-    Instance.new("UICorner", pillDot).CornerRadius = UDim.new(1,0)
+    mkCorner(pillDot, 99)
 
     local pillBtn = Instance.new("TextButton")
     pillBtn.Size             = UDim2.new(1,0,1,0)
     pillBtn.BackgroundTransparency = 1
-    pillBtn.Text             = "    monitor"
-    pillBtn.TextColor3       = MUTED
+    pillBtn.Text             = "   monitor v4.0"
+    pillBtn.TextColor3       = Theme.MUTED
     pillBtn.Font             = Enum.Font.Code
     pillBtn.TextSize         = 11
     pillBtn.TextXAlignment   = Enum.TextXAlignment.Left
     pillBtn.BorderSizePixel  = 0
     pillBtn.Parent           = pill
 
+    --// PANEL FRAME
+    local panel = Instance.new("Frame")
+    panel.Name            = "Panel"
+    panel.Size            = UDim2.new(0,420,0,510)
+    panel.Position        = UDim2.new(0.5,-210,0.5,-255)
+    panel.BackgroundColor3= Theme.BG
+    panel.BorderSizePixel = 0
+    panel.Active          = true
+    panel.ClipsDescendants= true
+    panel.Parent          = gui
+    mkCorner(panel, 12)
+
+    -- top accent strip
+    local topStrip = Instance.new("Frame")
+    topStrip.Size             = UDim2.new(1,0,0,3)
+    topStrip.BackgroundColor3 = Theme.ACCENT
+    topStrip.BorderSizePixel  = 0
+    topStrip.Parent           = panel
+
     --// TITLEBAR
     local titlebar = Instance.new("Frame")
-    titlebar.Size             = UDim2.new(1,0,0,34)
-    titlebar.BackgroundColor3 = BG2
+    titlebar.Size             = UDim2.new(1,0,0,36)
+    titlebar.Position         = UDim2.new(0,0,0,3)
+    titlebar.BackgroundColor3 = Theme.TOPBAR
     titlebar.BorderSizePixel  = 0
+    titlebar.Active           = true
     titlebar.Parent           = panel
 
     local titleLbl = Instance.new("TextLabel")
-    titleLbl.Text             = "webhook monitor"
-    titleLbl.Size             = UDim2.new(1,-70,1,0)
-    titleLbl.Position         = UDim2.new(0,12,0,0)
+    titleLbl.Text             = "webhook monitor  v4.0"
+    titleLbl.Size             = UDim2.new(1,-80,1,0)
+    titleLbl.Position         = UDim2.new(0,14,0,0)
     titleLbl.BackgroundTransparency = 1
-    titleLbl.TextColor3       = MUTED
+    titleLbl.TextColor3       = Theme.MUTED
     titleLbl.Font             = Enum.Font.Code
     titleLbl.TextSize         = 11
     titleLbl.TextXAlignment   = Enum.TextXAlignment.Left
@@ -396,33 +764,29 @@ local function createPanel()
         b.Position         = UDim2.new(1,xOff,0.5,-10)
         b.BackgroundColor3 = bg
         b.TextColor3       = tc
-        b.Font             = Enum.Font.GothamMedium
-        b.TextSize         = 13
+        b.Font             = Enum.Font.GothamBold
+        b.TextSize         = 14
         b.BorderSizePixel  = 0
         b.AutoButtonColor  = false
         b.Parent           = titlebar
-        Instance.new("UICorner", b).CornerRadius = UDim.new(0,5)
+        mkCorner(b, 5)
         return b
     end
 
-    local minBtn   = mkIconBtn("−", -56, BG3, MUTED)
-    local closeBtn = mkIconBtn("×", -28, Color3.fromRGB(55,16,16), RED)
+    local minBtn   = mkIconBtn("−", -58, Theme.BG3, Theme.MUTED)
+    local closeBtn = mkIconBtn("×", -30, Color3.fromRGB(60,15,15), Theme.RED)
 
-    -- drag logic
+    -- drag
     local dragging, dragStart, startPos
     titlebar.InputBegan:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging  = true
-            dragStart = i.Position
-            startPos  = panel.Position
+            dragging  = true; dragStart = i.Position; startPos = panel.Position
         end
     end)
     UserInputService.InputChanged:Connect(function(i)
         if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
             local d = i.Position - dragStart
-            panel.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + d.X,
-                startPos.Y.Scale, startPos.Y.Offset + d.Y)
+            panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+d.X, startPos.Y.Scale, startPos.Y.Offset+d.Y)
         end
     end)
     UserInputService.InputEnded:Connect(function(i)
@@ -430,39 +794,36 @@ local function createPanel()
     end)
 
     minBtn.MouseButton1Click:Connect(function()
-        panel.Visible  = false
-        pill.Position  = panel.Position
-        pill.Visible   = true
+        panel.Visible = false; pill.Position = panel.Position; pill.Visible = true
     end)
     pillBtn.MouseButton1Click:Connect(function()
-        panel.Visible = true
-        pill.Visible  = false
+        panel.Visible = true; pill.Visible = false
     end)
     closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
 
     --// TAB BAR
     local tabbar = Instance.new("Frame")
-    tabbar.Size             = UDim2.new(1,0,0,28)
-    tabbar.Position         = UDim2.new(0,0,0,34)
-    tabbar.BackgroundColor3 = BG2
+    tabbar.Size             = UDim2.new(1,0,0,30)
+    tabbar.Position         = UDim2.new(0,0,0,39)
+    tabbar.BackgroundColor3 = Theme.TOPBAR
     tabbar.BorderSizePixel  = 0
     tabbar.Parent           = panel
 
     local tabLine = Instance.new("Frame")
     tabLine.Size             = UDim2.new(1,0,0,1)
     tabLine.Position         = UDim2.new(0,0,1,-1)
-    tabLine.BackgroundColor3 = BORDER
+    tabLine.BackgroundColor3 = Theme.BORDER
     tabLine.BorderSizePixel  = 0
     tabLine.Parent           = tabbar
 
-    --// SCROLL BODY
+    --// SCROLLING BODY
     local scroll = Instance.new("ScrollingFrame")
-    scroll.Size                 = UDim2.new(1,0,1,-63)
-    scroll.Position             = UDim2.new(0,0,0,63)
+    scroll.Size                 = UDim2.new(1,0,1,-70)
+    scroll.Position             = UDim2.new(0,0,0,70)
     scroll.BackgroundTransparency = 1
     scroll.BorderSizePixel      = 0
     scroll.ScrollBarThickness   = 3
-    scroll.ScrollBarImageColor3 = BORDER
+    scroll.ScrollBarImageColor3 = Theme.BORDER
     scroll.CanvasSize           = UDim2.new(0,0,0,0)
     scroll.AutomaticCanvasSize  = Enum.AutomaticSize.Y
     scroll.Parent               = panel
@@ -471,245 +832,72 @@ local function createPanel()
     scrollPad.PaddingLeft   = UDim.new(0,10)
     scrollPad.PaddingRight  = UDim.new(0,10)
     scrollPad.PaddingTop    = UDim.new(0,8)
-    scrollPad.PaddingBottom = UDim.new(0,8)
+    scrollPad.PaddingBottom = UDim.new(0,10)
 
-    --// TAB PAGE CONTAINER — single UIListLayout on scroll
     local pageLayout = Instance.new("UIListLayout", scroll)
-    pageLayout.Padding       = UDim.new(0,8)
-    pageLayout.SortOrder     = Enum.SortOrder.LayoutOrder
+    pageLayout.Padding   = UDim.new(0,8)
+    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-    -- Each "page" is a Frame that contains all its sections
-    local pages = {}
-    local tabBtns = {}
-    local tabNames = {"monitor","players","config","log"}
-    local activeTab = "monitor"
+    --// PAGES
+    local tabNames = {"monitor","players","status","webhooks","config","log"}
+    local pages    = {}
+    local tabBtns  = {}
 
     for _, name in ipairs(tabNames) do
         local pg = Instance.new("Frame")
-        pg.Name            = "Page_"..name
-        pg.Size            = UDim2.new(1,0,0,0)
-        pg.AutomaticSize   = Enum.AutomaticSize.Y
+        pg.Name           = "Page_"..name
+        pg.Size           = UDim2.new(1,0,0,0)
+        pg.AutomaticSize  = Enum.AutomaticSize.Y
         pg.BackgroundTransparency = 1
-        pg.BorderSizePixel = 0
-        pg.Visible         = (name == "monitor")
-        pg.LayoutOrder     = 1
-        pg.Parent          = scroll
+        pg.BorderSizePixel= 0
+        pg.Visible        = (name == "monitor")
+        pg.LayoutOrder    = 1
+        pg.Parent         = scroll
 
         local pgl = Instance.new("UIListLayout", pg)
-        pgl.Padding    = UDim.new(0,8)
-        pgl.SortOrder  = Enum.SortOrder.LayoutOrder
+        pgl.Padding   = UDim.new(0,8)
+        pgl.SortOrder = Enum.SortOrder.LayoutOrder
 
         pages[name] = pg
     end
 
     -- tab buttons
-    local tabBtnW = math.floor(390 / #tabNames)
+    local tabW = math.floor(420 / #tabNames)
     for i, name in ipairs(tabNames) do
+        local tabCol = Theme.TabColors[name] or Theme.ACCENT
+        local active  = (name == "monitor")
+
         local tb = Instance.new("TextButton")
-        tb.Size             = UDim2.new(0,tabBtnW,1,-1)
-        tb.Position         = UDim2.new(0,(i-1)*tabBtnW,0,0)
+        tb.Size             = UDim2.new(0,tabW,1,-1)
+        tb.Position         = UDim2.new(0,(i-1)*tabW,0,0)
         tb.BackgroundTransparency = 1
         tb.Text             = name
-        tb.TextColor3       = (name == "monitor") and TEXT or DIM
+        tb.TextColor3       = active and Theme.TEXT or Theme.DIM
         tb.Font             = Enum.Font.GothamMedium
-        tb.TextSize         = 11
+        tb.TextSize         = 10
         tb.BorderSizePixel  = 0
         tb.Parent           = tabbar
         tabBtns[name]       = tb
 
-        -- underline indicator
         local ul = Instance.new("Frame")
         ul.Name             = "UL"
-        ul.Size             = UDim2.new(0.7,0,0,2)
-        ul.Position         = UDim2.new(0.15,0,1,-2)
-        ul.BackgroundColor3 = ACCENT
+        ul.Size             = UDim2.new(0.8,0,0,2)
+        ul.Position         = UDim2.new(0.1,0,1,-2)
+        ul.BackgroundColor3 = tabCol
         ul.BorderSizePixel  = 0
-        ul.Visible          = (name == "monitor")
+        ul.Visible          = active
         ul.Parent           = tb
 
         tb.MouseButton1Click:Connect(function()
-            -- hide all pages
             for _, pg in pairs(pages) do pg.Visible = false end
-            pages[name].Visible = true
-            activeTab = name
+            pages[name].Visible  = true
             scroll.CanvasPosition = Vector2.new(0,0)
-            -- update indicators
             for n, btn in pairs(tabBtns) do
-                btn.TextColor3 = (n == name) and TEXT or DIM
+                btn.TextColor3 = (n == name) and Theme.TEXT or Theme.DIM
                 local u = btn:FindFirstChild("UL")
                 if u then u.Visible = (n == name) end
             end
         end)
-    end
-
-    --// BUILDER HELPERS
-
-    -- section card
-    local function mkSection(parent, title, dotCol, order)
-        local card = Instance.new("Frame")
-        card.BackgroundColor3 = BG2
-        card.BorderSizePixel  = 0
-        card.Size             = UDim2.new(1,0,0,0)
-        card.AutomaticSize    = Enum.AutomaticSize.Y
-        card.LayoutOrder      = order or 0
-        card.ClipsDescendants = false
-        card.Parent           = parent
-        Instance.new("UICorner", card).CornerRadius = UDim.new(0,8)
-
-        -- header row
-        local hdr = Instance.new("Frame")
-        hdr.Size             = UDim2.new(1,0,0,30)
-        hdr.BackgroundTransparency = 1
-        hdr.BorderSizePixel  = 0
-        hdr.Parent           = card
-
-        local dot = Instance.new("Frame")
-        dot.Size             = UDim2.new(0,7,0,7)
-        dot.Position         = UDim2.new(0,10,0.5,-3)
-        dot.BackgroundColor3 = dotCol
-        dot.BorderSizePixel  = 0
-        dot.Parent           = hdr
-        Instance.new("UICorner", dot).CornerRadius = UDim.new(1,0)
-
-        local tl = Instance.new("TextLabel")
-        tl.Text             = title
-        tl.Size             = UDim2.new(1,-24,1,0)
-        tl.Position         = UDim2.new(0,22,0,0)
-        tl.BackgroundTransparency = 1
-        tl.TextColor3       = TEXT
-        tl.Font             = Enum.Font.GothamMedium
-        tl.TextSize         = 11
-        tl.TextXAlignment   = Enum.TextXAlignment.Left
-        tl.Parent           = hdr
-
-        -- divider
-        local div = Instance.new("Frame")
-        div.Size             = UDim2.new(1,-20,0,1)
-        div.Position         = UDim2.new(0,10,0,30)
-        div.BackgroundColor3 = BORDER
-        div.BorderSizePixel  = 0
-        div.Parent           = card
-
-        -- content
-        local ct = Instance.new("Frame")
-        ct.Name            = "Content"
-        ct.Position        = UDim2.new(0,0,0,31)
-        ct.Size            = UDim2.new(1,0,0,0)
-        ct.AutomaticSize   = Enum.AutomaticSize.Y
-        ct.BackgroundTransparency = 1
-        ct.BorderSizePixel = 0
-        ct.Parent          = card
-
-        local ctl = Instance.new("UIListLayout", ct)
-        ctl.Padding    = UDim.new(0,0)
-        ctl.SortOrder  = Enum.SortOrder.LayoutOrder
-
-        local ctp = Instance.new("UIPadding", ct)
-        ctp.PaddingLeft   = UDim.new(0,10)
-        ctp.PaddingRight  = UDim.new(0,10)
-        ctp.PaddingTop    = UDim.new(0,4)
-        ctp.PaddingBottom = UDim.new(0,8)
-
-        return ct, hdr, tl
-    end
-
-    -- info row (label + value)
-    local function mkInfo(parent, lbl, val, order)
-        local row = Instance.new("Frame")
-        row.Size             = UDim2.new(1,0,0,22)
-        row.BackgroundTransparency = 1
-        row.BorderSizePixel  = 0
-        row.LayoutOrder      = order or 0
-        row.Parent           = parent
-
-        local l = Instance.new("TextLabel")
-        l.Text             = lbl
-        l.Size             = UDim2.new(0.55,0,1,0)
-        l.BackgroundTransparency = 1
-        l.TextColor3       = MUTED
-        l.Font             = Enum.Font.Gotham
-        l.TextSize         = 11
-        l.TextXAlignment   = Enum.TextXAlignment.Left
-        l.Parent           = row
-
-        local v = Instance.new("TextLabel")
-        v.Text             = val
-        v.Name             = "Val"
-        v.Size             = UDim2.new(0.45,0,1,0)
-        v.Position         = UDim2.new(0.55,0,0,0)
-        v.BackgroundTransparency = 1
-        v.TextColor3       = TEXT
-        v.Font             = Enum.Font.Code
-        v.TextSize         = 11
-        v.TextXAlignment   = Enum.TextXAlignment.Right
-        v.Parent           = row
-
-        return v -- return value label so caller can update it
-    end
-
-    -- divider
-    local function mkDiv(parent, order)
-        local d = Instance.new("Frame")
-        d.Size             = UDim2.new(1,0,0,1)
-        d.BackgroundColor3 = BORDER
-        d.BorderSizePixel  = 0
-        d.LayoutOrder      = order or 0
-        d.Parent           = parent
-    end
-
-    -- toggle row
-    local function mkToggle(parent, lbl, cfgKey, order)
-        local row = Instance.new("Frame")
-        row.Size             = UDim2.new(1,0,0,28)
-        row.BackgroundTransparency = 1
-        row.BorderSizePixel  = 0
-        row.LayoutOrder      = order or 0
-        row.Parent           = parent
-
-        local l = Instance.new("TextLabel")
-        l.Text             = lbl
-        l.Size             = UDim2.new(1,-44,1,0)
-        l.BackgroundTransparency = 1
-        l.TextColor3       = MUTED
-        l.Font             = Enum.Font.Gotham
-        l.TextSize         = 11
-        l.TextXAlignment   = Enum.TextXAlignment.Left
-        l.Parent           = row
-
-        local on = Config.Send[cfgKey]
-
-        local track = Instance.new("Frame")
-        track.Size             = UDim2.new(0,32,0,17)
-        track.Position         = UDim2.new(1,-32,0.5,-8)
-        track.BackgroundColor3 = on and ACCENT or BG3
-        track.BorderSizePixel  = 0
-        track.Parent           = row
-        Instance.new("UICorner", track).CornerRadius = UDim.new(0,8)
-
-        local thumb = Instance.new("Frame")
-        thumb.Size             = UDim2.new(0,11,0,11)
-        thumb.Position         = on and UDim2.new(1,-13,0.5,-5) or UDim2.new(0,2,0.5,-5)
-        thumb.BackgroundColor3 = on and TEXT or DIM
-        thumb.BorderSizePixel  = 0
-        thumb.Parent           = track
-        Instance.new("UICorner", thumb).CornerRadius = UDim.new(1,0)
-
-        local clickArea = Instance.new("TextButton")
-        clickArea.Size             = UDim2.new(1,0,1,0)
-        clickArea.BackgroundTransparency = 1
-        clickArea.Text             = ""
-        clickArea.BorderSizePixel  = 0
-        clickArea.Parent           = track
-
-        clickArea.MouseButton1Click:Connect(function()
-            Config.Send[cfgKey] = not Config.Send[cfgKey]
-            local nowOn = Config.Send[cfgKey]
-            track.BackgroundColor3 = nowOn and ACCENT or BG3
-            thumb.BackgroundColor3 = nowOn and TEXT or DIM
-            thumb.Position         = nowOn and UDim2.new(1,-13,0.5,-5) or UDim2.new(0,2,0.5,-5)
-        end)
-
-        return row
     end
 
     --==============================================
@@ -717,158 +905,272 @@ local function createPanel()
     --==============================================
     local monPage = pages["monitor"]
 
-    local sesCt = mkSection(monPage, "session", GREEN, 1)
-    local uptimeV  = mkInfo(sesCt, "uptime",         "00:00:00", 1)
-    local pingV    = mkInfo(sesCt, "ping",            "—",        2)
-    local playersV = mkInfo(sesCt, "players online",  "—",        3)
-    local gameV    = mkInfo(sesCt, "game",            "loading…", 4)
-    local whStatV  = mkInfo(sesCt, "webhook",         WEBHOOK_URL and "configured" or "not set", 5)
+    local sesCt = mkSection(monPage, "session overview", Theme.GREEN, 1)
+    local uptimeV  = mkInfo(sesCt, "uptime",         "00:00:00",  1, Theme.CYAN)
+    local pingV    = mkInfo(sesCt, "ping",            "—",         2)
+    local playersV = mkInfo(sesCt, "players",         "—",         3)
+    local gameV    = mkInfo(sesCt, "game",            "loading…",  4, Theme.MUTED)
+    mkDiv(sesCt, 5)
+    local whStatRow = {}
+    for key, _ in pairs(Config.Webhooks) do
+        local lbl = "webhook ["..key.."]"
+        local hasUrl = Config.Webhooks[key] ~= ""
+        local v = mkInfo(sesCt, lbl, hasUrl and "configured" or "not set", 10,
+            hasUrl and Theme.GREEN or Theme.RED)
+        whStatRow[key] = v
+    end
 
-    local afkCt = mkSection(monPage, "afk detection", YELLOW, 2)
-    local afkStatV  = mkInfo(afkCt, "your status", "active",                              1)
-    local afkLastV  = mkInfo(afkCt, "last input",  "just now",                             2)
-    mkInfo(afkCt, "threshold", Config.AFKThreshold.."s",                                   3)
+    local pingCt = mkSection(monPage, "ping monitor", Theme.BLUE, 2)
+    local pngCurV  = mkInfo(pingCt, "current",    "—ms", 1)
+    local pngAvgV  = mkInfo(pingCt, "5m average", "—ms", 2)
+    local pngPeakV = mkInfo(pingCt, "session peak","—ms", 3)
+    mkDiv(pingCt, 4)
+    mkToggle(pingCt, "alert on spike (>"..Config.PingSpikeThreshold.."ms)",
+        function() return Config.Modules.PingMonitor.enabled end,
+        function(v) Config.Modules.PingMonitor.enabled = v end, 5)
+    mkToggle(pingCt, "include ping in embeds",
+        function() return Config.Embed.IncludePing end,
+        function(v) Config.Embed.IncludePing = v end, 6)
+
+    local afkCt = mkSection(monPage, "afk detection", Theme.YELLOW, 3)
+    local afkStatV = mkInfo(afkCt, "your status", "active",     1, Theme.GREEN)
+    local afkLastV = mkInfo(afkCt, "idle time",   "0s",         2)
+    mkInfo(afkCt, "threshold",  Config.AFKThreshold.."s",       3, Theme.MUTED)
     mkDiv(afkCt, 4)
-    mkToggle(afkCt, "send embed on afk",    "OnAFK",       5)
-    mkToggle(afkCt, "send embed on return", "OnAFKReturn", 6)
+    mkToggle(afkCt, "send on afk",
+        function() return Config.Modules.AFK.enabled end,
+        function(v) Config.Modules.AFK.enabled = v end, 5)
 
-    local pngCt = mkSection(monPage, "ping monitor", BLUE, 3)
-    local pngCurV  = mkInfo(pngCt, "current",    "—ms", 1)
-    local pngAvgV  = mkInfo(pngCt, "5m average", "—ms", 2)
-    local pngPeakV = mkInfo(pngCt, "peak",       "—ms", 3)
-    mkDiv(pngCt, 4)
-    mkToggle(pngCt, "alert on spike (>"..Config.PingSpikeThreshold.."ms)", "OnPingSpike", 5)
-    mkToggle(pngCt, "include ping in embeds",                               "IncludePing", 6)
+    local statsCt = mkSection(monPage, "send stats", Theme.MUTED, 4)
+    local sentV   = mkInfo(statsCt, "embeds sent",  "0", 1, Theme.GREEN)
+    local errV    = mkInfo(statsCt, "send errors",  "0", 2, Theme.RED)
+    local logCntV = mkInfo(statsCt, "log entries",  "0", 3)
 
     --==============================================
     -- PLAYERS PAGE
     --==============================================
     local playPage = pages["players"]
 
-    local jlCt = mkSection(playPage, "join / leave", GREEN, 1)
-    mkToggle(jlCt, "send on join",          "OnJoin",  1)
-    mkToggle(jlCt, "send on leave",         "OnLeave", 2)
+    local jlCt = mkSection(playPage, "join / leave events", Theme.GREEN, 1)
+    mkToggle(jlCt, "send on join",
+        function() return Config.Modules.PlayerEvents.enabled end,
+        function(v) Config.Modules.PlayerEvents.enabled = v end, 1)
+    mkToggle(jlCt, "send on leave",
+        function() return Config.Modules.PlayerEvents.enabled end,
+        function(v) Config.Modules.PlayerEvents.enabled = v end, 2)
     mkDiv(jlCt, 3)
-    mkToggle(jlCt, "include player count",  "IncludePlayerCount", 4)
+    mkToggle(jlCt, "include player count",
+        function() return Config.Embed.IncludePlayerCount end,
+        function(v) Config.Embed.IncludePlayerCount = v end, 4)
+    mkToggle(jlCt, "include place id",
+        function() return Config.Embed.IncludePlaceId end,
+        function(v) Config.Embed.IncludePlaceId = v end, 5)
 
-    local dcCt = mkSection(playPage, "disconnect / rejoin", RED, 2)
-    mkToggle(dcCt, "send on disconnect",  "OnDisconnect", 1)
+    local dcCt = mkSection(playPage, "disconnect / rejoin", Theme.RED, 2)
+    mkToggle(dcCt, "send on disconnect",
+        function() return Config.Modules.Disconnect.enabled end,
+        function(v) Config.Modules.Disconnect.enabled = v end, 1)
     mkDiv(dcCt, 2)
-    mkToggle(dcCt, "auto-rejoin on kick", "AutoRejoin",   3)
-    mkInfo(dcCt, "rejoin delay", Config.RejoinDelay.."s", 4)
+    mkToggle(dcCt, "auto-rejoin on kick",
+        function() return false end, function() end, 3)
+    mkInfo(dcCt, "rejoin delay", Config.RejoinDelay.."s", 4, Theme.MUTED)
+
+    local tokCt = mkSection(playPage, "token / economy watcher", Theme.ORANGE, 3)
+    mkToggle(tokCt, "watch token label",
+        function() return Config.Modules.TokenWatcher.enabled end,
+        function(v) Config.Modules.TokenWatcher.enabled = v end, 1)
+
+    --==============================================
+    -- STATUS TRACKER PAGE
+    --==============================================
+    local statusPage = pages["status"]
+
+    local stCt = mkSection(statusPage, "live status fields", Theme.CYAN, 1)
+    local statusValLabels = {}
+    for idx, sf in ipairs(Config.StatusFields) do
+        local col = Color3.fromRGB(
+            math.floor((sf.color / 0x10000) % 0x100),
+            math.floor((sf.color / 0x100)   % 0x100),
+            math.floor((sf.color)            % 0x100)
+        )
+        local vLbl = mkInfo(stCt, sf.label, sf.default, idx, col)
+        statusValLabels[sf.key] = vLbl
+    end
+
+    mkDiv(stCt, 99)
+    mkToggle(stCt, "send embeds on field change",
+        function() return Config.Modules.StatusTracker.enabled end,
+        function(v) Config.Modules.StatusTracker.enabled = v end, 100)
+
+    -- status history section
+    local histCt = mkSection(statusPage, "change history (last 10)", Theme.PURPLE, 2)
+
+    local histScroll = Instance.new("ScrollingFrame")
+    histScroll.Size                 = UDim2.new(1,0,0,120)
+    histScroll.BackgroundColor3     = Theme.BG3
+    histScroll.BorderSizePixel      = 0
+    histScroll.ScrollBarThickness   = 2
+    histScroll.ScrollBarImageColor3 = Theme.BORDER
+    histScroll.CanvasSize           = UDim2.new(0,0,0,0)
+    histScroll.AutomaticCanvasSize  = Enum.AutomaticSize.Y
+    histScroll.LayoutOrder          = 1
+    histScroll.Parent               = histCt
+    mkCorner(histScroll, 6)
+
+    local histLL = Instance.new("UIListLayout", histScroll)
+    histLL.Padding   = UDim.new(0,0)
+    histLL.SortOrder = Enum.SortOrder.LayoutOrder
+
+    local histPad = Instance.new("UIPadding", histScroll)
+    histPad.PaddingLeft   = UDim.new(0,6)
+    histPad.PaddingRight  = UDim.new(0,6)
+    histPad.PaddingTop    = UDim.new(0,4)
+    histPad.PaddingBottom = UDim.new(0,4)
+
+    local histOrder = 0
+    local function addHistRow(key, newVal, oldVal)
+        histOrder = histOrder + 1
+        -- keep max 10 rows
+        if histOrder > 10 then
+            local children = histScroll:GetChildren()
+            for _, c in ipairs(children) do
+                if c:IsA("Frame") then c:Destroy(); break end
+            end
+        end
+        local row = Instance.new("Frame")
+        row.Size             = UDim2.new(1,0,0,16)
+        row.BackgroundTransparency = 1
+        row.BorderSizePixel  = 0
+        row.LayoutOrder      = histOrder
+        row.Parent           = histScroll
+
+        local tsLbl = Instance.new("TextLabel")
+        tsLbl.Text            = timeStr()
+        tsLbl.Size            = UDim2.new(0,60,1,0)
+        tsLbl.BackgroundTransparency = 1
+        tsLbl.TextColor3      = Theme.DIM
+        tsLbl.Font            = Enum.Font.Code
+        tsLbl.TextSize        = 10
+        tsLbl.TextXAlignment  = Enum.TextXAlignment.Left
+        tsLbl.Parent          = row
+
+        local msgLbl = Instance.new("TextLabel")
+        msgLbl.Text           = key..": "..tostring(oldVal).." → "..tostring(newVal)
+        msgLbl.Size           = UDim2.new(1,-62,1,0)
+        msgLbl.Position       = UDim2.new(0,62,0,0)
+        msgLbl.BackgroundTransparency = 1
+        msgLbl.TextColor3     = Theme.CYAN
+        msgLbl.Font           = Enum.Font.Code
+        msgLbl.TextSize       = 10
+        msgLbl.TextXAlignment = Enum.TextXAlignment.Left
+        msgLbl.TextTruncate   = Enum.TextTruncate.AtEnd
+        msgLbl.Parent         = row
+    end
+
+    -- hook status tracker changes to UI
+    StatusTracker.onChange(function(key, newVal, oldVal)
+        if statusValLabels[key] then
+            statusValLabels[key].Text = tostring(newVal)
+        end
+        addHistRow(key, newVal, oldVal)
+    end)
+
+    --==============================================
+    -- WEBHOOKS PAGE
+    --==============================================
+    local whPage = pages["webhooks"]
+
+    local whInfoCt = mkSection(whPage, "route overview", Theme.PURPLE, 1)
+    for key, _ in pairs(Config.Webhooks) do
+        local botName = Config.BotNames[key] or key
+        local hasUrl  = Config.Webhooks[key] ~= ""
+        mkInfo(whInfoCt, key.." → "..botName, hasUrl and "OK" or "empty",
+            0, hasUrl and Theme.GREEN or Theme.RED)
+    end
+
+    -- individual route editors
+    local routeOrder = 2
+    for key, _ in pairs(Config.Webhooks) do
+        local dotCol = Theme.ACCENT
+        if key == "alerts"  then dotCol = Theme.RED    end
+        if key == "players" then dotCol = Theme.GREEN  end
+        if key == "tokens"  then dotCol = Theme.ORANGE end
+        if key == "status"  then dotCol = Theme.CYAN   end
+
+        local rCt = mkSection(whPage, "route: "..key, dotCol, routeOrder)
+        routeOrder = routeOrder + 1
+        mkWebhookRow(rCt, key, 1, function(url)
+            -- update overview & monitor page indicators
+            if whStatRow[key] then
+                whStatRow[key].Text      = "configured"
+                whStatRow[key].TextColor3= Theme.GREEN
+            end
+        end)
+    end
 
     --==============================================
     -- CONFIG PAGE
     --==============================================
     local cfgPage = pages["config"]
 
-    local whCt = mkSection(cfgPage, "webhook url", Color3.fromRGB(100,80,200), 1)
+    local embedCt = mkSection(cfgPage, "embed options (global)", Theme.MUTED, 1)
+    mkToggle(embedCt, "include timestamp",
+        function() return Config.Embed.IncludeTimestamp end,
+        function(v) Config.Embed.IncludeTimestamp = v end, 1)
+    mkToggle(embedCt, "include game name",
+        function() return Config.Embed.IncludeGameName end,
+        function(v) Config.Embed.IncludeGameName = v end, 2)
+    mkToggle(embedCt, "include player count",
+        function() return Config.Embed.IncludePlayerCount end,
+        function(v) Config.Embed.IncludePlayerCount = v end, 3)
+    mkToggle(embedCt, "include ping",
+        function() return Config.Embed.IncludePing end,
+        function(v) Config.Embed.IncludePing = v end, 4)
+    mkToggle(embedCt, "include place id",
+        function() return Config.Embed.IncludePlaceId end,
+        function(v) Config.Embed.IncludePlaceId = v end, 5)
 
-    local whInp = Instance.new("TextBox")
-    whInp.Text             = WEBHOOK_URL or ""
-    whInp.PlaceholderText  = "https://discord.com/api/webhooks/..."
-    whInp.Size             = UDim2.new(1,0,0,30)
-    whInp.BackgroundColor3 = BG3
-    whInp.TextColor3       = TEXT
-    whInp.PlaceholderColor3= DIM
-    whInp.Font             = Enum.Font.Code
-    whInp.TextSize         = 10
-    whInp.ClearTextOnFocus = false
-    whInp.BorderSizePixel  = 0
-    whInp.LayoutOrder      = 1
-    whInp.Parent           = whCt
-    Instance.new("UICorner", whInp).CornerRadius = UDim.new(0,6)
-
-    -- button row frame
-    local bRow = Instance.new("Frame")
-    bRow.Size             = UDim2.new(1,0,0,28)
-    bRow.BackgroundTransparency = 1
-    bRow.BorderSizePixel  = 0
-    bRow.LayoutOrder      = 2
-    bRow.Parent           = whCt
-
-    local brl = Instance.new("UIListLayout", bRow)
-    brl.FillDirection       = Enum.FillDirection.Horizontal
-    brl.HorizontalAlignment = Enum.HorizontalAlignment.Left
-    brl.Padding             = UDim.new(0,6)
-
-    local function cfgBtn(parent, txt, bg, tc, order)
-        local b = Instance.new("TextButton")
-        b.Text             = txt
-        b.Size             = UDim2.new(0,90,0,26)
-        b.BackgroundColor3 = bg
-        b.TextColor3       = tc
-        b.Font             = Enum.Font.GothamMedium
-        b.TextSize         = 10
-        b.BorderSizePixel  = 0
-        b.AutoButtonColor  = false
-        b.LayoutOrder      = order or 0
-        b.Parent           = parent
-        Instance.new("UICorner", b).CornerRadius = UDim.new(0,6)
-        return b
+    local modCt = mkSection(cfgPage, "module toggles", Theme.ACCENT, 2)
+    local modOrder = 1
+    for modKey, mod in pairs(Config.Modules) do
+        local dotCol = Color3.fromRGB(
+            math.floor((mod.color / 0x10000) % 0x100),
+            math.floor((mod.color / 0x100)   % 0x100),
+            math.floor((mod.color)            % 0x100)
+        )
+        mkToggle(modCt, mod.label.." → ["..mod.webhookKey.."]",
+            function() return mod.enabled end,
+            function(v) mod.enabled = v end, modOrder)
+        modOrder = modOrder + 1
     end
 
-    local saveWhBtn  = cfgBtn(bRow, "save to file", Color3.fromRGB(12,38,12), GREEN, 1)
-    local testWhBtn  = cfgBtn(bRow, "test send",    Color3.fromRGB(10,18,38), BLUE,  2)
-    local clearWhBtn = cfgBtn(bRow, "clear",        Color3.fromRGB(38,10,10), RED,   3)
-
-    local whFileV = mkInfo(whCt, "saved file", fileExists(Config.SaveFile) and Config.SaveFile or "none", 3)
-
-    saveWhBtn.MouseButton1Click:Connect(function()
-        local url = whInp.Text:gsub("%s+","")
-        if url ~= "" then
-            WEBHOOK_URL = url
-            fileSave(Config.SaveFile, url)
-            whFileV.Text      = "saved — "..Config.SaveFile
-            whFileV.TextColor3= GREEN
-            whStatV.Text      = "configured"
-            whStatV.TextColor3= GREEN
-            logAdd("ok", "webhook url saved")
-        end
-    end)
-
-    testWhBtn.MouseButton1Click:Connect(function()
-        send(buildEmbed({ title="Test", color=0x5865F2, fields=commonFields({field("Source","manual test",false)}) }))
-    end)
-
-    clearWhBtn.MouseButton1Click:Connect(function()
-        whInp.Text        = ""
-        WEBHOOK_URL       = nil
-        fileDel(Config.SaveFile)
-        whFileV.Text      = "cleared"
-        whFileV.TextColor3= RED
-        whStatV.Text      = "not set"
-        whStatV.TextColor3= RED
-        logAdd("warn", "webhook cleared")
-    end)
-
-    local embCt = mkSection(cfgPage, "embed options", MUTED, 2)
-    mkToggle(embCt, "include timestamp",    "IncludeTimestamp",   1)
-    mkToggle(embCt, "include game name",    "IncludeGameName",    2)
-    mkToggle(embCt, "include player count", "IncludePlayerCount", 3)
+    local threshCt = mkSection(cfgPage, "thresholds", Theme.ORANGE, 3)
+    mkInfo(threshCt, "AFK threshold",   Config.AFKThreshold.."s",        1, Theme.MUTED)
+    mkInfo(threshCt, "ping spike",      Config.PingSpikeThreshold.."ms",  2, Theme.MUTED)
+    mkInfo(threshCt, "rejoin delay",    Config.RejoinDelay.."s",          3, Theme.MUTED)
 
     --==============================================
     -- LOG PAGE
     --==============================================
     local logPage = pages["log"]
 
-    local logCt = mkSection(logPage, "activity log", BLUE, 1)
+    local logCt = mkSection(logPage, "activity log", Theme.BLUE, 1)
 
     local logScroll = Instance.new("ScrollingFrame")
-    logScroll.Size                 = UDim2.new(1,0,0,180)
-    logScroll.BackgroundColor3     = BG3
+    logScroll.Size                 = UDim2.new(1,0,0,220)
+    logScroll.BackgroundColor3     = Theme.BG3
     logScroll.BorderSizePixel      = 0
     logScroll.ScrollBarThickness   = 3
-    logScroll.ScrollBarImageColor3 = BORDER
+    logScroll.ScrollBarImageColor3 = Theme.BORDER
     logScroll.CanvasSize           = UDim2.new(0,0,0,0)
     logScroll.AutomaticCanvasSize  = Enum.AutomaticSize.Y
     logScroll.LayoutOrder          = 1
     logScroll.Parent               = logCt
-    Instance.new("UICorner", logScroll).CornerRadius = UDim.new(0,6)
+    mkCorner(logScroll, 6)
 
-    local logListLayout = Instance.new("UIListLayout", logScroll)
-    logListLayout.Padding    = UDim.new(0,0)
-    logListLayout.SortOrder  = Enum.SortOrder.LayoutOrder
+    local logLL = Instance.new("UIListLayout", logScroll)
+    logLL.Padding   = UDim.new(0,0)
+    logLL.SortOrder = Enum.SortOrder.LayoutOrder
 
     local logPad = Instance.new("UIPadding", logScroll)
     logPad.PaddingLeft   = UDim.new(0,6)
@@ -876,111 +1178,112 @@ local function createPanel()
     logPad.PaddingTop    = UDim.new(0,4)
     logPad.PaddingBottom = UDim.new(0,4)
 
-    local logOrder = 0
-
+    local logRowOrder = 0
     local function addLogRow(entry)
-        logOrder = logOrder + 1
-        local tc = (entry.kind=="ok") and GREEN or (entry.kind=="err") and RED
-                or (entry.kind=="warn") and YELLOW or BLUE
+        logRowOrder = logRowOrder + 1
+        local tc = (entry.kind=="ok")   and Theme.GREEN
+                or (entry.kind=="err")  and Theme.RED
+                or (entry.kind=="warn") and Theme.YELLOW
+                or Theme.BLUE
 
         local row = Instance.new("Frame")
         row.Size             = UDim2.new(1,0,0,16)
         row.BackgroundTransparency = 1
         row.BorderSizePixel  = 0
-        row.LayoutOrder      = logOrder
+        row.LayoutOrder      = logRowOrder
         row.Parent           = logScroll
 
         local ts = Instance.new("TextLabel")
-        ts.Text             = entry.ts
-        ts.Size             = UDim2.new(0,65,1,0)
+        ts.Text            = entry.ts
+        ts.Size            = UDim2.new(0,65,1,0)
         ts.BackgroundTransparency = 1
-        ts.TextColor3       = DIM
-        ts.Font             = Enum.Font.Code
-        ts.TextSize         = 10
-        ts.TextXAlignment   = Enum.TextXAlignment.Left
-        ts.Parent           = row
+        ts.TextColor3      = Theme.DIM
+        ts.Font            = Enum.Font.Code
+        ts.TextSize        = 10
+        ts.TextXAlignment  = Enum.TextXAlignment.Left
+        ts.Parent          = row
 
         local msg = Instance.new("TextLabel")
-        msg.Text            = entry.msg
-        msg.Size            = UDim2.new(1,-67,1,0)
-        msg.Position        = UDim2.new(0,67,0,0)
+        msg.Text           = entry.msg
+        msg.Size           = UDim2.new(1,-67,1,0)
+        msg.Position       = UDim2.new(0,67,0,0)
         msg.BackgroundTransparency = 1
-        msg.TextColor3      = tc
-        msg.Font            = Enum.Font.Code
-        msg.TextSize        = 10
-        msg.TextXAlignment  = Enum.TextXAlignment.Left
-        msg.TextTruncate    = Enum.TextTruncate.AtEnd
-        msg.Parent          = row
+        msg.TextColor3     = tc
+        msg.Font           = Enum.Font.Code
+        msg.TextSize       = 10
+        msg.TextXAlignment = Enum.TextXAlignment.Left
+        msg.TextTruncate   = Enum.TextTruncate.AtEnd
+        msg.Parent         = row
 
-        -- auto-scroll to bottom
         task.defer(function()
             logScroll.CanvasPosition = Vector2.new(0, math.huge)
         end)
     end
 
-    -- populate existing buffer
     for i = #LogBuffer, 1, -1 do addLogRow(LogBuffer[i]) end
     onLog(addLogRow)
 
-    -- stats
-    local statCt = mkSection(logPage, "stats", MUTED, 2)
-    local sentV  = mkInfo(statCt, "embeds sent",    tostring(embedsSent), 1)
-    local logCntV= mkInfo(statCt, "log entries",    "0",                  2)
-
     --==============================================
-    -- LIVE UPDATES
+    -- LIVE UPDATE LOOP
     --==============================================
-    local startTick   = tick()
-    local pingBuf     = {}
-    local peakPing    = 0
+    local startTick    = tick()
+    local pingBuf      = {}
+    local peakPing     = 0
     local lastPingTick = 0
 
     RunService.Heartbeat:Connect(function()
-        -- uptime
         local el = math.floor(tick() - startTick)
-        uptimeV.Text = ("%02d:%02d:%02d"):format(math.floor(el/3600), math.floor((el%3600)/60), el%60)
+        uptimeV.Text = ("%02d:%02d:%02d"):format(
+            math.floor(el/3600), math.floor((el%3600)/60), el%60)
 
-        -- ping every 2s
         if tick() - lastPingTick >= 2 then
             lastPingTick = tick()
             local p = getPing()
             table.insert(pingBuf, p)
             if #pingBuf > 150 then table.remove(pingBuf,1) end
             peakPing = math.max(peakPing, p)
-            local sum = 0; for _,v in ipairs(pingBuf) do sum=sum+v end
-            local avg = math.round(sum/#pingBuf)
+            local sum = 0
+            for _, v in ipairs(pingBuf) do sum = sum + v end
+            local avg = math.round(sum / #pingBuf)
 
-            pingV.Text     = p.."ms"
-            pingV.TextColor3 = p<100 and GREEN or p<200 and YELLOW or RED
-            pngCurV.Text   = p.."ms"
-            pngCurV.TextColor3 = p<100 and GREEN or p<200 and YELLOW or RED
-            pngAvgV.Text   = avg.."ms"
-            pngPeakV.Text  = peakPing.."ms"
-            playersV.Text  = getPlayerCount().." / "..Players.MaxPlayers
+            local pingCol = p < 100 and Theme.GREEN or p < 200 and Theme.YELLOW or Theme.RED
+            pingV.Text      = p.."ms";  pingV.TextColor3 = pingCol
+            pngCurV.Text    = p.."ms";  pngCurV.TextColor3 = pingCol
+            pngAvgV.Text    = avg.."ms"
+            pngPeakV.Text   = peakPing.."ms";
+            pngPeakV.TextColor3 = peakPing > 200 and Theme.RED or Theme.TEXT
+
+            playersV.Text   = getPlayerCount().." / "..Players.MaxPlayers
         end
 
-        -- stats update
         sentV.Text   = tostring(embedsSent)
+        errV.Text    = tostring(sendErrors);  errV.TextColor3 = sendErrors > 0 and Theme.RED or Theme.MUTED
         logCntV.Text = tostring(#LogBuffer)
+
+        -- refresh webhook status in monitor tab
+        for key, lbl in pairs(whStatRow) do
+            local has = Config.Webhooks[key] and Config.Webhooks[key] ~= ""
+            lbl.Text       = has and "configured" or "not set"
+            lbl.TextColor3 = has and Theme.GREEN or Theme.RED
+        end
     end)
 
-    -- game name async
     task.spawn(function() gameV.Text = getGameName() end)
 
-    -- afk tracker lives here so it can update the label
+    --// AFK DETECTION
     local lastInput = tick()
     local isAFK     = false
 
     UserInputService.InputBegan:Connect(function()
         lastInput = tick()
-        afkLastV.Text = "just now"
+        afkLastV.Text = "0s"
         if isAFK then
             isAFK = false
             afkStatV.Text       = "active"
-            afkStatV.TextColor3 = GREEN
+            afkStatV.TextColor3 = Theme.GREEN
             logAdd("ok","returned from afk")
-            if Config.Send.OnAFKReturn then
-                send(buildEmbed({ title="Returned from AFK", color=0x57F287,
+            if Config.Modules.AFK.enabled then
+                sendTo("default", buildEmbed({ title="Returned from AFK", color=0x57F287,
                     fields=commonFields({field("Player", LP.Name, true)}) }))
             end
         end
@@ -988,69 +1291,95 @@ local function createPanel()
 
     RunService.Heartbeat:Connect(function()
         local idle = math.floor(tick() - lastInput)
-        if idle > 5 then
-            afkLastV.Text = idle.."s ago"
-        end
+        afkLastV.Text = idle.."s"
         if not isAFK and idle >= Config.AFKThreshold then
             isAFK = true
             afkStatV.Text       = "afk"
-            afkStatV.TextColor3 = YELLOW
-            logAdd("warn","went afk ("..Config.AFKThreshold.."s idle)")
-            if Config.Send.OnAFK then
-                send(buildEmbed({ title="Player AFK", color=0xFEE75C,
-                    fields=commonFields({field("Player",LP.Name,true),field("Idle",Config.AFKThreshold.."s",true)}) }))
+            afkStatV.TextColor3 = Theme.YELLOW
+            logAdd("warn","went afk ("..idle.."s)")
+            if Config.Modules.AFK.enabled then
+                sendTo("default", buildEmbed({ title="Player AFK", color=0xFEE75C,
+                    fields=commonFields({
+                        field("Player", LP.Name,                    true),
+                        field("Idle",   Config.AFKThreshold.."s",   true)
+                    })
+                }))
             end
         end
     end)
 end
 
 --====================================================
--- FEATURES
+-- FEATURE MODULES
 --====================================================
-local function onPlayerAdded(player)
-    if not Config.Send.OnJoin then return end
-    local age = "unknown"
-    local ok, a = pcall(function() return player:GetAccountAge() end)
-    if ok then
-        age = math.floor(a/365).."y "..math.floor((a%365)/30).."m"
+local function setupPlayerEvents()
+    local function onAdded(player)
+        if not Config.Modules.PlayerEvents.enabled then return end
+        local age = "unknown"
+        local ok, a = pcall(function() return player:GetAccountAge() end)
+        if ok then age = math.floor(a/365).."y "..math.floor((a%365)/30).."m" end
+        logAdd("ok", player.Name.." joined (age: "..age..")")
+        sendTo("players", buildEmbed({
+            title  = "Player Joined",
+            color  = Config.Modules.PlayerEvents.color,
+            fields = commonFields({
+                field("Player", player.Name, true),
+                field("Age",    age,         true),
+                field("UserId", player.UserId, true),
+            })
+        }))
     end
-    logAdd("ok", player.Name.." joined (age: "..age..")")
-    send(buildEmbed({ title="Player Joined", color=0x57F287,
-        fields=commonFields({field("Player",player.Name,true),field("Age",age,true)}) }))
-end
 
-local function onPlayerRemoving(player)
-    if not Config.Send.OnLeave then return end
-    logAdd("err", player.Name.." left")
-    send(buildEmbed({ title="Player Left", color=0xED4245,
-        fields=commonFields({field("Player",player.Name,true)}) }))
+    local function onRemoving(player)
+        if not Config.Modules.PlayerEvents.enabled then return end
+        logAdd("err", player.Name.." left")
+        sendTo("players", buildEmbed({
+            title  = "Player Left",
+            color  = 0xED4245,
+            fields = commonFields({ field("Player", player.Name, true) })
+        }))
+    end
+
+    Players.PlayerAdded:Connect(onAdded)
+    Players.PlayerRemoving:Connect(onRemoving)
+    for _, p in ipairs(Players:GetPlayers()) do task.spawn(onAdded, p) end
 end
 
 local function setupDisconnect()
     game:BindToClose(function()
-        if not Config.Send.OnDisconnect then return end
-        logAdd("err","session ended")
-        send(buildEmbed({ title="Session Ended", color=0xFEE75C,
-            fields=commonFields({field("Player",LP.Name,true)}) }))
+        if not Config.Modules.Disconnect.enabled then return end
+        logAdd("err","session ended / disconnect")
+        sendTo("alerts", buildEmbed({
+            title  = "Session Ended",
+            color  = 0xFEE75C,
+            fields = commonFields({ field("Player", LP.Name, true) })
+        }))
     end)
 end
 
 local function setupPingMonitor()
     local lastSpike = 0
     RunService.Heartbeat:Connect(function()
-        if not Config.Send.OnPingSpike then return end
-        if tick()-lastSpike < 60 then return end
+        if not Config.Modules.PingMonitor.enabled then return end
+        if tick() - lastSpike < 60 then return end
         local p = getPing()
         if p >= Config.PingSpikeThreshold then
             lastSpike = tick()
             logAdd("warn","ping spike: "..p.."ms")
-            send(buildEmbed({ title="Ping Spike", color=0xFEE75C,
-                fields=commonFields({field("Ping",p.."ms",true),field("Threshold",Config.PingSpikeThreshold.."ms",true)}) }))
+            sendTo("alerts", buildEmbed({
+                title  = "Ping Spike",
+                color  = 0xFF4444,
+                fields = commonFields({
+                    field("Ping",      p.."ms",                         true),
+                    field("Threshold", Config.PingSpikeThreshold.."ms", true),
+                })
+            }))
         end
     end)
 end
 
 local function setupTokenWatcher()
+    if not Config.Modules.TokenWatcher.enabled then return end
     local ok, label = pcall(function()
         return LP:WaitForChild("PlayerGui",10)
             :WaitForChild("TradeTokenCurrency_UI",10)
@@ -1065,43 +1394,169 @@ local function setupTokenWatcher()
         if new ~= last then
             local prev = last; last = new
             logAdd("info","tokens: "..prev.." → "..new)
-            send(buildEmbed({ title="Tokens Updated", color=0xFEE75C,
-                fields=commonFields({field("Before",prev,true),field("After",new,true)}) }))
+            sendTo("tokens", buildEmbed({
+                title  = "Tokens Updated",
+                color  = Config.Modules.TokenWatcher.color,
+                fields = commonFields({
+                    field("Before", prev, true),
+                    field("After",  new,  true),
+                })
+            }))
         end
     end)
 end
 
 --====================================================
--- MAIN
+-- SETUP SCREEN (first run)
 --====================================================
--- try loading saved webhook first
-local saved = fileLoad(Config.SaveFile)
-if saved then
-    WEBHOOK_URL = saved:gsub("%s+","")
-    logAdd("ok","webhook loaded from "..Config.SaveFile)
-else
-    -- show setup screen, then panel after
-    WEBHOOK_URL = showSetupGUI()
-    if WEBHOOK_URL then
-        logAdd("ok","webhook url set")
-    else
-        logAdd("warn","no webhook — embeds disabled")
+local function showSetupGUI()
+    if PG:FindFirstChild("WHSetup_UI") then PG.WHSetup_UI:Destroy() end
+
+    local done = Instance.new("BindableEvent")
+
+    local sg = Instance.new("ScreenGui")
+    sg.Name           = "WHSetup_UI"
+    sg.ResetOnSpawn   = false
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.DisplayOrder   = 1001
+    sg.Parent         = PG
+
+    -- backdrop
+    local bd = Instance.new("Frame")
+    bd.Size                 = UDim2.new(1,0,1,0)
+    bd.BackgroundColor3     = Color3.fromRGB(0,0,0)
+    bd.BackgroundTransparency = 0.35
+    bd.BorderSizePixel      = 0
+    bd.Parent               = sg
+
+    -- card
+    local card = Instance.new("Frame")
+    card.Size             = UDim2.new(0,460,0,240)
+    card.Position         = UDim2.new(0.5,-230,0.5,-120)
+    card.BackgroundColor3 = Color3.fromRGB(16,16,28)
+    card.BorderSizePixel  = 0
+    card.Parent           = sg
+    mkCorner(card, 12)
+
+    -- accent top bar
+    local at = Instance.new("Frame")
+    at.Size             = UDim2.new(1,0,0,3)
+    at.BackgroundColor3 = Theme.ACCENT
+    at.BorderSizePixel  = 0
+    at.Parent           = card
+
+    -- topbar
+    local tb = Instance.new("Frame")
+    tb.Size             = UDim2.new(1,0,0,36)
+    tb.Position         = UDim2.new(0,0,0,3)
+    tb.BackgroundColor3 = Color3.fromRGB(10,10,20)
+    tb.BorderSizePixel  = 0
+    tb.Parent           = card
+
+    mkLabel(tb, "webhook monitor v4.0  —  first run setup", 14, 0, 400, 36, 11, Theme.MUTED)
+
+    mkLabel(card, "paste your default discord webhook. you can add more routes inside the app.", 14, 48, 432, 18, 11, Theme.DIM)
+
+    local inp = Instance.new("TextBox")
+    inp.PlaceholderText  = "https://discord.com/api/webhooks/..."
+    inp.Size             = UDim2.new(0,432,0,34)
+    inp.Position         = UDim2.new(0,14,0,72)
+    inp.BackgroundColor3 = Theme.BG3
+    inp.TextColor3       = Theme.TEXT
+    inp.PlaceholderColor3= Theme.DIM
+    inp.Font             = Enum.Font.Code
+    inp.TextSize         = 11
+    inp.ClearTextOnFocus = false
+    inp.BorderSizePixel  = 0
+    inp.Parent           = card
+    mkCorner(inp, 7)
+
+    local stL = mkLabel(card, "", 14, 116, 432, 14, 10, Theme.DIM, nil, nil, 4)
+
+    local function mkBtn(txt, x, y, w, h, bg, tc)
+        local b = Instance.new("TextButton")
+        b.Text             = txt
+        b.Size             = UDim2.new(0,w,0,h)
+        b.Position         = UDim2.new(0,x,0,y)
+        b.BackgroundColor3 = bg
+        b.TextColor3       = tc
+        b.Font             = Enum.Font.GothamMedium
+        b.TextSize         = 11
+        b.BorderSizePixel  = 0
+        b.AutoButtonColor  = false
+        b.ZIndex           = 4
+        b.Parent           = card
+        mkCorner(b, 7)
+        return b
     end
+
+    local saveBtn = mkBtn("save & open monitor", 14,  138, 220, 34, Color3.fromRGB(30,40,100), Theme.BLUE)
+    local skipBtn = mkBtn("skip (no webhook)",   242, 138, 160, 34, Color3.fromRGB(18,18,36),  Theme.DIM)
+
+    saveBtn.MouseButton1Click:Connect(function()
+        local url = inp.Text:gsub("%s+","")
+        if url == "" then stL.Text = "url cannot be empty."; stL.TextColor3 = Theme.RED; return end
+        Config.Webhooks["default"] = url
+        saveWebhooks()
+        stL.Text = "saved! loading monitor..."; stL.TextColor3 = Theme.GREEN
+        task.delay(0.5, function() done:Fire() end)
+    end)
+
+    skipBtn.MouseButton1Click:Connect(function() done:Fire() end)
+
+    done.Event:Wait()
+    task.delay(0.1, function() sg:Destroy() end)
+    done:Destroy()
 end
 
--- always show panel after setup
+--====================================================
+-- MAIN ENTRY POINT
+--====================================================
+loadWebhooks()
+
+local hasAnyWebhook = false
+for _, v in pairs(Config.Webhooks) do
+    if v ~= "" then hasAnyWebhook = true; break end
+end
+
+if not hasAnyWebhook then
+    showSetupGUI()
+else
+    logAdd("ok","webhooks loaded from file")
+end
+
 createPanel()
 
--- startup embed
-send(buildEmbed({ title="Monitor Started", color=0x57F287,
-    fields=commonFields({field("Player",LP.Name,true)}) }))
-logAdd("ok","monitor started")
+-- startup embed to default
+sendTo("default", buildEmbed({
+    title  = "Monitor Started",
+    color  = 0x57F287,
+    fields = commonFields({ field("Player", LP.Name, true) })
+}))
+logAdd("ok","monitor v4.0 started")
 
--- events
-Players.PlayerAdded:Connect(onPlayerAdded)
-Players.PlayerRemoving:Connect(onPlayerRemoving)
-for _, p in ipairs(Players:GetPlayers()) do task.spawn(onPlayerAdded, p) end
-
+-- boot modules
+setupPlayerEvents()
 setupDisconnect()
 setupPingMonitor()
 setupTokenWatcher()
+
+--====================================================
+-- EXAMPLE: HOW TO USE STATUS TRACKER IN YOUR CODE
+--====================================================
+-- Call these anywhere in your own scripts after this runs:
+--
+--   StatusTracker.set("matchStatus", "in match")
+--   StatusTracker.set("rank",        "Diamond")
+--   StatusTracker.set("coins",       tostring(newCoinCount))
+--   StatusTracker.set("level",       tostring(playerLevel))
+--
+-- Each call updates the Status tab UI and (if enabled)
+-- fires a webhook embed to the "status" route.
+--
+-- To ADD a new tracked field:
+--   1. Add { key="myKey", label="My Label", default="?", color=0xRRGGBB }
+--      to Config.StatusFields at the top of the file.
+--   2. Optionally add StatusEmbedOnChange.myKey = true/false
+--   3. Call StatusTracker.set("myKey", value) wherever it changes
+--====================================================
