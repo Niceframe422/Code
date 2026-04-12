@@ -492,239 +492,239 @@ local Products = {
 		GiftId = 3301567956;
 		NormalId = 3301567958;
 		Display = "1 Premium Anti Bee Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+3 Premium Anti Bee Egg"] = {
 		GiftId = 3301567959;
 		NormalId = 3301567955;
 		Display = "3 Premium Anti Bee Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+10 Premium Anti Bee Egg"] = {
 		GiftId = 3301567957;
 		NormalId = 3301567960;
 		Display = "10 Premium Anti Bee Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 
 	["+1 Premium Oasis Egg"] = {
 		GiftId = 3317459189;
 		NormalId = 3317459182;
 		Display = "1 Premium Oasis Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+3 Premium Oasis Egg"] = {
 		GiftId = 3317459185;
 		NormalId = 3317459186;
 		Display = "3 Premium Oasis Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+10 Premium Oasis Egg"] = {
 		GiftId = 3317459187;
 		NormalId = 3317459188;
 		Display = "10 Premium Oasis Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 
 	["+1 Premium Primal Egg"] = {
 		GiftId = 3330286152;
 		NormalId = 3330286154;
 		Display = "1 Premium Primal Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+3 Premium Primal Egg"] = {
 		GiftId = 3330286153;
 		NormalId = 3330286155;
 		Display = "3 Premium Primal Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+10 Premium Primal Egg"] = {
 		GiftId = 3330286160;
 		NormalId = 3330286148;
 		Display = "10 Premium Primal Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 
 	["+1 Premium Fall Egg"] = {
 		GiftId = 3401426986;
 		NormalId = 3401426983;
 		Display = "1 Premium Fall Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+3 Premium Fall Eggs"] = {
 		GiftId = 3401426987;
 		NormalId = 3401426985;
 		Display = "3 Premium Fall Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+10 Premium Fall Eggs"] = {
 		GiftId = 3401426988;
 		NormalId = 3401426984;
 		Display = "10 Premium Fall Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 
 	["+1 Premium Spooky Egg"] = {
 		GiftId = 3427163851;
 		NormalId = 3427163857;
 		Display = "1 Premium Spooky Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+3 Premium Spooky Eggs"] = {
 		GiftId = 3427163855;
 		NormalId = 3427163854;
 		Display = "3 Premium Spooky Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+10 Premium Spooky Eggs"] = {
 		GiftId = 3427163856;
 		NormalId = 3427163853;
 		Display = "10 Premium Spooky Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 
 	["+1 Premium Safari Egg"] = {
 		GiftId = 3444449490;
 		NormalId = 3444449487;
 		Display = "1 Premium Safari Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+3 Premium Safari Eggs"] = {
 		GiftId = 3444449488;
 		NormalId = 3444449485;
 		Display = "3 Premium Safari Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+10 Premium Safari Eggs"] = {
 		GiftId = 3444449489;
 		NormalId = 3444449486;
 		Display = "10 Premium Safari Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 
 	["+1 Premium Christmas Egg"] = {
 		GiftId = 3477922694;
 		NormalId = 3477922698;
 		Display = "1 Premium Christmas Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+3 Premium Christmas Eggs"] = {
 		GiftId = 3477922696;
 		NormalId = 3477922697;
 		Display = "3 Premium Christmas Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+10 Premium Christmas Eggs"] = {
 		GiftId = 3477922699;
 		NormalId = 3477922700;
 		Display = "10 Premium Christmas Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+50 Premium Christmas Eggs"] = {
 		GiftId = 3478044311;
 		NormalId = 3478043835;
 		Display = "50 Premium Christmas Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 
 	["+1 Premium Winter Egg"] = {
 		GiftId = 3483801742;
 		NormalId = 3483801741;
 		Display = "1 Premium Winter Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+3 Premium Winter Eggs"] = {
 		GiftId = 3483801746;
 		NormalId = 3483801745;
 		Display = "3 Premium Winter Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+10 Premium Winter Eggs"] = {
 		GiftId = 3483801749;
 		NormalId = 3483801744;
 		Display = "10 Premium Winter Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+50 Premium Winter Eggs"] = {
 		GiftId = 3483801747;
 		NormalId = 3483801743;
 		Display = "50 Premium Winter Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 
 	["+1 Premium New Year's Egg"] = {
 		GiftId = 3489363340;
 		NormalId = 3489363343;
 		Display = "1 Premium New Year's Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+3 Premium New Year's Eggs"] = {
 		GiftId = 3489363337;
 		NormalId = 3489363338;
 		Display = "3 Premium New Year's Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+10 Premium New Year's Eggs"] = {
 		GiftId = 3489363341;
 		NormalId = 3489363342;
 		Display = "10 Premium New Year's Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+50 Premium New Year's Eggs"] = {
 		GiftId = 3489363345;
 		NormalId = 3489363344;
 		Display = "50 Premium New Year's Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 
 	["+1 Premium Carnival Egg"] = {
 		GiftId = 3497475841;
 		NormalId = 3497475839;
 		Display = "1 Premium Carnival Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+3 Premium Carnival Eggs"] = {
 		GiftId = 3497475845;
 		NormalId = 3497475846;
 		Display = "3 Premium Carnival Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+10 Premium Carnival Eggs"] = {
 		GiftId = 3497475840;
 		NormalId = 3497475844;
 		Display = "10 Premium Carnival Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+50 Premium Carnival Eggs"] = {
 		GiftId = 3497475842;
 		NormalId = 3497475843;
 		Display = "50 Premium Carnival Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 
 	["+1 Premium Bird Egg"] = {
 		GiftId = 3512151974;
 		NormalId = 3512151971;
 		Display = "1 Premium Bird Egg";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+3 Premium Bird Eggs"] = {
 		GiftId = 3512151972;
 		NormalId = 3512151973;
 		Display = "3 Premium Bird Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+10 Premium Bird Eggs"] = {
 		GiftId = 3512151975;
 		NormalId = 3512151976;
 		Display = "10 Premium Bird Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 	["+50 Premium Birdl Eggs"] = {
 		GiftId = 3512151981;
 		NormalId = 3512151977;
 		Display = "50 Premium Bird Eggs";
-		Category = "Eggs";
+		Category = "Premium";
 	};
 
 	-- TOKENS
