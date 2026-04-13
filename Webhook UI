@@ -1615,18 +1615,18 @@ end
 --   route key you want, then set that route's URL in the webhooks tab.
 --====================================================
 local function setupTokenWatcher()
-    -- Strip commas and whitespace then parse as number.
-    -- Handles formatted values like "1,234" or "1 234".
+
     local function parseTokens(txt)
-        if not txt or txt == "" then return nil end
-        return tonumber(txt:gsub(",",""):gsub("%s+",""))
+        if not txt then return nil end
+        local cleaned = txt:gsub("[^%d%-]", "") -- only numbers
+        return tonumber(cleaned)
     end
 
-    local ui = Config._TokUI  -- GUI labels wired up in createPanel()
+    local ui = Config._TokUI
 
     local function setStatus(msg, col)
         if ui and ui.status then
-            ui.status.Text       = msg
+            ui.status.Text = msg
             ui.status.TextColor3 = col or Theme.MUTED
         end
     end
@@ -1634,177 +1634,170 @@ local function setupTokenWatcher()
     local function updateBigDisplay(txt, delta)
         if not ui then return end
         ui.bigVal.Text = (txt ~= "" and txt or "0")
-        ui.bigVal.TextColor3 = delta > 0 and Theme.GREEN
-                            or delta < 0 and Theme.RED
-                            or Theme.ORANGE
+        ui.bigVal.TextColor3 =
+            delta > 0 and Theme.GREEN or
+            delta < 0 and Theme.RED or
+            Theme.ORANGE
     end
 
-    -- Session accumulators reset to zero when the script first runs.
     local sessionGain = 0
     local sessionLoss = 0
     local changeCount = 0
 
     local function updateSessionUI()
         if not ui then return end
-        ui.totalGain.Text       = "+"..tostring(sessionGain)
-        ui.totalGain.TextColor3 = sessionGain > 0 and Theme.GREEN or Theme.MUTED
-        ui.totalLoss.Text       = "−"..tostring(math.abs(sessionLoss))
-        ui.totalLoss.TextColor3 = sessionLoss < 0 and Theme.RED or Theme.MUTED
-        ui.changes.Text         = tostring(changeCount)
+        ui.totalGain.Text = "+"..sessionGain
+        ui.totalLoss.Text = "−"..math.abs(sessionLoss)
+        ui.changes.Text = tostring(changeCount)
     end
 
-    -- Poll PlayerGui every second until the label appears (or 60s timeout).
-    -- We poll instead of using WaitForChild because the TradeTokenCurrency_UI
-    -- ScreenGui is added dynamically and WaitForChild on the ScreenGui itself
-    -- can block before the inner children exist.
+    -- ✅ FIXED LABEL FINDER (deep search)
     local function findLabel()
         local deadline = tick() + 60
+
         while tick() < deadline do
-            local sg = PG:FindFirstChild("TradeTokenCurrency_UI")
-            if sg then
-                local tt = sg:FindFirstChild("TradeTokens")
-                if tt then
-                    local lbl = tt:FindFirstChild("TextLabel1")
-                    if lbl then return lbl end
-                end
+            local lbl = PG:FindFirstChild("TextLabel1", true)
+
+            if lbl and lbl:IsA("TextLabel") then
+                return lbl
             end
+
             task.wait(1)
         end
+
         return nil
     end
 
     task.spawn(function()
         setStatus("searching…", Theme.YELLOW)
-        logAdd("info", "token watcher: searching for TextLabel1…")
 
         local label = findLabel()
 
         if not label then
-            setStatus("not found (60s timeout)", Theme.RED)
-            logAdd("warn", "token watcher: TextLabel1 not found — open the trade UI and re-run")
+            setStatus("not found", Theme.RED)
+            warn("Token label not found")
             return
         end
 
-        -- ── STEP A: Read and display the CURRENT value immediately ────────
-        -- This runs as soon as the label is found, before any change happens.
+        -- ✅ WAIT UNTIL TEXT IS VALID
+        repeat
+            task.wait()
+        until label.Text and label.Text ~= ""
+
         local lastText = label.Text
-        local lastNum  = parseTokens(lastText)
+        local lastNum = parseTokens(lastText)
 
         updateBigDisplay(lastText, 0)
-        if ui then
-            ui.lastChg.Text      = "startup read"
-            ui.lastChg.TextColor3= Theme.MUTED
-        end
         setStatus("active", Theme.GREEN)
-        logAdd("ok", "token watcher ready — current value: "..(lastText ~= "" and lastText or "0"))
 
-        -- ── STEP B: Send an initial "snapshot" embed to Discord ───────────
-        -- This fires once when the label is first found, even if the value
-        -- never changes. It gives you a baseline in Discord so you always
-        -- know what the count was at the start of the session.
+        -- ✅ SEND INITIAL SNAPSHOT
         if Config.Modules.TokenWatcher.enabled then
             sendTo("tokens", buildEmbed({
-                title       = "Token Snapshot — Session Start",
-                color       = 0xFFAA00,
-                description = "Current token count at time of detection.",
-                fields      = commonFields({
+                title = "Token Snapshot",
+                color = 0xFFAA00,
+                fields = commonFields({
                     field("Tokens", lastText ~= "" and lastText or "0", true),
-                    field("Note",   "no change yet — baseline read",    false),
                 })
             }))
         end
 
-        -- ── STEP C: Watch for parent removal (trade UI closing/reopening) ─
+        -- ✅ HANDLE UI BEING REPLACED
         label.AncestryChanged:Connect(function()
             if not label.Parent then
-                setStatus("label removed — retrying…", Theme.YELLOW)
-                logAdd("warn", "token label removed — restarting watcher")
-                task.spawn(setupTokenWatcher)
+                setStatus("UI changed, reconnecting...", Theme.YELLOW)
+                task.wait(1)
+                setupTokenWatcher()
             end
         end)
 
-        -- ── STEP D: Fire on every subsequent text change ──────────────────
-        label:GetPropertyChangedSignal("Text"):Connect(function()
-            local newText = label.Text
-            if newText == lastText then return end  -- guard against no-op fires
+        -- ✅ MAIN UPDATE FUNCTION (REUSABLE)
+        local function processChange(newText)
+            if newText == lastText then return end
 
-            local newNum  = parseTokens(newText)
-            local prevNum = parseTokens(lastText)
-            local prevTxt = lastText
+            local prevText = lastText
+            local prevNum = parseTokens(prevText)
+            local newNum = parseTokens(newText)
+
             lastText = newText
 
-            -- Delta: how many tokens were gained or lost this change
             local delta = 0
             if newNum and prevNum then
                 delta = newNum - prevNum
             end
 
-            -- Accumulate session totals
-            changeCount = changeCount + 1
+            changeCount += 1
+
             if delta > 0 then
-                sessionGain = sessionGain + delta
+                sessionGain += delta
             elseif delta < 0 then
-                sessionLoss = sessionLoss + delta
+                sessionLoss += delta
             end
 
-            -- Update the UI display
             updateBigDisplay(newText, delta)
+            updateSessionUI()
 
+            -- UI
             if ui then
-                -- Show the delta badge briefly then fade it
+                ui.lastChg.Text = timeStr()
+
                 if delta ~= 0 then
                     local sign = delta > 0 and "+" or ""
-                    ui.delta.Text       = sign..tostring(delta)
+                    ui.delta.Text = sign..delta
                     ui.delta.TextColor3 = delta > 0 and Theme.GREEN or Theme.RED
-                    task.delay(4, function()
-                        if ui.delta.Text == sign..tostring(delta) then
-                            ui.delta.Text        = ""
-                            ui.bigVal.TextColor3 = Theme.ORANGE
+
+                    task.delay(3, function()
+                        if ui.delta.Text == sign..delta then
+                            ui.delta.Text = ""
                         end
                     end)
                 end
-
-                ui.lastChg.Text       = timeStr()
-                ui.lastChg.TextColor3 = Theme.TEXT
-                updateSessionUI()
-                ui.addRow(prevTxt ~= "" and prevTxt or "?", newText, delta)
             end
 
-            local sign = delta > 0 and "+" or ""
-            logAdd(delta >= 0 and "ok" or "warn",
-                "tokens: "..prevTxt.." → "..newText
-                ..(delta ~= 0 and " ("..sign..delta..")" or ""))
-
-            -- Send the change embed
+            -- DISCORD
             if Config.Modules.TokenWatcher.enabled then
-                local embedCol = delta > 0 and 0x44D264
-                             or  delta < 0 and 0xED4245
-                             or  0xFFAA00
-                local deltaStr = delta ~= 0
-                    and ((delta > 0 and "+" or "")..tostring(delta))
-                    or  "no change"
-
                 sendTo("tokens", buildEmbed({
-                    title = delta > 0 and "Tokens Gained"
-                         or delta < 0 and "Tokens Lost"
-                         or "Tokens Changed",
-                    color = embedCol,
-                    description = delta > 0
-                        and "Gained **"..tostring(delta).."** tokens"
-                        or  delta < 0
-                        and "Lost **"..tostring(math.abs(delta)).."** tokens"
-                        or  "Token count refreshed with no numeric change",
+                    title =
+                        delta > 0 and "Tokens Gained" or
+                        delta < 0 and "Tokens Lost" or
+                        "Tokens Updated",
+
+                    color =
+                        delta > 0 and 0x44D264 or
+                        delta < 0 and 0xED4245 or
+                        0xFFAA00,
+
                     fields = commonFields({
-                        field("Before",        prevTxt,                          true),
-                        field("After",         newText,                          true),
-                        field("Change",        deltaStr,                         true),
-                        field("Session Gain",  "+"..tostring(sessionGain),       true),
-                        field("Session Loss",  "−"..tostring(math.abs(sessionLoss)), true),
-                        field("# Changes",     tostring(changeCount),            true),
+                        field("Before", prevText, true),
+                        field("After", newText ~= "" and newText or "0", true),
+                        field("Change",
+                            delta ~= 0 and ((delta > 0 and "+" or "")..delta) or "0",
+                            true
+                        ),
+                        field("Session Gain", "+"..sessionGain, true),
+                        field("Session Loss", "−"..math.abs(sessionLoss), true),
+                        field("Changes", tostring(changeCount), true),
                     })
                 }))
             end
+        end
+
+        -- ✅ EVENT LISTENER
+        label:GetPropertyChangedSignal("Text"):Connect(function()
+            processChange(label.Text)
         end)
+
+        -- ✅ BACKUP LOOP (VERY IMPORTANT)
+        task.spawn(function()
+            while label and label.Parent do
+                task.wait(1)
+
+                local current = label.Text
+                if current ~= lastText then
+                    processChange(current)
+                end
+            end
+        end)
+
     end)
 end
 
