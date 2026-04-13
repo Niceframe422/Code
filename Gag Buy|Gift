@@ -208,12 +208,17 @@ local Products = {
 	["Prime Seed Pack"] = {Display = "Prime Seed Pack"; Category = "Seed Pack"},
 	["Holiday Seed Pack"] = {Display = "Holiday Seed Pack"; Category = "Seed Pack"},
 	["Season 4 Seed Pack"] = {Display = "Season 4 Seed Pack"; Category = "Seed Pack"},
+    -- ufo shard
+	--////////////////////////////////////////////////////
+	["UFO Shard x1"] = {Display = "UFO Shard x1"; Category = "Pet Shard"},
+	["UFO Shard x3"] = {Display = "UFO Shard x3"; Category = "Pet Shard"},
+	["UFO Shard x10"] = {Display = "UFO Shard x10"; Category = "Pet Shard"},
    
 }
 
 local Categories = {
 	"All", "Seed Pack", "Seeds", "Super Seed",
-	"Regular Eggs", "Premium Eggs",
+	"Regular Eggs", "Premium Eggs","Pet Shard",
 	"Chests", "Crates", "Container", "Present",
 	"Tokens", "Currency", "Bundle Pack", "Pass"
 }
