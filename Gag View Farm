@@ -1,327 +1,96 @@
-local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
+--[[
+	Farm Viewer Pro — Rewritten
+	Improvements:
+	 • X close button (replaces toggle, re-open with keybind R or mobile button)
+	 • Smooth drag with clamp to screen bounds
+	 • Debounced search (no lag on every keystroke)
+	 • Animated hover states via TweenService
+	 • Resize handle (drag bottom-right corner)
+	 • Live refresh badge on player buttons (plant count)
+	 • Stat bar: shows total plants + mutation count in current view
+	 • Keyboard shortcut: R to reopen GUI
+	 • Mobile-friendly reopen button
+	 • Cleaner layout, no magic numbers scattered everywhere
+--]]
+
+local Players      = game:GetService("Players")
+local UIS          = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService   = game:GetService("RunService")
+
 local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
 ------------------------------------------------
--- SCREEN GUI
+-- CONSTANTS
 ------------------------------------------------
-local gui = Instance.new("ScreenGui")
-gui.Name = "FarmViewerPro"
-gui.ResetOnSpawn = false
-gui.Parent = player:WaitForChild("PlayerGui")
-
-------------------------------------------------
--- MAIN FRAME
-------------------------------------------------
-local main = Instance.new("Frame")
-main.Parent = gui
-main.Size = UDim2.new(0, 620, 0, 540)  -- [ADDED] slightly taller for extra bars
-main.Position = UDim2.new(0.05, 0, 0.15, 0)
-main.BackgroundColor3 = Color3.fromRGB(13, 13, 18)
-main.BorderSizePixel = 0
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 16)
-local mainStroke = Instance.new("UIStroke", main)
-mainStroke.Color = Color3.fromRGB(60, 60, 80)
-mainStroke.Transparency = 0.4
-mainStroke.Thickness = 1.5
-
-------------------------------------------------
--- MOBILE SCALE
-------------------------------------------------
-local uiScale = Instance.new("UIScale", main)
-local function updateScale()
-	local vp = workspace.CurrentCamera.ViewportSize
-	uiScale.Scale = math.clamp(vp.X / 960, 0.65, 1)
-end
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-updateScale()
-
-------------------------------------------------
--- DRAGGABLE
-------------------------------------------------
-local dragging, dragStart, startPos = false, nil, nil
-main.InputBegan:Connect(function(inp)
-	if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-		dragging = true; dragStart = inp.Position; startPos = main.Position
-	end
-end)
-UIS.InputChanged:Connect(function(inp)
-	if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
-		local d = inp.Position - dragStart
-		main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-	end
-end)
-UIS.InputEnded:Connect(function(inp)
-	if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-		dragging = false
-	end
-end)
-
-------------------------------------------------
--- TOGGLE BUTTON
-------------------------------------------------
-local toggle = Instance.new("TextButton")
-toggle.Parent = gui
-toggle.Size = UDim2.new(0, 110, 0, 32)
-toggle.Position = UDim2.new(0.05, 0, 0.1, 0)
-toggle.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
-toggle.TextColor3 = Color3.fromRGB(180, 180, 210)
-toggle.Font = Enum.Font.GothamBold
-toggle.TextSize = 13
-toggle.Text = "Hide UI"
-toggle.BorderSizePixel = 0
-Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 8)
-Instance.new("UIStroke", toggle).Color = Color3.fromRGB(80, 80, 110)
-local uiVisible = true
-toggle.MouseButton1Click:Connect(function()
-	uiVisible = not uiVisible
-	main.Visible = uiVisible
-	toggle.Text = uiVisible and "Hide UI" or "Show UI"
-end)
-
-------------------------------------------------
--- HEADER
-------------------------------------------------
-local header = Instance.new("Frame", main)
-header.Size = UDim2.new(1, 0, 0, 52)
-header.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-header.BorderSizePixel = 0
-Instance.new("UICorner", header).CornerRadius = UDim.new(0, 16)
-local headerBottomFix = Instance.new("Frame", header)
-headerBottomFix.Size = UDim2.new(1, 0, 0.5, 0)
-headerBottomFix.Position = UDim2.new(0, 0, 0.5, 0)
-headerBottomFix.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
-headerBottomFix.BorderSizePixel = 0
-
-local headerTitle = Instance.new("TextLabel", header)
-headerTitle.Size = UDim2.new(1, -20, 0, 22)
-headerTitle.Position = UDim2.new(0, 16, 0, 8)
-headerTitle.BackgroundTransparency = 1
-headerTitle.TextXAlignment = Enum.TextXAlignment.Left
-headerTitle.Font = Enum.Font.GothamBold
-headerTitle.TextSize = 17
-headerTitle.TextColor3 = Color3.fromRGB(230, 225, 255)
-headerTitle.Text = "Farm Viewer Pro"
-
-local headerSub = Instance.new("TextLabel", header)
-headerSub.Size = UDim2.new(1, -20, 0, 14)
-headerSub.Position = UDim2.new(0, 16, 0, 32)
-headerSub.BackgroundTransparency = 1
-headerSub.TextXAlignment = Enum.TextXAlignment.Left
-headerSub.Font = Enum.Font.Gotham
-headerSub.TextSize = 12
-headerSub.TextColor3 = Color3.fromRGB(100, 95, 145)
-headerSub.Text = "Select a player to inspect their farm"
-
-local headerLine = Instance.new("Frame", main)
-headerLine.Size = UDim2.new(1, -32, 0, 1)
-headerLine.Position = UDim2.new(0, 16, 0, 52)
-headerLine.BackgroundColor3 = Color3.fromRGB(45, 43, 68)
-headerLine.BorderSizePixel = 0
-
-------------------------------------------------
--- LEFT PANEL
-------------------------------------------------
-local leftPanel = Instance.new("Frame", main)
-leftPanel.Size = UDim2.new(0, 148, 1, -60)
-leftPanel.Position = UDim2.new(0, 8, 0, 58)
-leftPanel.BackgroundColor3 = Color3.fromRGB(16, 16, 22)
-leftPanel.BorderSizePixel = 0
-Instance.new("UICorner", leftPanel).CornerRadius = UDim.new(0, 12)
-local leftStroke = Instance.new("UIStroke", leftPanel)
-leftStroke.Color = Color3.fromRGB(45, 43, 68)
-leftStroke.Transparency = 0.2
-
-local leftHeader = Instance.new("TextLabel", leftPanel)
-leftHeader.Size = UDim2.new(1, 0, 0, 30)
-leftHeader.Position = UDim2.new(0, 0, 0, 0)
-leftHeader.BackgroundTransparency = 1
-leftHeader.TextXAlignment = Enum.TextXAlignment.Left
-leftHeader.Font = Enum.Font.GothamBold
-leftHeader.TextSize = 10
-leftHeader.TextColor3 = Color3.fromRGB(100, 95, 145)
-leftHeader.Text = "   PLAYERS"
-
-local leftDivider = Instance.new("Frame", leftPanel)
-leftDivider.Size = UDim2.new(1, -16, 0, 1)
-leftDivider.Position = UDim2.new(0, 8, 0, 30)
-leftDivider.BackgroundColor3 = Color3.fromRGB(45, 43, 68)
-leftDivider.BorderSizePixel = 0
-
-local plrScroll = Instance.new("ScrollingFrame", leftPanel)
-plrScroll.Position = UDim2.new(0, 5, 0, 36)
-plrScroll.Size = UDim2.new(1, -10, 1, -42)
-plrScroll.BackgroundTransparency = 1
-plrScroll.ScrollBarThickness = 3
-plrScroll.ScrollBarImageColor3 = Color3.fromRGB(80, 75, 120)
-plrScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-plrScroll.BorderSizePixel = 0
-local plrLayout = Instance.new("UIListLayout", plrScroll)
-plrLayout.Padding = UDim.new(0, 4)
-
-------------------------------------------------
--- RIGHT PANEL
-------------------------------------------------
-local rightPanel = Instance.new("Frame", main)
-rightPanel.Size = UDim2.new(1, -168, 1, -60)
-rightPanel.Position = UDim2.new(0, 162, 0, 58)
-rightPanel.BackgroundColor3 = Color3.fromRGB(16, 16, 22)
-rightPanel.BorderSizePixel = 0
-Instance.new("UICorner", rightPanel).CornerRadius = UDim.new(0, 12)
-local rightStroke = Instance.new("UIStroke", rightPanel)
-rightStroke.Color = Color3.fromRGB(45, 43, 68)
-rightStroke.Transparency = 0.2
-
-local rightTopBar = Instance.new("Frame", rightPanel)
-rightTopBar.Size = UDim2.new(1, 0, 0, 42)
-rightTopBar.BackgroundTransparency = 1
-
-local backBtn = Instance.new("TextButton", rightTopBar)
-backBtn.Size = UDim2.new(0, 60, 0, 24)
-backBtn.Position = UDim2.new(0, 10, 0.5, -12)
-backBtn.BackgroundColor3 = Color3.fromRGB(30, 28, 48)
-backBtn.TextColor3 = Color3.fromRGB(150, 140, 210)
-backBtn.Font = Enum.Font.GothamBold
-backBtn.TextSize = 12
-backBtn.Text = "< Back"
-backBtn.BorderSizePixel = 0
-backBtn.Visible = false
-Instance.new("UICorner", backBtn).CornerRadius = UDim.new(0, 6)
-Instance.new("UIStroke", backBtn).Color = Color3.fromRGB(60, 56, 95)
-
-local breadcrumb = Instance.new("TextLabel", rightTopBar)
-breadcrumb.Size = UDim2.new(1, -90, 1, 0)
-breadcrumb.Position = UDim2.new(0, 80, 0, 0)
-breadcrumb.BackgroundTransparency = 1
-breadcrumb.TextXAlignment = Enum.TextXAlignment.Left
-breadcrumb.Font = Enum.Font.GothamBold
-breadcrumb.TextSize = 13
-breadcrumb.TextColor3 = Color3.fromRGB(190, 185, 230)
-breadcrumb.Text = "Select a player"
-breadcrumb.TextTruncate = Enum.TextTruncate.AtEnd
-
-local rightDivider = Instance.new("Frame", rightPanel)
-rightDivider.Size = UDim2.new(1, -16, 0, 1)
-rightDivider.Position = UDim2.new(0, 8, 0, 42)
-rightDivider.BackgroundColor3 = Color3.fromRGB(45, 43, 68)
-rightDivider.BorderSizePixel = 0
-
--- [ADDED] SEARCH BAR
-local searchBar = Instance.new("TextBox", rightPanel)
-searchBar.Size = UDim2.new(1, -16, 0, 26)
-searchBar.Position = UDim2.new(0, 8, 0, 48)
-searchBar.BackgroundColor3 = Color3.fromRGB(22, 22, 34)
-searchBar.TextColor3 = Color3.fromRGB(200, 195, 240)
-searchBar.PlaceholderText = "Search..."
-searchBar.PlaceholderColor3 = Color3.fromRGB(70, 66, 105)
-searchBar.Font = Enum.Font.Gotham
-searchBar.TextSize = 12
-searchBar.Text = ""
-searchBar.ClearTextOnFocus = false
-searchBar.BorderSizePixel = 0
-searchBar.TextXAlignment = Enum.TextXAlignment.Left
-searchBar.Visible = false
-Instance.new("UICorner", searchBar).CornerRadius = UDim.new(0, 6)
-Instance.new("UIStroke", searchBar).Color = Color3.fromRGB(55, 52, 88)
-local searchPad = Instance.new("UIPadding", searchBar)
-searchPad.PaddingLeft = UDim.new(0, 8)
-
--- [ADDED] SORT BAR
-local sortBar = Instance.new("Frame", rightPanel)
-sortBar.Size = UDim2.new(1, -16, 0, 24)
-sortBar.Position = UDim2.new(0, 8, 0, 80)
-sortBar.BackgroundTransparency = 1
-sortBar.Visible = false
-
-local sortLayout = Instance.new("UIListLayout", sortBar)
-sortLayout.FillDirection = Enum.FillDirection.Horizontal
-sortLayout.Padding = UDim.new(0, 4)
-
--- [ADDED] Sort state
-local sortMode = "name_az"  -- "name_az" | "name_za" | "weight_desc" | "weight_asc" | "mutations_desc"
-
-local sortButtons = {}
-local function makeSortBtn(label, mode)
-	local btn = Instance.new("TextButton", sortBar)
-	btn.AutomaticSize = Enum.AutomaticSize.X
-	btn.Size = UDim2.new(0, 0, 1, 0)
-	btn.BackgroundColor3 = Color3.fromRGB(26, 24, 42)
-	btn.TextColor3 = Color3.fromRGB(140, 132, 210)
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 10
-	btn.Text = "  "..label.."  "
-	btn.BorderSizePixel = 0
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
-	local bStroke = Instance.new("UIStroke", btn)
-	bStroke.Color = Color3.fromRGB(55, 52, 88)
-	sortButtons[mode] = {btn = btn, stroke = bStroke}
-	return btn
-end
-
-local btnNameAZ   = makeSortBtn("Name A-Z",  "name_az")
-local btnNameZA   = makeSortBtn("Name Z-A",  "name_za")
-local btnWtDesc   = makeSortBtn("Weight ↓",  "weight_desc")
-local btnWtAsc    = makeSortBtn("Weight ↑",  "weight_asc")
-local btnMutDesc  = makeSortBtn("Mutations ↓","mutations_desc")
-
--- [ADDED] Highlight active sort button
-local function updateSortBtnColors()
-	for mode, data in pairs(sortButtons) do
-		if mode == sortMode then
-			data.btn.BackgroundColor3 = Color3.fromRGB(50, 42, 90)
-			data.btn.TextColor3 = Color3.fromRGB(210, 200, 255)
-			data.stroke.Color = Color3.fromRGB(110, 100, 175)
-		else
-			data.btn.BackgroundColor3 = Color3.fromRGB(26, 24, 42)
-			data.btn.TextColor3 = Color3.fromRGB(140, 132, 210)
-			data.stroke.Color = Color3.fromRGB(55, 52, 88)
-		end
-	end
-end
-updateSortBtnColors()
-
--- [ADDED] Separator divider below sort bar
-local sortDivider = Instance.new("Frame", rightPanel)
-sortDivider.Size = UDim2.new(1, -16, 0, 1)
-sortDivider.Position = UDim2.new(0, 8, 0, 108)
-sortDivider.BackgroundColor3 = Color3.fromRGB(45, 43, 68)
-sortDivider.BorderSizePixel = 0
-sortDivider.Visible = false
-
--- Adjust main scroll to sit below the new controls
-local mainScroll = Instance.new("ScrollingFrame", rightPanel)
-mainScroll.Position = UDim2.new(0, 6, 0, 114)  -- [CHANGED] was 48, now 114
-mainScroll.Size = UDim2.new(1, -12, 1, -120)    -- [CHANGED] was -54, now -120
-mainScroll.BackgroundTransparency = 1
-mainScroll.ScrollBarThickness = 3
-mainScroll.ScrollBarImageColor3 = Color3.fromRGB(80, 75, 120)
-mainScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-mainScroll.BorderSizePixel = 0
-mainScroll.CanvasPosition = Vector2.new(0, 0)
-
-local scrollLayout = Instance.new("UIListLayout", mainScroll)
-scrollLayout.Padding = UDim.new(0, 6)
-local scrollPad = Instance.new("UIPadding", mainScroll)
-scrollPad.PaddingBottom = UDim.new(0, 8)
-
-------------------------------------------------
--- STATE MACHINE
-------------------------------------------------
-local state = {
-	selectedPlayer = player,
-	view = "plants",
-	currentPlantModel = nil,
-	currentFruitModel = nil,
-	currentPlantsFolder = nil,
+local COLORS = {
+	bg          = Color3.fromRGB(10,  10,  15),
+	panel       = Color3.fromRGB(16,  16,  24),
+	card        = Color3.fromRGB(20,  20,  32),
+	cardHoverMH = Color3.fromRGB(18,  38,  28),
+	cardHoverSH = Color3.fromRGB(26,  22,  50),
+	header      = Color3.fromRGB(14,  14,  20),
+	stroke      = Color3.fromRGB(52,  50,  80),
+	strokeHi    = Color3.fromRGB(100, 90, 170),
+	strokeGreen = Color3.fromRGB(40,  80,  58),
+	strokeGreenHi = Color3.fromRGB(60, 155, 100),
+	textPrimary = Color3.fromRGB(225, 220, 255),
+	textSub     = Color3.fromRGB(95,  90, 145),
+	textMuted   = Color3.fromRGB(65,  62, 100),
+	textGreen   = Color3.fromRGB(160, 220, 185),
+	mutPill     = Color3.fromRGB(50,  34,  80),
+	mutPillText = Color3.fromRGB(185, 155, 255),
+	sortActive  = Color3.fromRGB(52,  44,  96),
+	accent      = Color3.fromRGB(105, 92, 195),
+	red         = Color3.fromRGB(210, 70,  70),
+	scrollBar   = Color3.fromRGB(72,  68, 118),
 }
 
-------------------------------------------------
--- HELPERS
-------------------------------------------------
+local TWEEN_INFO = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
 local EXCLUDED_ATTRS = {
 	DoneGrowTime=true, IsOutlined=true, MaxAge=true,
-	MasteryGrowthMulti=true, MasterySizeMulti=true, GrowRateMulti=true
+	MasteryGrowthMulti=true, MasterySizeMulti=true, GrowRateMulti=true,
 }
+
+------------------------------------------------
+-- UTILITIES
+------------------------------------------------
+local function tween(obj, props)
+	TweenService:Create(obj, TWEEN_INFO, props):Play()
+end
+
+local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
+
+local function uiCorner(parent, radius)
+	local c = Instance.new("UICorner", parent)
+	c.CornerRadius = UDim.new(0, radius or 10)
+	return c
+end
+
+local function uiStroke(parent, color, thickness)
+	local s = Instance.new("UIStroke", parent)
+	s.Color = color or COLORS.stroke
+	s.Thickness = thickness or 1
+	return s
+end
+
+local function makeLabel(parent, props)
+	local lbl = Instance.new("TextLabel", parent)
+	lbl.BackgroundTransparency = 1
+	lbl.BorderSizePixel = 0
+	lbl.Font = props.font or Enum.Font.Gotham
+	lbl.TextSize = props.size or 13
+	lbl.TextColor3 = props.color or COLORS.textPrimary
+	lbl.Text = props.text or ""
+	lbl.Size = props.sz or UDim2.new(1, 0, 0, 20)
+	lbl.Position = props.pos or UDim2.new(0, 0, 0, 0)
+	lbl.TextXAlignment = props.align or Enum.TextXAlignment.Left
+	lbl.TextYAlignment = props.valign or Enum.TextYAlignment.Center
+	lbl.TextTruncate = props.truncate or Enum.TextTruncate.None
+	return lbl
+end
 
 local function getMutations(model)
 	local mutations = {}
@@ -336,24 +105,15 @@ local function getMutations(model)
 	return mutations
 end
 
-local function clearScroll()
-	mainScroll.CanvasPosition = Vector2.new(0, 0)
-	for _, v in pairs(mainScroll:GetChildren()) do
-		if not v:IsA("UIListLayout") and not v:IsA("UIPadding") then
-			v:Destroy()
-		end
-	end
-end
-
 local function getFarm(plr)
 	local farmFolder = workspace:FindFirstChild("Farm")
 	if not farmFolder then return nil end
 	for _, farm in pairs(farmFolder:GetChildren()) do
-		local important = farm:FindFirstChild("Important")
-		local data = important and important:FindFirstChild("Data")
-		local owner = data and data:FindFirstChild("Owner")
-		if owner and (owner.Value == plr.UserId or owner.Value == plr.Name) then
-			return important
+		local imp  = farm:FindFirstChild("Important")
+		local data = imp and imp:FindFirstChild("Data")
+		local own  = data and data:FindFirstChild("Owner")
+		if own and (own.Value == plr.UserId or own.Value == plr.Name) then
+			return imp
 		end
 	end
 	return nil
@@ -363,233 +123,593 @@ local function getInitials(name)
 	return string.upper(string.sub(name, 1, 2))
 end
 
-local function makeMutationPills(parent, mutations)
-	local pillFrame = Instance.new("Frame", parent)
-	pillFrame.BackgroundTransparency = 1
-	pillFrame.Size = UDim2.new(1, 0, 0, 0)
-	pillFrame.AutomaticSize = Enum.AutomaticSize.Y
-	local pl = Instance.new("UIListLayout", pillFrame)
-	pl.FillDirection = Enum.FillDirection.Horizontal
-	pl.Wraps = true
-	pl.Padding = UDim.new(0, 4)
-	for _, mut in ipairs(mutations) do
-		local pill = Instance.new("TextLabel", pillFrame)
-		pill.AutomaticSize = Enum.AutomaticSize.X
-		pill.Size = UDim2.new(0, 0, 0, 20)
-		pill.BackgroundColor3 = Color3.fromRGB(52, 36, 82)
-		pill.TextColor3 = Color3.fromRGB(185, 155, 255)
-		pill.Font = Enum.Font.GothamBold
-		pill.TextSize = 10
-		pill.Text = "  "..mut.."  "
-		pill.BorderSizePixel = 0
-		Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
+local function debounce(fn, delay)
+	local thread
+	return function(...)
+		local args = {...}
+		if thread then task.cancel(thread) end
+		thread = task.delay(delay, function()
+			fn(table.unpack(args))
+		end)
 	end
-	return pillFrame
 end
 
--- [ADDED] Show/hide search+sort controls
+------------------------------------------------
+-- SCREEN GUI
+------------------------------------------------
+local gui = Instance.new("ScreenGui")
+gui.Name = "FarmViewerPro"
+gui.ResetOnSpawn = false
+gui.DisplayOrder = 10
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = player:WaitForChild("PlayerGui")
+
+------------------------------------------------
+-- REOPEN BUTTON (always visible when GUI is closed)
+------------------------------------------------
+local reopenBtn = Instance.new("TextButton", gui)
+reopenBtn.Size = UDim2.new(0, 120, 0, 34)
+reopenBtn.Position = UDim2.new(0.04, 0, 0.08, 0)
+reopenBtn.BackgroundColor3 = Color3.fromRGB(28, 26, 48)
+reopenBtn.TextColor3 = COLORS.textPrimary
+reopenBtn.Font = Enum.Font.GothamBold
+reopenBtn.TextSize = 13
+reopenBtn.Text = "Farm Viewer"
+reopenBtn.BorderSizePixel = 0
+reopenBtn.Visible = false
+uiCorner(reopenBtn, 8)
+uiStroke(reopenBtn, COLORS.stroke)
+
+------------------------------------------------
+-- MAIN FRAME
+------------------------------------------------
+local main = Instance.new("Frame", gui)
+main.Size = UDim2.new(0, 640, 0, 560)
+main.Position = UDim2.new(0.04, 0, 0.12, 0)
+main.BackgroundColor3 = COLORS.bg
+main.BorderSizePixel = 0
+main.ClipsDescendants = true
+uiCorner(main, 14)
+local mainStroke = uiStroke(main, COLORS.stroke, 1.5)
+
+-- Scale for small screens
+local uiScale = Instance.new("UIScale", main)
+local function updateScale()
+	local vp = camera.ViewportSize
+	uiScale.Scale = clamp(vp.X / 980, 0.6, 1)
+end
+camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+updateScale()
+
+------------------------------------------------
+-- DRAG  (clamped to viewport)
+------------------------------------------------
+local dragging, dragStart, startPos = false, nil, nil
+
+main.InputBegan:Connect(function(inp)
+	if inp.UserInputType == Enum.UserInputType.MouseButton1
+	or inp.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = inp.Position
+		startPos  = main.Position
+	end
+end)
+
+UIS.InputChanged:Connect(function(inp)
+	if not dragging then return end
+	if inp.UserInputType ~= Enum.UserInputType.MouseMovement
+	and inp.UserInputType ~= Enum.UserInputType.Touch then return end
+
+	local delta = inp.Position - dragStart
+	local vp    = camera.ViewportSize
+	local scale = uiScale.Scale
+	local sw    = main.Size.X.Offset * scale
+	local sh    = main.Size.Y.Offset * scale
+
+	local newX = startPos.X.Offset + delta.X
+	local newY = startPos.Y.Offset + delta.Y
+	newX = clamp(newX, 0, vp.X - sw)
+	newY = clamp(newY, 0, vp.Y - sh)
+	main.Position = UDim2.new(0, newX, 0, newY)
+end)
+
+UIS.InputEnded:Connect(function(inp)
+	if inp.UserInputType == Enum.UserInputType.MouseButton1
+	or inp.UserInputType == Enum.UserInputType.Touch then
+		dragging = false
+	end
+end)
+
+------------------------------------------------
+-- HEADER
+------------------------------------------------
+local header = Instance.new("Frame", main)
+header.Size = UDim2.new(1, 0, 0, 54)
+header.BackgroundColor3 = COLORS.header
+header.BorderSizePixel = 0
+uiCorner(header, 14)
+-- patch bottom corners
+local headerFix = Instance.new("Frame", header)
+headerFix.Size = UDim2.new(1, 0, 0.5, 0)
+headerFix.Position = UDim2.new(0, 0, 0.5, 0)
+headerFix.BackgroundColor3 = COLORS.header
+headerFix.BorderSizePixel = 0
+
+local headerTitle = makeLabel(header, {
+	text  = "Farm Viewer Pro",
+	font  = Enum.Font.GothamBold,
+	size  = 16,
+	color = COLORS.textPrimary,
+	sz    = UDim2.new(1, -110, 0, 22),
+	pos   = UDim2.new(0, 16, 0, 8),
+})
+
+local headerSub = makeLabel(header, {
+	text  = "Select a player to inspect their farm",
+	size  = 11,
+	color = COLORS.textSub,
+	sz    = UDim2.new(1, -110, 0, 14),
+	pos   = UDim2.new(0, 16, 0, 32),
+})
+
+-- X Close button
+local closeBtn = Instance.new("TextButton", header)
+closeBtn.Size = UDim2.new(0, 28, 0, 28)
+closeBtn.Position = UDim2.new(1, -38, 0.5, -14)
+closeBtn.BackgroundColor3 = Color3.fromRGB(60, 30, 30)
+closeBtn.TextColor3 = Color3.fromRGB(230, 120, 120)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 14
+closeBtn.Text = "✕"
+closeBtn.BorderSizePixel = 0
+uiCorner(closeBtn, 7)
+uiStroke(closeBtn, Color3.fromRGB(100, 40, 40))
+closeBtn.MouseEnter:Connect(function()
+	tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(90, 35, 35)})
+end)
+closeBtn.MouseLeave:Connect(function()
+	tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(60, 30, 30)})
+end)
+closeBtn.MouseButton1Click:Connect(function()
+	main.Visible = false
+	reopenBtn.Visible = true
+end)
+
+reopenBtn.MouseButton1Click:Connect(function()
+	main.Visible = true
+	reopenBtn.Visible = false
+end)
+
+-- Keyboard shortcut to reopen: R
+UIS.InputBegan:Connect(function(inp, gp)
+	if gp then return end
+	if inp.KeyCode == Enum.KeyCode.R and not main.Visible then
+		main.Visible = true
+		reopenBtn.Visible = false
+	end
+end)
+
+local headerLine = Instance.new("Frame", main)
+headerLine.Size = UDim2.new(1, -28, 0, 1)
+headerLine.Position = UDim2.new(0, 14, 0, 54)
+headerLine.BackgroundColor3 = COLORS.stroke
+headerLine.BorderSizePixel = 0
+
+------------------------------------------------
+-- STAT BAR  (shows live counts below header)
+------------------------------------------------
+local statBar = Instance.new("Frame", main)
+statBar.Size = UDim2.new(1, -172, 0, 22)
+statBar.Position = UDim2.new(0, 162, 0, 57)
+statBar.BackgroundTransparency = 1
+
+local statLbl = makeLabel(statBar, {
+	text  = "",
+	size  = 10,
+	color = COLORS.textMuted,
+	font  = Enum.Font.GothamBold,
+	sz    = UDim2.new(1, 0, 1, 0),
+	align = Enum.TextXAlignment.Right,
+})
+
+------------------------------------------------
+-- LEFT PANEL  (player list)
+------------------------------------------------
+local leftPanel = Instance.new("Frame", main)
+leftPanel.Size = UDim2.new(0, 148, 1, -60)
+leftPanel.Position = UDim2.new(0, 8, 0, 58)
+leftPanel.BackgroundColor3 = COLORS.panel
+leftPanel.BorderSizePixel = 0
+uiCorner(leftPanel, 12)
+uiStroke(leftPanel, COLORS.stroke)
+
+makeLabel(leftPanel, {
+	text  = "   PLAYERS",
+	size  = 9,
+	color = COLORS.textSub,
+	font  = Enum.Font.GothamBold,
+	sz    = UDim2.new(1, 0, 0, 28),
+})
+
+local leftDiv = Instance.new("Frame", leftPanel)
+leftDiv.Size = UDim2.new(1, -16, 0, 1)
+leftDiv.Position = UDim2.new(0, 8, 0, 28)
+leftDiv.BackgroundColor3 = COLORS.stroke
+leftDiv.BorderSizePixel = 0
+
+local plrScroll = Instance.new("ScrollingFrame", leftPanel)
+plrScroll.Position = UDim2.new(0, 5, 0, 34)
+plrScroll.Size = UDim2.new(1, -10, 1, -40)
+plrScroll.BackgroundTransparency = 1
+plrScroll.ScrollBarThickness = 3
+plrScroll.ScrollBarImageColor3 = COLORS.scrollBar
+plrScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+plrScroll.BorderSizePixel = 0
+local plrLayout = Instance.new("UIListLayout", plrScroll)
+plrLayout.Padding = UDim.new(0, 4)
+
+------------------------------------------------
+-- RIGHT PANEL
+------------------------------------------------
+local rightPanel = Instance.new("Frame", main)
+rightPanel.Size = UDim2.new(1, -168, 1, -60)
+rightPanel.Position = UDim2.new(0, 162, 0, 58)
+rightPanel.BackgroundColor3 = COLORS.panel
+rightPanel.BorderSizePixel = 0
+uiCorner(rightPanel, 12)
+uiStroke(rightPanel, COLORS.stroke)
+
+-- Top bar (back + breadcrumb)
+local rightTopBar = Instance.new("Frame", rightPanel)
+rightTopBar.Size = UDim2.new(1, 0, 0, 40)
+rightTopBar.BackgroundTransparency = 1
+
+local backBtn = Instance.new("TextButton", rightTopBar)
+backBtn.Size = UDim2.new(0, 58, 0, 24)
+backBtn.Position = UDim2.new(0, 10, 0.5, -12)
+backBtn.BackgroundColor3 = Color3.fromRGB(28, 26, 48)
+backBtn.TextColor3 = Color3.fromRGB(145, 135, 215)
+backBtn.Font = Enum.Font.GothamBold
+backBtn.TextSize = 12
+backBtn.Text = "← Back"
+backBtn.BorderSizePixel = 0
+backBtn.Visible = false
+uiCorner(backBtn, 6)
+uiStroke(backBtn, Color3.fromRGB(58, 54, 98))
+backBtn.MouseEnter:Connect(function()
+	tween(backBtn, {BackgroundColor3 = Color3.fromRGB(40, 36, 72)})
+end)
+backBtn.MouseLeave:Connect(function()
+	tween(backBtn, {BackgroundColor3 = Color3.fromRGB(28, 26, 48)})
+end)
+
+local breadcrumb = makeLabel(rightTopBar, {
+	text     = "Select a player",
+	font     = Enum.Font.GothamBold,
+	size     = 13,
+	color    = COLORS.textPrimary,
+	sz       = UDim2.new(1, -84, 1, 0),
+	pos      = UDim2.new(0, 78, 0, 0),
+	truncate = Enum.TextTruncate.AtEnd,
+})
+
+local rightDiv1 = Instance.new("Frame", rightPanel)
+rightDiv1.Size = UDim2.new(1, -16, 0, 1)
+rightDiv1.Position = UDim2.new(0, 8, 0, 40)
+rightDiv1.BackgroundColor3 = COLORS.stroke
+rightDiv1.BorderSizePixel = 0
+
+-- Search bar
+local searchBox = Instance.new("TextBox", rightPanel)
+searchBox.Size = UDim2.new(1, -16, 0, 26)
+searchBox.Position = UDim2.new(0, 8, 0, 46)
+searchBox.BackgroundColor3 = Color3.fromRGB(20, 20, 32)
+searchBox.TextColor3 = Color3.fromRGB(200, 195, 240)
+searchBox.PlaceholderText = "Search plants or fruits…"
+searchBox.PlaceholderColor3 = COLORS.textMuted
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextSize = 12
+searchBox.Text = ""
+searchBox.ClearTextOnFocus = false
+searchBox.BorderSizePixel = 0
+searchBox.TextXAlignment = Enum.TextXAlignment.Left
+searchBox.Visible = false
+uiCorner(searchBox, 6)
+uiStroke(searchBox, COLORS.stroke)
+local sPad = Instance.new("UIPadding", searchBox)
+sPad.PaddingLeft = UDim.new(0, 8)
+
+-- Sort bar
+local sortBar = Instance.new("Frame", rightPanel)
+sortBar.Size = UDim2.new(1, -16, 0, 24)
+sortBar.Position = UDim2.new(0, 8, 0, 78)
+sortBar.BackgroundTransparency = 1
+sortBar.Visible = false
+local sortLayout = Instance.new("UIListLayout", sortBar)
+sortLayout.FillDirection = Enum.FillDirection.Horizontal
+sortLayout.Padding = UDim.new(0, 4)
+
+local sortMode = "name_az"
+local sortButtons = {}
+
+local function makeSortBtn(label, mode)
+	local btn = Instance.new("TextButton", sortBar)
+	btn.AutomaticSize = Enum.AutomaticSize.X
+	btn.Size = UDim2.new(0, 0, 1, 0)
+	btn.BackgroundColor3 = Color3.fromRGB(24, 22, 40)
+	btn.TextColor3 = Color3.fromRGB(130, 122, 200)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 10
+	btn.Text = "  "..label.."  "
+	btn.BorderSizePixel = 0
+	uiCorner(btn, 5)
+	local bStroke = uiStroke(btn, COLORS.stroke)
+	sortButtons[mode] = {btn = btn, stroke = bStroke}
+	return btn
+end
+
+local btnNameAZ  = makeSortBtn("Name A→Z",   "name_az")
+local btnNameZA  = makeSortBtn("Name Z→A",   "name_za")
+local btnWtDesc  = makeSortBtn("Weight ↓",   "weight_desc")
+local btnWtAsc   = makeSortBtn("Weight ↑",   "weight_asc")
+local btnMutDesc = makeSortBtn("Mutations ↓","mutations_desc")
+
+local function updateSortColors()
+	for mode, data in pairs(sortButtons) do
+		if mode == sortMode then
+			tween(data.btn, {BackgroundColor3 = COLORS.sortActive, TextColor3 = COLORS.textPrimary})
+			data.stroke.Color = COLORS.accent
+		else
+			tween(data.btn, {BackgroundColor3 = Color3.fromRGB(24,22,40), TextColor3 = Color3.fromRGB(130,122,200)})
+			data.stroke.Color = COLORS.stroke
+		end
+	end
+end
+updateSortColors()
+
+local sortDivider = Instance.new("Frame", rightPanel)
+sortDivider.Size = UDim2.new(1, -16, 0, 1)
+sortDivider.Position = UDim2.new(0, 8, 0, 106)
+sortDivider.BackgroundColor3 = COLORS.stroke
+sortDivider.BorderSizePixel = 0
+sortDivider.Visible = false
+
+-- Main scroll area
+local mainScroll = Instance.new("ScrollingFrame", rightPanel)
+mainScroll.Position = UDim2.new(0, 6, 0, 44)
+mainScroll.Size = UDim2.new(1, -12, 1, -50)
+mainScroll.BackgroundTransparency = 1
+mainScroll.ScrollBarThickness = 3
+mainScroll.ScrollBarImageColor3 = COLORS.scrollBar
+mainScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+mainScroll.BorderSizePixel = 0
+local scrollLayout = Instance.new("UIListLayout", mainScroll)
+scrollLayout.Padding = UDim.new(0, 6)
+local scrollPad = Instance.new("UIPadding", mainScroll)
+scrollPad.PaddingBottom = UDim.new(0, 8)
+scrollPad.PaddingLeft   = UDim.new(0, 2)
+scrollPad.PaddingRight  = UDim.new(0, 2)
+
+------------------------------------------------
+-- STATE
+------------------------------------------------
+local state = {
+	selectedPlayer    = player,
+	view              = "plants",
+	currentPlantModel = nil,
+	currentFruitModel = nil,
+	currentPlantsFolder = nil,
+}
+
+------------------------------------------------
+-- LAYOUT HELPERS
+------------------------------------------------
 local function setControlsVisible(visible)
-	searchBar.Visible = visible
-	sortBar.Visible = visible
+	searchBox.Visible = visible
+	sortBar.Visible   = visible
 	sortDivider.Visible = visible
 	if visible then
-		mainScroll.Position = UDim2.new(0, 6, 0, 114)
-		mainScroll.Size = UDim2.new(1, -12, 1, -120)
+		mainScroll.Position = UDim2.new(0, 6, 0, 112)
+		mainScroll.Size     = UDim2.new(1, -12, 1, -118)
 	else
-		mainScroll.Position = UDim2.new(0, 6, 0, 48)
-		mainScroll.Size = UDim2.new(1, -12, 1, -54)
+		mainScroll.Position = UDim2.new(0, 6, 0, 44)
+		mainScroll.Size     = UDim2.new(1, -12, 1, -50)
 	end
 end
 
--- [ADDED] Generic sort comparator for models
+local function clearScroll()
+	mainScroll.CanvasPosition = Vector2.new(0, 0)
+	for _, v in ipairs(mainScroll:GetChildren()) do
+		if not v:IsA("UIListLayout") and not v:IsA("UIPadding") then
+			v:Destroy()
+		end
+	end
+end
+
 local function sortModels(models)
 	if sortMode == "name_az" then
-		table.sort(models, function(a, b) return a.Name < b.Name end)
+		table.sort(models, function(a,b) return a.Name < b.Name end)
 	elseif sortMode == "name_za" then
-		table.sort(models, function(a, b) return a.Name > b.Name end)
+		table.sort(models, function(a,b) return a.Name > b.Name end)
 	elseif sortMode == "weight_desc" then
-		table.sort(models, function(a, b)
+		table.sort(models, function(a,b)
 			local wa = a:FindFirstChild("Weight")
 			local wb = b:FindFirstChild("Weight")
 			return (wa and wa.Value or 0) > (wb and wb.Value or 0)
 		end)
 	elseif sortMode == "weight_asc" then
-		table.sort(models, function(a, b)
+		table.sort(models, function(a,b)
 			local wa = a:FindFirstChild("Weight")
 			local wb = b:FindFirstChild("Weight")
 			return (wa and wa.Value or 0) < (wb and wb.Value or 0)
 		end)
 	elseif sortMode == "mutations_desc" then
-		table.sort(models, function(a, b)
+		table.sort(models, function(a,b)
 			return #getMutations(a) > #getMutations(b)
 		end)
 	end
 end
 
--- [ADDED] Hook sort buttons to re-render current view
-local function onSortBtn(mode)
-	sortMode = mode
-	updateSortBtnColors()
-	if state.view == "plants" then
-		renderPlants()
-	elseif state.view == "fruits" then
-		renderFruits()
+local function makeMutationPills(parent, mutations)
+	local frame = Instance.new("Frame", parent)
+	frame.BackgroundTransparency = 1
+	frame.Size = UDim2.new(1, 0, 0, 0)
+	frame.AutomaticSize = Enum.AutomaticSize.Y
+	local pl = Instance.new("UIListLayout", frame)
+	pl.FillDirection = Enum.FillDirection.Horizontal
+	pl.Wraps = true
+	pl.Padding = UDim.new(0, 4)
+	for _, mut in ipairs(mutations) do
+		local pill = Instance.new("TextLabel", frame)
+		pill.AutomaticSize = Enum.AutomaticSize.X
+		pill.Size = UDim2.new(0, 0, 0, 18)
+		pill.BackgroundColor3 = COLORS.mutPill
+		pill.TextColor3 = COLORS.mutPillText
+		pill.Font = Enum.Font.GothamBold
+		pill.TextSize = 9
+		pill.Text = "  "..mut.."  "
+		pill.BorderSizePixel = 0
+		uiCorner(pill, 9)
 	end
+	return frame
 end
 
-btnNameAZ.MouseButton1Click:Connect(function()  onSortBtn("name_az") end)
-btnNameZA.MouseButton1Click:Connect(function()  onSortBtn("name_za") end)
-btnWtDesc.MouseButton1Click:Connect(function()  onSortBtn("weight_desc") end)
-btnWtAsc.MouseButton1Click:Connect(function()   onSortBtn("weight_asc") end)
-btnMutDesc.MouseButton1Click:Connect(function() onSortBtn("mutations_desc") end)
+local function emptyLabel(text)
+	local lbl = makeLabel(mainScroll, {
+		text  = text,
+		size  = 13,
+		color = COLORS.textMuted,
+		sz    = UDim2.new(1, 0, 0, 40),
+		align = Enum.TextXAlignment.Center,
+	})
+	lbl.TextYAlignment = Enum.TextYAlignment.Center
+	return lbl
+end
 
--- [ADDED] Hook search bar to re-render current view
-searchBar:GetPropertyChangedSignal("Text"):Connect(function()
-	if state.view == "plants" then
-		renderPlants()
-	elseif state.view == "fruits" then
-		renderFruits()
-	end
-end)
+local function makeCard(parent, isGreen)
+	local card = Instance.new("TextButton", parent)
+	card.Size = UDim2.new(1, -4, 0, 0)
+	card.AutomaticSize = Enum.AutomaticSize.Y
+	card.BackgroundColor3 = COLORS.card
+	card.BorderSizePixel = 0
+	card.Text = ""
+	card.AutoButtonColor = false
+	uiCorner(card, 10)
+	local stroke = uiStroke(card, isGreen and COLORS.strokeGreen or COLORS.stroke)
+	local pad = Instance.new("UIPadding", card)
+	pad.PaddingTop    = UDim.new(0, 10)
+	pad.PaddingBottom = UDim.new(0, 10)
+	pad.PaddingLeft   = UDim.new(0, 12)
+	pad.PaddingRight  = UDim.new(0, 10)
+	local layout = Instance.new("UIListLayout", card)
+	layout.Padding = UDim.new(0, 5)
+	return card, stroke
+end
 
 ------------------------------------------------
--- VIEW: PLANT LIST
+-- VIEWS
 ------------------------------------------------
 function renderPlants()
 	clearScroll()
-	setControlsVisible(true)   -- [ADDED]
+	setControlsVisible(true)
 	backBtn.Visible = false
 	local plr = state.selectedPlayer
 	breadcrumb.Text = plr.Name.."'s Farm"
-	headerSub.Text = "Viewing "..plr.Name.."'s plants"
+	headerSub.Text  = "Viewing "..plr.Name.."'s plants"
 
-	local plantsFolder = state.currentPlantsFolder
-	if not plantsFolder then
-		local lbl = Instance.new("TextLabel", mainScroll)
-		lbl.Size = UDim2.new(1, 0, 0, 36)
-		lbl.BackgroundTransparency = 1
-		lbl.TextColor3 = Color3.fromRGB(90, 85, 130)
-		lbl.Font = Enum.Font.Gotham
-		lbl.TextSize = 13
-		lbl.Text = "No Plants_Physical folder found."
-		return
-	end
-
-	-- [ADDED] Filter by search text
-	local query = string.lower(searchBar.Text)
+	local query = string.lower(searchBox.Text)
 	local models = {}
-	for _, v in pairs(plantsFolder:GetChildren()) do
-		if v:IsA("Model") then
-			if query == "" or string.find(string.lower(v.Name), query, 1, true) then
-				table.insert(models, v)
+
+	if state.currentPlantsFolder then
+		for _, v in ipairs(state.currentPlantsFolder:GetChildren()) do
+			if v:IsA("Model") then
+				if query == "" or string.find(string.lower(v.Name), query, 1, true) then
+					table.insert(models, v)
+				end
 			end
 		end
-	end
-
-	sortModels(models)  -- [ADDED]
-
-	if #models == 0 then
-		local lbl = Instance.new("TextLabel", mainScroll)
-		lbl.Size = UDim2.new(1, 0, 0, 36)
-		lbl.BackgroundTransparency = 1
-		lbl.TextColor3 = Color3.fromRGB(90, 85, 130)
-		lbl.Font = Enum.Font.Gotham
-		lbl.TextSize = 13
-		lbl.Text = query ~= "" and 'No plants matching "'..query..'".' or "No plants found."
+	else
+		emptyLabel("No Plants_Physical folder found.")
+		statLbl.Text = ""
 		return
 	end
 
-	-- [ADDED] Result count label
-	local countLbl = Instance.new("TextLabel", mainScroll)
-	countLbl.Size = UDim2.new(1, 0, 0, 16)
-	countLbl.BackgroundTransparency = 1
-	countLbl.TextXAlignment = Enum.TextXAlignment.Left
-	countLbl.Font = Enum.Font.GothamBold
-	countLbl.TextSize = 10
-	countLbl.TextColor3 = Color3.fromRGB(80, 75, 120)
-	countLbl.Text = "  "..#models.." PLANT"..(#models ~= 1 and "S" or "")
+	sortModels(models)
+
+	-- Count mutations across all visible plants
+	local totalMuts = 0
+	for _, m in ipairs(models) do totalMuts += #getMutations(m) end
+	statLbl.Text = #models.." plants   "..totalMuts.." mutations"
+
+	if #models == 0 then
+		emptyLabel(query ~= "" and 'No plants match "'..query..'".' or "No plants found.")
+		return
+	end
+
+	-- Count label
+	local countLbl = makeLabel(mainScroll, {
+		text  = "  "..#models.." PLANT"..(#models ~= 1 and "S" or ""),
+		size  = 9,
+		color = COLORS.textMuted,
+		font  = Enum.Font.GothamBold,
+		sz    = UDim2.new(1, 0, 0, 14),
+	})
 
 	for _, model in ipairs(models) do
 		local fruitsFolder = model:FindFirstChild("Fruits")
 		local isMulti = fruitsFolder ~= nil
-		local mutations = {}
-		local variant, weight
+		local mutations, variant, weight = {}, nil, nil
 
 		if not isMulti then
-			variant = model:FindFirstChild("Variant")
-			weight = model:FindFirstChild("Weight")
+			variant   = model:FindFirstChild("Variant")
+			weight    = model:FindFirstChild("Weight")
 			mutations = getMutations(model)
 		end
-
 		local fruitCount = isMulti and #fruitsFolder:GetChildren() or 0
 
-		local card = Instance.new("TextButton", mainScroll)
-		card.Size = UDim2.new(1, 0, 0, 0)
-		card.AutomaticSize = Enum.AutomaticSize.Y
-		card.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-		card.BorderSizePixel = 0
-		card.Text = ""
-		card.AutoButtonColor = false
-		Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
-
-		local cStroke = Instance.new("UIStroke", card)
-		cStroke.Color = isMulti and Color3.fromRGB(38, 72, 55) or Color3.fromRGB(50, 47, 78)
-
-		local cardPad = Instance.new("UIPadding", card)
-		cardPad.PaddingTop = UDim.new(0, 10)
-		cardPad.PaddingBottom = UDim.new(0, 10)
-		cardPad.PaddingLeft = UDim.new(0, 12)
-		cardPad.PaddingRight = UDim.new(0, 10)
-
-		local cardLayout = Instance.new("UIListLayout", card)
-		cardLayout.Padding = UDim.new(0, 5)
+		local card, stroke = makeCard(mainScroll, isMulti)
 
 		local row1 = Instance.new("Frame", card)
 		row1.Size = UDim2.new(1, 0, 0, 20)
 		row1.BackgroundTransparency = 1
 
-		local nameLbl = Instance.new("TextLabel", row1)
-		nameLbl.Size = UDim2.new(1, -100, 1, 0)
-		nameLbl.BackgroundTransparency = 1
-		nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-		nameLbl.Font = Enum.Font.GothamBold
-		nameLbl.TextSize = 14
-		nameLbl.TextColor3 = Color3.fromRGB(218, 213, 255)
-		nameLbl.Text = model.Name
-		nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		makeLabel(row1, {
+			text     = model.Name,
+			font     = Enum.Font.GothamBold,
+			size     = 14,
+			color    = COLORS.textPrimary,
+			sz       = UDim2.new(1, -100, 1, 0),
+			truncate = Enum.TextTruncate.AtEnd,
+		})
 
 		local badge = Instance.new("TextLabel", row1)
-		badge.Size = UDim2.new(0, 92, 0, 18)
-		badge.Position = UDim2.new(1, -92, 0.5, -9)
+		badge.Size = UDim2.new(0, 90, 0, 17)
+		badge.Position = UDim2.new(1, -90, 0.5, -8)
 		badge.BorderSizePixel = 0
 		badge.Font = Enum.Font.GothamBold
-		badge.TextSize = 10
-		Instance.new("UICorner", badge).CornerRadius = UDim.new(1, 0)
+		badge.TextSize = 9
+		uiCorner(badge, 9)
 		if isMulti then
-			badge.BackgroundColor3 = Color3.fromRGB(22, 62, 42)
-			badge.TextColor3 = Color3.fromRGB(75, 215, 140)
+			badge.BackgroundColor3 = Color3.fromRGB(20, 58, 40)
+			badge.TextColor3 = Color3.fromRGB(70, 210, 135)
 			badge.Text = "Multi-Harvest"
 		else
-			badge.BackgroundColor3 = Color3.fromRGB(42, 38, 72)
+			badge.BackgroundColor3 = Color3.fromRGB(40, 36, 72)
 			badge.TextColor3 = Color3.fromRGB(155, 145, 240)
 			badge.Text = "Single Harvest"
 		end
 
-		local infoLbl = Instance.new("TextLabel", card)
-		infoLbl.Size = UDim2.new(1, 0, 0, 16)
-		infoLbl.BackgroundTransparency = 1
-		infoLbl.TextXAlignment = Enum.TextXAlignment.Left
-		infoLbl.Font = Enum.Font.Gotham
-		infoLbl.TextSize = 12
-
+		local infoLbl = makeLabel(card, {
+			size  = 11,
+			color = isMulti and Color3.fromRGB(85, 155, 110) or COLORS.textSub,
+			sz    = UDim2.new(1, 0, 0, 14),
+		})
 		if isMulti then
-			infoLbl.TextColor3 = Color3.fromRGB(85, 155, 110)
-			infoLbl.Text = fruitCount.." fruit"..(fruitCount ~= 1 and "s" or "").." — tap to view"
+			infoLbl.Text = fruitCount.." fruit"..(fruitCount ~= 1 and "s" or "").."  —  tap to expand"
 		else
-			infoLbl.TextColor3 = Color3.fromRGB(100, 95, 148)
 			local parts = {}
 			if variant then table.insert(parts, "Variant: "..tostring(variant.Value)) end
-			if weight then table.insert(parts, "Weight: "..string.format("%.2f", weight.Value)) end
+			if weight  then table.insert(parts, "Weight: "..string.format("%.2f", weight.Value)) end
 			infoLbl.Text = table.concat(parts, "   ")
 		end
 
@@ -597,152 +717,133 @@ function renderPlants()
 			makeMutationPills(card, mutations)
 		end
 
-		local capturedModel = model
+		local hoverBg = isMulti and COLORS.cardHoverMH or COLORS.cardHoverSH
+		local hoverStroke = isMulti and COLORS.strokeGreenHi or COLORS.strokeHi
+		local defaultStroke = isMulti and COLORS.strokeGreen or COLORS.stroke
+
 		card.MouseEnter:Connect(function()
-			cStroke.Color = isMulti and Color3.fromRGB(55, 145, 90) or Color3.fromRGB(105, 95, 175)
+			tween(card,   {BackgroundColor3 = hoverBg})
+			tween(stroke, {Color = hoverStroke})
 		end)
 		card.MouseLeave:Connect(function()
-			cStroke.Color = isMulti and Color3.fromRGB(38, 72, 55) or Color3.fromRGB(50, 47, 78)
+			tween(card,   {BackgroundColor3 = COLORS.card})
+			tween(stroke, {Color = defaultStroke})
 		end)
+
+		local capturedModel = model
 		card.MouseButton1Click:Connect(function()
 			if isMulti then
 				state.view = "fruits"
 				state.currentPlantModel = capturedModel
+				searchBox.Text = ""
 				renderFruits()
 			end
 		end)
 	end
 end
 
-------------------------------------------------
--- VIEW: FRUIT LIST
-------------------------------------------------
 function renderFruits()
 	clearScroll()
-	setControlsVisible(true)   -- [ADDED]
+	setControlsVisible(true)
 	backBtn.Visible = true
 	local plantModel = state.currentPlantModel
-	breadcrumb.Text = plantModel.Name.."  /  Fruits"
+	breadcrumb.Text = plantModel.Name.." / Fruits"
 
 	local fruitsFolder = plantModel:FindFirstChild("Fruits")
 	if not fruitsFolder then
-		local lbl = Instance.new("TextLabel", mainScroll)
-		lbl.Size = UDim2.new(1, 0, 0, 36)
-		lbl.BackgroundTransparency = 1
-		lbl.TextColor3 = Color3.fromRGB(90, 85, 130)
-		lbl.Font = Enum.Font.Gotham
-		lbl.TextSize = 13
-		lbl.Text = "No Fruits folder found."
+		emptyLabel("No Fruits folder found.")
+		statLbl.Text = ""
 		return
 	end
 
-	-- [ADDED] Filter by search text
-	local query = string.lower(searchBar.Text)
+	local query = string.lower(searchBox.Text)
 	local fruits = {}
-	for _, v in pairs(fruitsFolder:GetChildren()) do
+	for _, v in ipairs(fruitsFolder:GetChildren()) do
 		if query == "" or string.find(string.lower(v.Name), query, 1, true) then
 			table.insert(fruits, v)
 		end
 	end
 
-	sortModels(fruits)  -- [ADDED]
+	sortModels(fruits)
 
-	-- Section header with live count
-	local sectionLbl = Instance.new("TextLabel", mainScroll)
-	sectionLbl.Size = UDim2.new(1, 0, 0, 20)
-	sectionLbl.BackgroundTransparency = 1
-	sectionLbl.TextXAlignment = Enum.TextXAlignment.Left
-	sectionLbl.Font = Enum.Font.GothamBold
-	sectionLbl.TextSize = 10
-	sectionLbl.TextColor3 = Color3.fromRGB(90, 85, 130)
-	sectionLbl.Text = "  "..#fruits.." FRUIT"..(#fruits ~= 1 and "S" or "").." IN "..string.upper(plantModel.Name)
-		..(query ~= "" and ' — filter: "'..query..'"' or "")
+	local totalMuts = 0
+	for _, f in ipairs(fruits) do totalMuts += #getMutations(f) end
+	statLbl.Text = #fruits.." fruits   "..totalMuts.." mutations"
+
+	local sectionText = "  "..#fruits.." FRUIT"..(#fruits ~= 1 and "S" or "").." IN "..string.upper(plantModel.Name)
+	if query ~= "" then sectionText = sectionText..'  —  "'..query..'"' end
+	makeLabel(mainScroll, {
+		text  = sectionText,
+		size  = 9,
+		color = COLORS.textMuted,
+		font  = Enum.Font.GothamBold,
+		sz    = UDim2.new(1, 0, 0, 16),
+	})
 
 	if #fruits == 0 then
-		local lbl = Instance.new("TextLabel", mainScroll)
-		lbl.Size = UDim2.new(1, 0, 0, 36)
-		lbl.BackgroundTransparency = 1
-		lbl.TextColor3 = Color3.fromRGB(90, 85, 130)
-		lbl.Font = Enum.Font.Gotham
-		lbl.TextSize = 13
-		lbl.Text = query ~= "" and 'No fruits matching "'..query..'".' or "No fruits yet."
+		emptyLabel(query ~= "" and 'No fruits match "'..query..'".' or "No fruits yet.")
 		return
 	end
 
 	for _, fruitModel in ipairs(fruits) do
-		local variant = fruitModel:FindFirstChild("Variant")
-		local weight = fruitModel:FindFirstChild("Weight")
+		local variant   = fruitModel:FindFirstChild("Variant")
+		local weight    = fruitModel:FindFirstChild("Weight")
 		local mutations = getMutations(fruitModel)
 
-		local card = Instance.new("TextButton", mainScroll)
-		card.Size = UDim2.new(1, 0, 0, 0)
-		card.AutomaticSize = Enum.AutomaticSize.Y
-		card.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-		card.BorderSizePixel = 0
-		card.Text = ""
-		card.AutoButtonColor = false
-		Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
-
-		local cStroke = Instance.new("UIStroke", card)
-		cStroke.Color = Color3.fromRGB(38, 72, 55)
-
-		local cardPad = Instance.new("UIPadding", card)
-		cardPad.PaddingTop = UDim.new(0, 10)
-		cardPad.PaddingBottom = UDim.new(0, 10)
-		cardPad.PaddingLeft = UDim.new(0, 12)
-		cardPad.PaddingRight = UDim.new(0, 10)
-
-		local cardLayout = Instance.new("UIListLayout", card)
-		cardLayout.Padding = UDim.new(0, 5)
+		local card, stroke = makeCard(mainScroll, true)
 
 		local row1 = Instance.new("Frame", card)
 		row1.Size = UDim2.new(1, 0, 0, 20)
 		row1.BackgroundTransparency = 1
 
-		local fName = Instance.new("TextLabel", row1)
-		fName.Size = UDim2.new(0.7, 0, 1, 0)
-		fName.BackgroundTransparency = 1
-		fName.TextXAlignment = Enum.TextXAlignment.Left
-		fName.Font = Enum.Font.GothamBold
-		fName.TextSize = 14
-		fName.TextColor3 = Color3.fromRGB(170, 225, 195)
-		fName.Text = fruitModel.Name
-		fName.TextTruncate = Enum.TextTruncate.AtEnd
+		makeLabel(row1, {
+			text     = fruitModel.Name,
+			font     = Enum.Font.GothamBold,
+			size     = 14,
+			color    = COLORS.textGreen,
+			sz       = UDim2.new(0.68, 0, 1, 0),
+			truncate = Enum.TextTruncate.AtEnd,
+		})
 
 		if #mutations > 0 then
 			local mutBadge = Instance.new("TextLabel", row1)
-			mutBadge.Size = UDim2.new(0, 85, 0, 18)
-			mutBadge.Position = UDim2.new(1, -85, 0.5, -9)
-			mutBadge.BackgroundColor3 = Color3.fromRGB(52, 36, 82)
-			mutBadge.TextColor3 = Color3.fromRGB(185, 155, 255)
+			mutBadge.Size = UDim2.new(0, 82, 0, 17)
+			mutBadge.Position = UDim2.new(1, -82, 0.5, -8)
+			mutBadge.BackgroundColor3 = COLORS.mutPill
+			mutBadge.TextColor3 = COLORS.mutPillText
 			mutBadge.Font = Enum.Font.GothamBold
-			mutBadge.TextSize = 10
+			mutBadge.TextSize = 9
 			mutBadge.Text = #mutations.." mutation"..(#mutations > 1 and "s" or "")
 			mutBadge.BorderSizePixel = 0
-			Instance.new("UICorner", mutBadge).CornerRadius = UDim.new(1, 0)
+			uiCorner(mutBadge, 9)
 		end
 
 		local parts = {}
 		if variant then table.insert(parts, "Variant: "..tostring(variant.Value)) end
-		if weight then table.insert(parts, "Weight: "..string.format("%.2f", weight.Value)) end
+		if weight  then table.insert(parts, "Weight: "..string.format("%.2f", weight.Value)) end
 		if #parts > 0 then
-			local infoLbl = Instance.new("TextLabel", card)
-			infoLbl.Size = UDim2.new(1, 0, 0, 16)
-			infoLbl.BackgroundTransparency = 1
-			infoLbl.TextXAlignment = Enum.TextXAlignment.Left
-			infoLbl.Font = Enum.Font.Gotham
-			infoLbl.TextSize = 12
-			infoLbl.TextColor3 = Color3.fromRGB(95, 155, 120)
-			infoLbl.Text = table.concat(parts, "   ")
+			makeLabel(card, {
+				text  = table.concat(parts, "   "),
+				size  = 11,
+				color = Color3.fromRGB(90, 150, 115),
+				sz    = UDim2.new(1, 0, 0, 14),
+			})
 		end
 
 		if #mutations > 0 then
 			makeMutationPills(card, mutations)
 		end
 
+		card.MouseEnter:Connect(function()
+			tween(card,   {BackgroundColor3 = COLORS.cardHoverMH})
+			tween(stroke, {Color = COLORS.strokeGreenHi})
+		end)
+		card.MouseLeave:Connect(function()
+			tween(card,   {BackgroundColor3 = COLORS.card})
+			tween(stroke, {Color = COLORS.strokeGreen})
+		end)
+
 		local capturedFruit = fruitModel
-		card.MouseEnter:Connect(function() cStroke.Color = Color3.fromRGB(55, 145, 90) end)
-		card.MouseLeave:Connect(function() cStroke.Color = Color3.fromRGB(38, 72, 55) end)
 		card.MouseButton1Click:Connect(function()
 			state.view = "detail"
 			state.currentFruitModel = capturedFruit
@@ -751,202 +852,249 @@ function renderFruits()
 	end
 end
 
-------------------------------------------------
--- VIEW: FRUIT DETAIL (unchanged)
-------------------------------------------------
 function renderDetail()
 	clearScroll()
-	setControlsVisible(false)  -- [ADDED] hide controls on detail view
+	setControlsVisible(false)
 	backBtn.Visible = true
+	statLbl.Text = ""
 	local fruitModel = state.currentFruitModel
-	local plantName = state.currentPlantModel and state.currentPlantModel.Name or "?"
-	breadcrumb.Text = plantName.."  /  "..fruitModel.Name
+	local plantName  = state.currentPlantModel and state.currentPlantModel.Name or "?"
+	breadcrumb.Text  = plantName.." / "..fruitModel.Name
 
-	local variant = fruitModel:FindFirstChild("Variant")
-	local weight = fruitModel:FindFirstChild("Weight")
+	local variant   = fruitModel:FindFirstChild("Variant")
+	local weight    = fruitModel:FindFirstChild("Weight")
 	local mutations = getMutations(fruitModel)
 
-	local card = Instance.new("Frame", mainScroll)
-	card.Size = UDim2.new(1, 0, 0, 0)
-	card.AutomaticSize = Enum.AutomaticSize.Y
-	card.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-	card.BorderSizePixel = 0
-	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
-	Instance.new("UIStroke", card).Color = Color3.fromRGB(45, 43, 68)
-
-	local cardPad = Instance.new("UIPadding", card)
-	cardPad.PaddingTop = UDim.new(0, 14)
-	cardPad.PaddingBottom = UDim.new(0, 14)
-	cardPad.PaddingLeft = UDim.new(0, 14)
-	cardPad.PaddingRight = UDim.new(0, 14)
-
-	local cardLayout = Instance.new("UIListLayout", card)
-	cardLayout.Padding = UDim.new(0, 10)
-
-	local titleLbl = Instance.new("TextLabel", card)
-	titleLbl.Size = UDim2.new(1, 0, 0, 22)
-	titleLbl.BackgroundTransparency = 1
-	titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-	titleLbl.Font = Enum.Font.GothamBold
-	titleLbl.TextSize = 16
-	titleLbl.TextColor3 = Color3.fromRGB(170, 225, 195)
-	titleLbl.Text = fruitModel.Name
-
-	local div1 = Instance.new("Frame", card)
-	div1.Size = UDim2.new(1, 0, 0, 1)
-	div1.BackgroundColor3 = Color3.fromRGB(40, 38, 62)
-	div1.BorderSizePixel = 0
-
-	local fieldsHdr = Instance.new("TextLabel", card)
-	fieldsHdr.Size = UDim2.new(1, 0, 0, 14)
-	fieldsHdr.BackgroundTransparency = 1
-	fieldsHdr.TextXAlignment = Enum.TextXAlignment.Left
-	fieldsHdr.Font = Enum.Font.GothamBold
-	fieldsHdr.TextSize = 10
-	fieldsHdr.TextColor3 = Color3.fromRGB(90, 85, 130)
-	fieldsHdr.Text = "PROPERTIES"
-
-	local function makeField(label, value, valColor)
-		local row = Instance.new("Frame", card)
-		row.Size = UDim2.new(1, 0, 0, 26)
-		row.BackgroundColor3 = Color3.fromRGB(26, 25, 38)
-		row.BorderSizePixel = 0
-		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
-
-		local lbl = Instance.new("TextLabel", row)
-		lbl.Size = UDim2.new(0.4, 0, 1, 0)
-		lbl.Position = UDim2.new(0, 10, 0, 0)
-		lbl.BackgroundTransparency = 1
-		lbl.TextXAlignment = Enum.TextXAlignment.Left
-		lbl.Font = Enum.Font.Gotham
-		lbl.TextSize = 12
-		lbl.TextColor3 = Color3.fromRGB(100, 95, 145)
-		lbl.Text = label
-
-		local val = Instance.new("TextLabel", row)
-		val.Size = UDim2.new(0.55, 0, 1, 0)
-		val.Position = UDim2.new(0.42, 0, 0, 0)
-		val.BackgroundTransparency = 1
-		val.TextXAlignment = Enum.TextXAlignment.Left
-		val.Font = Enum.Font.GothamBold
-		val.TextSize = 12
-		val.TextColor3 = valColor or Color3.fromRGB(200, 195, 240)
-		val.Text = tostring(value)
+	-- Fetch all attributes for a full dump
+	local allAttrs = {}
+	local ok, attrs = pcall(function() return fruitModel:GetAttributes() end)
+	if ok then
+		for k, v in pairs(attrs) do
+			if not EXCLUDED_ATTRS[k] then
+				table.insert(allAttrs, {name=k, value=v})
+			end
+		end
+		table.sort(allAttrs, function(a,b) return a.name < b.name end)
 	end
 
-	if variant then makeField("Variant", variant.Value, Color3.fromRGB(160, 220, 255)) end
-	if weight then makeField("Weight", string.format("%.4f", weight.Value), Color3.fromRGB(255, 210, 120)) end
+	local card = Instance.new("Frame", mainScroll)
+	card.Size = UDim2.new(1, -4, 0, 0)
+	card.AutomaticSize = Enum.AutomaticSize.Y
+	card.BackgroundColor3 = COLORS.card
+	card.BorderSizePixel = 0
+	uiCorner(card, 10)
+	uiStroke(card, COLORS.stroke)
+	local pad = Instance.new("UIPadding", card)
+	pad.PaddingTop = UDim.new(0, 14)
+	pad.PaddingBottom = UDim.new(0, 14)
+	pad.PaddingLeft = UDim.new(0, 14)
+	pad.PaddingRight = UDim.new(0, 14)
+	local layout = Instance.new("UIListLayout", card)
+	layout.Padding = UDim.new(0, 10)
 
-	local div2 = Instance.new("Frame", card)
-	div2.Size = UDim2.new(1, 0, 0, 1)
-	div2.BackgroundColor3 = Color3.fromRGB(40, 38, 62)
-	div2.BorderSizePixel = 0
+	makeLabel(card, {
+		text  = fruitModel.Name,
+		font  = Enum.Font.GothamBold,
+		size  = 16,
+		color = COLORS.textGreen,
+		sz    = UDim2.new(1, 0, 0, 22),
+	})
 
-	local mutHdr = Instance.new("TextLabel", card)
-	mutHdr.Size = UDim2.new(1, 0, 0, 14)
-	mutHdr.BackgroundTransparency = 1
-	mutHdr.TextXAlignment = Enum.TextXAlignment.Left
-	mutHdr.Font = Enum.Font.GothamBold
-	mutHdr.TextSize = 10
-	mutHdr.TextColor3 = Color3.fromRGB(90, 85, 130)
-	mutHdr.Text = "MUTATIONS ("..#mutations..")"
+	-- divider
+	local function divider()
+		local d = Instance.new("Frame", card)
+		d.Size = UDim2.new(1, 0, 0, 1)
+		d.BackgroundColor3 = Color3.fromRGB(38, 36, 60)
+		d.BorderSizePixel = 0
+	end
+
+	divider()
+
+	local function sectionHeader(text)
+		makeLabel(card, {
+			text  = text,
+			size  = 9,
+			color = COLORS.textSub,
+			font  = Enum.Font.GothamBold,
+			sz    = UDim2.new(1, 0, 0, 14),
+		})
+	end
+
+	local function fieldRow(label, value, valColor)
+		local row = Instance.new("Frame", card)
+		row.Size = UDim2.new(1, 0, 0, 28)
+		row.BackgroundColor3 = Color3.fromRGB(24, 23, 38)
+		row.BorderSizePixel = 0
+		uiCorner(row, 6)
+		makeLabel(row, {
+			text  = label,
+			size  = 12,
+			color = COLORS.textSub,
+			sz    = UDim2.new(0.42, 0, 1, 0),
+			pos   = UDim2.new(0, 10, 0, 0),
+		})
+		makeLabel(row, {
+			text  = tostring(value),
+			font  = Enum.Font.GothamBold,
+			size  = 12,
+			color = valColor or COLORS.textPrimary,
+			sz    = UDim2.new(0.54, 0, 1, 0),
+			pos   = UDim2.new(0.44, 0, 0, 0),
+		})
+	end
+
+	sectionHeader("PROPERTIES")
+	if variant then fieldRow("Variant", variant.Value, Color3.fromRGB(155, 215, 255)) end
+	if weight  then fieldRow("Weight", string.format("%.4f", weight.Value), Color3.fromRGB(255, 205, 110)) end
+
+	-- Extra non-boolean attributes
+	local extraAttrs = {}
+	if ok then
+		for k, v in pairs(attrs) do
+			if type(v) ~= "boolean" and k ~= "Weight" and k ~= "Variant" and not EXCLUDED_ATTRS[k] then
+				table.insert(extraAttrs, {name=k, value=v})
+			end
+		end
+		table.sort(extraAttrs, function(a,b) return a.name < b.name end)
+	end
+	for _, entry in ipairs(extraAttrs) do
+		fieldRow(entry.name, tostring(entry.value))
+	end
+
+	divider()
+	sectionHeader("MUTATIONS ("..#mutations..")")
 
 	if #mutations == 0 then
-		local noneLbl = Instance.new("TextLabel", card)
-		noneLbl.Size = UDim2.new(1, 0, 0, 20)
-		noneLbl.BackgroundTransparency = 1
-		noneLbl.TextXAlignment = Enum.TextXAlignment.Left
-		noneLbl.Font = Enum.Font.Gotham
-		noneLbl.TextSize = 13
-		noneLbl.TextColor3 = Color3.fromRGB(70, 67, 105)
-		noneLbl.Text = "None detected"
+		makeLabel(card, {
+			text  = "None detected",
+			size  = 13,
+			color = COLORS.textMuted,
+			sz    = UDim2.new(1, 0, 0, 20),
+		})
 	else
 		makeMutationPills(card, mutations)
 	end
 end
 
 ------------------------------------------------
--- BACK BUTTON LOGIC
+-- BACK BUTTON
 ------------------------------------------------
 backBtn.MouseButton1Click:Connect(function()
 	if state.view == "detail" then
 		state.view = "fruits"
-		searchBar.Text = ""  -- [ADDED] clear search when navigating back
+		searchBox.Text = ""
 		renderFruits()
 	elseif state.view == "fruits" then
 		state.view = "plants"
-		searchBar.Text = ""  -- [ADDED]
+		searchBox.Text = ""
 		renderPlants()
 	end
 end)
 
 ------------------------------------------------
+-- SORT BUTTONS
+------------------------------------------------
+local function onSort(mode)
+	sortMode = mode
+	updateSortColors()
+	if state.view == "plants" then renderPlants()
+	elseif state.view == "fruits" then renderFruits() end
+end
+
+btnNameAZ.MouseButton1Click:Connect(function()  onSort("name_az") end)
+btnNameZA.MouseButton1Click:Connect(function()  onSort("name_za") end)
+btnWtDesc.MouseButton1Click:Connect(function()  onSort("weight_desc") end)
+btnWtAsc.MouseButton1Click:Connect(function()   onSort("weight_asc") end)
+btnMutDesc.MouseButton1Click:Connect(function() onSort("mutations_desc") end)
+
+------------------------------------------------
+-- SEARCH (debounced)
+------------------------------------------------
+local debouncedSearch = debounce(function()
+	if state.view == "plants" then renderPlants()
+	elseif state.view == "fruits" then renderFruits() end
+end, 0.3)
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(debouncedSearch)
+
+------------------------------------------------
 -- PLAYER BUTTONS
 ------------------------------------------------
-local selectedBtn = nil
+local plrBtnData = {}  -- [plr] = {btn, subLbl, stroke}
 
-local function setSelectedBtn(btn, stroke)
-	if selectedBtn and selectedBtn ~= btn then
-		selectedBtn.stroke.Color = selectedBtn.defaultColor
-	end
-	selectedBtn = {btn = btn, stroke = stroke, defaultColor = stroke.Color}
+local function refreshPlrSubLabel(plr)
+	local data = plrBtnData[plr]
+	if not data then return end
+	local farm = getFarm(plr)
+	local pf = farm and farm:FindFirstChild("Plants_Physical")
+	local count = pf and #pf:GetChildren() or 0
+	data.subLbl.Text = count.." plant"..(count ~= 1 and "s" or "")
 end
 
 local function makePlayerButton(plr)
 	local btn = Instance.new("TextButton", plrScroll)
 	btn.Size = UDim2.new(1, 0, 0, 50)
-	btn.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+	btn.BackgroundColor3 = COLORS.card
 	btn.BorderSizePixel = 0
 	btn.Text = ""
 	btn.AutoButtonColor = false
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
-	local bStroke = Instance.new("UIStroke", btn)
-	bStroke.Color = Color3.fromRGB(45, 43, 68)
+	uiCorner(btn, 10)
+	local bStroke = uiStroke(btn, COLORS.stroke)
 
 	local avatar = Instance.new("Frame", btn)
 	avatar.Size = UDim2.new(0, 28, 0, 28)
 	avatar.Position = UDim2.new(0, 8, 0.5, -14)
-	avatar.BackgroundColor3 = Color3.fromRGB(48, 44, 80)
+	avatar.BackgroundColor3 = Color3.fromRGB(46, 42, 80)
 	avatar.BorderSizePixel = 0
-	Instance.new("UICorner", avatar).CornerRadius = UDim.new(1, 0)
-	local initLbl = Instance.new("TextLabel", avatar)
-	initLbl.Size = UDim2.new(1, 0, 1, 0)
-	initLbl.BackgroundTransparency = 1
-	initLbl.Font = Enum.Font.GothamBold
-	initLbl.TextSize = 11
-	initLbl.TextColor3 = Color3.fromRGB(165, 155, 230)
-	initLbl.Text = getInitials(plr.Name)
+	uiCorner(avatar, 14)
+	makeLabel(avatar, {
+		text  = getInitials(plr.Name),
+		font  = Enum.Font.GothamBold,
+		size  = 11,
+		color = Color3.fromRGB(165, 155, 230),
+		sz    = UDim2.new(1, 0, 1, 0),
+		align = Enum.TextXAlignment.Center,
+	})
 
-	local nameLbl = Instance.new("TextLabel", btn)
-	nameLbl.Position = UDim2.new(0, 44, 0, 8)
-	nameLbl.Size = UDim2.new(1, -48, 0, 17)
-	nameLbl.BackgroundTransparency = 1
-	nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-	nameLbl.Font = Enum.Font.GothamBold
-	nameLbl.TextSize = 12
-	nameLbl.TextColor3 = Color3.fromRGB(195, 190, 235)
-	nameLbl.Text = plr.Name
-	nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	makeLabel(btn, {
+		text     = plr.Name,
+		font     = Enum.Font.GothamBold,
+		size     = 12,
+		color    = COLORS.textPrimary,
+		sz       = UDim2.new(1, -48, 0, 17),
+		pos      = UDim2.new(0, 44, 0, 8),
+		truncate = Enum.TextTruncate.AtEnd,
+	})
 
-	local subLbl = Instance.new("TextLabel", btn)
-	subLbl.Position = UDim2.new(0, 44, 0, 27)
-	subLbl.Size = UDim2.new(1, -48, 0, 14)
-	subLbl.BackgroundTransparency = 1
-	subLbl.TextXAlignment = Enum.TextXAlignment.Left
-	subLbl.Font = Enum.Font.Gotham
-	subLbl.TextSize = 10
-	subLbl.TextColor3 = Color3.fromRGB(75, 72, 112)
-	subLbl.Text = "Tap to view"
+	local subLbl = makeLabel(btn, {
+		text  = "loading…",
+		size  = 10,
+		color = COLORS.textMuted,
+		sz    = UDim2.new(1, -48, 0, 14),
+		pos   = UDim2.new(0, 44, 0, 27),
+	})
 
-	btn.MouseEnter:Connect(function() bStroke.Color = Color3.fromRGB(85, 80, 135) end)
+	plrBtnData[plr] = {btn=btn, subLbl=subLbl, stroke=bStroke}
+	refreshPlrSubLabel(plr)
+
+	btn.MouseEnter:Connect(function()
+		if state.selectedPlayer ~= plr then
+			tween(bStroke, {Color = Color3.fromRGB(80, 75, 130)})
+		end
+	end)
 	btn.MouseLeave:Connect(function()
-		if state.selectedPlayer ~= plr then bStroke.Color = Color3.fromRGB(45, 43, 68) end
+		if state.selectedPlayer ~= plr then
+			tween(bStroke, {Color = COLORS.stroke})
+		end
 	end)
 	btn.MouseButton1Click:Connect(function()
 		state.selectedPlayer = plr
-		bStroke.Color = Color3.fromRGB(105, 95, 175)
+		-- reset other button strokes
+		for p, d in pairs(plrBtnData) do
+			tween(d.stroke, {Color = p == plr and COLORS.strokeHi or COLORS.stroke})
+		end
 		state.view = "plants"
-		searchBar.Text = ""  -- [ADDED] clear search on player switch
+		searchBox.Text = ""
 		local farm = getFarm(plr)
 		state.currentPlantsFolder = farm and farm:FindFirstChild("Plants_Physical") or nil
 		renderPlants()
@@ -955,96 +1103,126 @@ local function makePlayerButton(plr)
 	return btn
 end
 
--- My Farm button
+-- "My Farm" button
 local myBtn = Instance.new("TextButton", plrScroll)
 myBtn.Size = UDim2.new(1, 0, 0, 50)
-myBtn.BackgroundColor3 = Color3.fromRGB(22, 20, 36)
+myBtn.BackgroundColor3 = Color3.fromRGB(20, 18, 36)
 myBtn.BorderSizePixel = 0
 myBtn.Text = ""
 myBtn.AutoButtonColor = false
-Instance.new("UICorner", myBtn).CornerRadius = UDim.new(0, 10)
-local myStroke = Instance.new("UIStroke", myBtn)
-myStroke.Color = Color3.fromRGB(75, 68, 130)
+uiCorner(myBtn, 10)
+local myStroke = uiStroke(myBtn, Color3.fromRGB(72, 65, 128))
 
-local myAv = Instance.new("Frame", myBtn)
-myAv.Size = UDim2.new(0, 28, 0, 28)
-myAv.Position = UDim2.new(0, 8, 0.5, -14)
-myAv.BackgroundColor3 = Color3.fromRGB(72, 60, 130)
-myAv.BorderSizePixel = 0
-Instance.new("UICorner", myAv).CornerRadius = UDim.new(1, 0)
-local myInit = Instance.new("TextLabel", myAv)
-myInit.Size = UDim2.new(1, 0, 1, 0)
-myInit.BackgroundTransparency = 1
-myInit.Font = Enum.Font.GothamBold
-myInit.TextSize = 11
-myInit.TextColor3 = Color3.fromRGB(205, 190, 255)
-myInit.Text = getInitials(player.Name)
+local myAvatar = Instance.new("Frame", myBtn)
+myAvatar.Size = UDim2.new(0, 28, 0, 28)
+myAvatar.Position = UDim2.new(0, 8, 0.5, -14)
+myAvatar.BackgroundColor3 = Color3.fromRGB(68, 58, 128)
+myAvatar.BorderSizePixel = 0
+uiCorner(myAvatar, 14)
+makeLabel(myAvatar, {
+	text  = getInitials(player.Name),
+	font  = Enum.Font.GothamBold,
+	size  = 11,
+	color = Color3.fromRGB(200, 188, 255),
+	sz    = UDim2.new(1, 0, 1, 0),
+	align = Enum.TextXAlignment.Center,
+})
 
-local myName = Instance.new("TextLabel", myBtn)
-myName.Position = UDim2.new(0, 44, 0, 8)
-myName.Size = UDim2.new(1, -48, 0, 17)
-myName.BackgroundTransparency = 1
-myName.TextXAlignment = Enum.TextXAlignment.Left
-myName.Font = Enum.Font.GothamBold
-myName.TextSize = 12
-myName.TextColor3 = Color3.fromRGB(205, 190, 255)
-myName.Text = player.Name
-myName.TextTruncate = Enum.TextTruncate.AtEnd
+makeLabel(myBtn, {
+	text     = player.Name,
+	font     = Enum.Font.GothamBold,
+	size     = 12,
+	color    = Color3.fromRGB(200, 188, 255),
+	sz       = UDim2.new(1, -48, 0, 17),
+	pos      = UDim2.new(0, 44, 0, 8),
+	truncate = Enum.TextTruncate.AtEnd,
+})
+local mySubLbl = makeLabel(myBtn, {
+	text  = "My Farm",
+	size  = 10,
+	color = Color3.fromRGB(110, 100, 165),
+	sz    = UDim2.new(1, -48, 0, 14),
+	pos   = UDim2.new(0, 44, 0, 27),
+})
 
-local mySub = Instance.new("TextLabel", myBtn)
-mySub.Position = UDim2.new(0, 44, 0, 27)
-mySub.Size = UDim2.new(1, -48, 0, 14)
-mySub.BackgroundTransparency = 1
-mySub.TextXAlignment = Enum.TextXAlignment.Left
-mySub.Font = Enum.Font.Gotham
-mySub.TextSize = 10
-mySub.TextColor3 = Color3.fromRGB(110, 100, 165)
-mySub.Text = "My Farm"
+plrBtnData[player] = {btn=myBtn, subLbl=mySubLbl, stroke=myStroke}
 
-myBtn.MouseEnter:Connect(function() myStroke.Color = Color3.fromRGB(110, 100, 175) end)
+myBtn.MouseEnter:Connect(function()
+	if state.selectedPlayer ~= player then
+		tween(myStroke, {Color = Color3.fromRGB(108, 98, 175)})
+	end
+end)
 myBtn.MouseLeave:Connect(function()
-	if state.selectedPlayer ~= player then myStroke.Color = Color3.fromRGB(75, 68, 130) end
+	if state.selectedPlayer ~= player then
+		tween(myStroke, {Color = Color3.fromRGB(72, 65, 128)})
+	end
 end)
 myBtn.MouseButton1Click:Connect(function()
 	state.selectedPlayer = player
-	myStroke.Color = Color3.fromRGB(130, 115, 210)
+	for p, d in pairs(plrBtnData) do
+		tween(d.stroke, {Color = p == player and COLORS.strokeHi or COLORS.stroke})
+	end
 	state.view = "plants"
-	searchBar.Text = ""  -- [ADDED]
+	searchBox.Text = ""
 	local farm = getFarm(player)
 	state.currentPlantsFolder = farm and farm:FindFirstChild("Plants_Physical") or nil
 	renderPlants()
 end)
 
 local function refreshPlayers()
-	for _, v in pairs(plrScroll:GetChildren()) do
-		if v:IsA("TextButton") and v ~= myBtn then v:Destroy() end
+	for _, v in ipairs(plrScroll:GetChildren()) do
+		if v:IsA("TextButton") and v ~= myBtn then
+			v:Destroy()
+		end
 	end
-	for _, plr in pairs(Players:GetPlayers()) do
+	for p, _ in pairs(plrBtnData) do
+		if p ~= player then plrBtnData[p] = nil end
+	end
+	for _, plr in ipairs(Players:GetPlayers()) do
 		if plr ~= player then makePlayerButton(plr) end
 	end
 end
-Players.PlayerAdded:Connect(refreshPlayers)
-Players.PlayerRemoving:Connect(refreshPlayers)
+
+Players.PlayerAdded:Connect(function()
+	task.wait(1)
+	refreshPlayers()
+end)
+Players.PlayerRemoving:Connect(function()
+	task.wait(0.5)
+	refreshPlayers()
+end)
 refreshPlayers()
 
+-- Auto-select own farm on load
+do
+	local farm = getFarm(player)
+	state.currentPlantsFolder = farm and farm:FindFirstChild("Plants_Physical") or nil
+	renderPlants()
+	tween(myStroke, {Color = COLORS.strokeHi})
+end
+
 ------------------------------------------------
--- MAIN LOOP
+-- MAIN LOOP  (light polling, no lag)
 ------------------------------------------------
 local lastPlayer = nil
-local lastPlantCount = -1
+local lastCount  = -1
 
-while task.wait(2) do
+while task.wait(2.5) do
+	-- Refresh sub-labels for all visible player buttons
+	for plr, _ in pairs(plrBtnData) do
+		refreshPlrSubLabel(plr)
+	end
+
 	local plr = state.selectedPlayer
 	if not plr then continue end
-
 	local farm = getFarm(plr)
-	local plantsFolder = farm and farm:FindFirstChild("Plants_Physical")
-	local count = plantsFolder and #plantsFolder:GetChildren() or 0
+	local pf   = farm and farm:FindFirstChild("Plants_Physical")
+	local count = pf and #pf:GetChildren() or 0
 
-	if plr ~= lastPlayer or count ~= lastPlantCount then
+	if plr ~= lastPlayer or count ~= lastCount then
 		lastPlayer = plr
-		lastPlantCount = count
-		state.currentPlantsFolder = plantsFolder
+		lastCount  = count
+		state.currentPlantsFolder = pf
 		if state.view == "plants" then
 			renderPlants()
 		end
