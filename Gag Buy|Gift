@@ -20,186 +20,195 @@ local GiftRemote = ReplicatedStorage
 
 ------------------------------------------------
 -- PRODUCT DATABASE
--- Price    = Robux cost shown on the card label
--- isGiftable = whether the Gift button appears at all
---              (Tokens are ForcedRobuxPurchase and cannot be gifted via
---               the gift remote, Pass/Currency items are also non-giftable)
 ------------------------------------------------
 local Products = {
 	-- SEED PACKS
-	["Open 1 - Exotic Seed Pack"]      = { GiftId = 3269033223; NormalId = 3267528421; Display = "1 Exotic Seed Pack";        Category = "Seed Pack";    Price = 75;   isGiftable = true  };
-	["Open 3 - Exotic Seed Pack"]      = { GiftId = 3269033336; NormalId = 3267548052; Display = "3 Exotic Seed Packs";       Category = "Seed Pack";    Price = 200;  isGiftable = true  };
-	["Open 10 - Exotic Seed Pack"]     = { GiftId = 3269033529; NormalId = 3267548161; Display = "10 Exotic Seed Packs";      Category = "Seed Pack";    Price = 600;  isGiftable = true  };
-	["Open 1 - Bug Egg"]               = { GiftId = 3277815193; NormalId = 3278426597; Display = "1 Bug Egg";                 Category = "Regular Eggs"; Price = 50;   isGiftable = true  };
-	["Open 3 - Bug Egg"]               = { GiftId = 3277815350; NormalId = 3277814538; Display = "3 Bug Eggs";                Category = "Regular Eggs"; Price = 130;  isGiftable = true  };
-	["Open 10 - Bug Egg"]              = { GiftId = 3277815654; NormalId = 3277814625; Display = "10 Bug Eggs";               Category = "Regular Eggs"; Price = 400;  isGiftable = true  };
-	["10 Premium Seed Sacks"]          = { GiftId = 3273679009; NormalId = 3273679012; Display = "10 Premium Seed Sacks";     Category = "Premium Eggs"; Price = 450;  isGiftable = true  };
-	["10 Premium Night Seeds"]         = { GiftId = 3282733014; NormalId = 3282157462; Display = "10 Premium Night Seeds";    Category = "Premium Eggs"; Price = 450;  isGiftable = true  };
-	["10 Premium Night Eggs"]          = { GiftId = 3282661439; NormalId = 3282157312; Display = "10 Premium Night Eggs";     Category = "Premium Eggs"; Price = 450;  isGiftable = true  };
-	["+1 Exclusive Cosmetic Crate"]    = { GiftId = 3290672926; NormalId = 3290672626; Display = "1 Exclusive Cosmetic Crate";  Category = "Crates";     Price = 100;  isGiftable = true  };
-	["+3 Exclusive Cosmetic Crates"]   = { GiftId = 3290673007; NormalId = 3290672712; Display = "3 Exclusive Cosmetic Crates"; Category = "Crates";     Price = 275;  isGiftable = true  };
-	["+10 Exclusive Cosmetic Crates"]  = { GiftId = 3290673073; NormalId = 3290672848; Display = "10 Exclusive Cosmetic Crates";Category = "Crates";     Price = 850;  isGiftable = true  };
-	["+1 Exotic Flower Seed Pack"]     = { GiftId = 3295548788; NormalId = 3295548770; Display = "1 Exotic Flower Seed Pack";   Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Flower Seed Pack"]     = { GiftId = 3295548780; NormalId = 3295548782; Display = "3 Exotic Flower Seed Packs";  Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Flower Seed Pack"]    = { GiftId = 3295548784; NormalId = 3295548781; Display = "10 Exotic Flower Seed Packs"; Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Crafters Seed Pack"]   = { GiftId = 3306352285; NormalId = 3306352279; Display = "1 Exotic Crafters Seed Pack"; Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Crafters Seed Pack"]   = { GiftId = 3306352286; NormalId = 3306352283; Display = "3 Exotic Crafters Seed Packs";Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Crafters Seed Pack"]  = { GiftId = 3306352287; NormalId = 3306352284; Display = "10 Exotic Crafters Seed Packs";Category = "Seed Pack"; Price = 600;  isGiftable = true  };
-	["+1 Exotic Summer Seed Pack"]     = { GiftId = 3311388950; NormalId = 3311388942; Display = "1 Exotic Summer Seed Pack";   Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Summer Seed Pack"]     = { GiftId = 3311388953; NormalId = 3311388951; Display = "3 Exotic Summer Seed Packs";  Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Summer Seed Pack"]    = { GiftId = 3311388949; NormalId = 3311388948; Display = "10 Exotic Summer Seed Packs"; Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Ancient Seed Pack"]    = { GiftId = 3323657555; NormalId = 3323657553; Display = "1 Exotic Ancient Seed Pack";  Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Ancient Seed Pack"]    = { GiftId = 3323657556; NormalId = 3323657547; Display = "3 Exotic Ancient Seed Packs"; Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Ancient Seed Pack"]   = { GiftId = 3323657554; NormalId = 3323657552; Display = "10 Exotic Ancient Seed Packs";Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Zen Seed Pack"]        = { GiftId = 3338826788; NormalId = 3338826792; Display = "1 Exotic Zen Seed Pack";      Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Zen Seed Pack"]        = { GiftId = 3338826794; NormalId = 3338826791; Display = "3 Exotic Zen Seed Packs";     Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Zen Seed Pack"]       = { GiftId = 3338826793; NormalId = 3338826790; Display = "10 Exotic Zen Seed Packs";    Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Gourmet Seed Pack"]    = { GiftId = 3354839820; NormalId = 3354839803; Display = "1 Exotic Gourmet Seed Pack";  Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Gourmet Seed Packs"]   = { GiftId = 3354839819; NormalId = 3354839826; Display = "3 Exotic Gourmet Seed Packs"; Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Gourmet Seed Packs"]  = { GiftId = 3354839818; NormalId = 3354839817; Display = "10 Exotic Gourmet Seed Packs";Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Sprout Seed Pack"]     = { GiftId = 3371226361; NormalId = 3371226353; Display = "1 Exotic Sprout Seed Pack";   Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Sprout Seed Packs"]    = { GiftId = 3371226362; NormalId = 3371226360; Display = "3 Exotic Sprout Seed Packs";  Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Sprout Seed Packs"]   = { GiftId = 3371226364; NormalId = 3371226363; Display = "10 Exotic Sprout Seed Packs"; Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Enchanted Seed Pack"]  = { GiftId = 3387753639; NormalId = 3387753641; Display = "1 Exotic Enchanted Seed Pack"; Category = "Seed Pack"; Price = 75;   isGiftable = true  };
-	["+3 Exotic Enchanted Seed Packs"] = { GiftId = 3387753637; NormalId = 3387753634; Display = "3 Exotic Enchanted Seed Packs";Category = "Seed Pack"; Price = 200;  isGiftable = true  };
-	["+10 Exotic Enchanted Seed Packs"]= { GiftId = 3387753640; NormalId = 3387753638; Display = "10 Exotic Enchanted Seed Packs";Category = "Seed Pack";Price = 600;  isGiftable = true  };
-	["+1 Exotic Fall Seed Pack"]       = { GiftId = 3407391673; NormalId = 3407391662; Display = "1 Exotic Fall Seed Pack";     Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Fall Seed Packs"]      = { GiftId = 3407391664; NormalId = 3407391663; Display = "3 Exotic Fall Seed Packs";    Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Fall Seed Packs"]     = { GiftId = 3407391665; NormalId = 3407391666; Display = "10 Exotic Fall Seed Packs";   Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Safari Seed Pack"]     = { GiftId = 3449810468; NormalId = 3449810469; Display = "1 Exotic Safari Seed Pack";   Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Safari Seed Packs"]    = { GiftId = 3449810470; NormalId = 3449810472; Display = "3 Exotic Safari Seed Packs";  Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Safari Seed Packs"]   = { GiftId = 3449810473; NormalId = 3449810471; Display = "10 Exotic Safari Seed Packs"; Category = "Seed Pack";  Price = 600;  isGiftable = true  };
+	["Open 1 - Exotic Seed Pack"] = { GiftId = 3269033223; NormalId = 3267528421; Display = "1 Exotic Seed Pack"; Category = "Seed Pack" };
+	["Open 3 - Exotic Seed Pack"] = { GiftId = 3269033336; NormalId = 3267548052; Display = "3 Exotic Seed Packs"; Category = "Seed Pack" };
+	["Open 10 - Exotic Seed Pack"] = { GiftId = 3269033529; NormalId = 3267548161; Display = "10 Exotic Seed Packs"; Category = "Seed Pack" };
+	["Open 1 - Bug Egg"] = { GiftId = 3277815193; NormalId = 3278426597; Display = "1 Bug Egg"; Category = "Regular Eggs" };
+	["Open 3 - Bug Egg"] = { GiftId = 3277815350; NormalId = 3277814538; Display = "3 Bug Eggs"; Category = "Regular Eggs" };
+	["Open 10 - Bug Egg"] = { GiftId = 3277815654; NormalId = 3277814625; Display = "10 Bug Eggs"; Category = "Regular Eggs" };
+	["10 Premium Seed Sacks"] = { GiftId = 3273679009; NormalId = 3273679012; Display = "10 Premium Seed Sacks"; Category = "Premium Eggs" };
+	["10 Premium Night Seeds"] = { GiftId = 3282733014; NormalId = 3282157462; Display = "10 Premium Night Seeds"; Category = "Premium Eggs" };
+	["10 Premium Night Eggs"] = { GiftId = 3282661439; NormalId = 3282157312; Display = "10 Premium Night Eggs"; Category = "Premium Eggs" };
+	["+1 Exclusive Cosmetic Crate"] = { GiftId = 3290672926; NormalId = 3290672626; Display = "1 Exclusive Cosmetic Crate"; Category = "Crates" };
+	["+3 Exclusive Cosmetic Crates"] = { GiftId = 3290673007; NormalId = 3290672712; Display = "3 Exclusive Cosmetic Crates"; Category = "Crates" };
+	["+10 Exclusive Cosmetic Crates"] = { GiftId = 3290673073; NormalId = 3290672848; Display = "10 Exclusive Cosmetic Crates"; Category = "Crates" };
+	["+1 Exotic Flower Seed Pack"] = { GiftId = 3295548788; NormalId = 3295548770; Display = "1 Exotic Flower Seed Pack"; Category = "Seed Pack" };
+	["+3 Exotic Flower Seed Pack"] = { GiftId = 3295548780; NormalId = 3295548782; Display = "3 Exotic Flower Seed Packs"; Category = "Seed Pack" };
+	["+10 Exotic Flower Seed Pack"] = { GiftId = 3295548784; NormalId = 3295548781; Display = "10 Exotic Flower Seed Packs"; Category = "Seed Pack" };
+	["+1 Exotic Crafters Seed Pack"] = { GiftId = 3306352285; NormalId = 3306352279; Display = "1 Exotic Crafters Seed Pack"; Category = "Seed Pack" };
+	["+3 Exotic Crafters Seed Pack"] = { GiftId = 3306352286; NormalId = 3306352283; Display = "3 Exotic Crafters Seed Packs"; Category = "Seed Pack" };
+	["+10 Exotic Crafters Seed Pack"] = { GiftId = 3306352287; NormalId = 3306352284; Display = "10 Exotic Crafters Seed Packs"; Category = "Seed Pack" };
+	["+1 Exotic Summer Seed Pack"] = { GiftId = 3311388950; NormalId = 3311388942; Display = "1 Exotic Summer Seed Pack"; Category = "Seed Pack" };
+	["+3 Exotic Summer Seed Pack"] = { GiftId = 3311388953; NormalId = 3311388951; Display = "3 Exotic Summer Seed Packs"; Category = "Seed Pack" };
+	["+10 Exotic Summer Seed Pack"] = { GiftId = 3311388949; NormalId = 3311388948; Display = "10 Exotic Summer Seed Packs"; Category = "Seed Pack" };
+	["+1 Exotic Ancient Seed Pack"] = { GiftId = 3323657555; NormalId = 3323657553; Display = "1 Exotic Ancient Seed Pack"; Category = "Seed Pack" };
+	["+3 Exotic Ancient Seed Pack"] = { GiftId = 3323657556; NormalId = 3323657547; Display = "3 Exotic Ancient Seed Packs"; Category = "Seed Pack" };
+	["+10 Exotic Ancient Seed Pack"] = { GiftId = 3323657554; NormalId = 3323657552; Display = "10 Exotic Ancient Seed Packs"; Category = "Seed Pack" };
+	["+1 Exotic Zen Seed Pack"] = { GiftId = 3338826788; NormalId = 3338826792; Display = "1 Exotic Zen Seed Pack"; Category = "Seed Pack" };
+	["+3 Exotic Zen Seed Pack"] = { GiftId = 3338826794; NormalId = 3338826791; Display = "3 Exotic Zen Seed Packs"; Category = "Seed Pack" };
+	["+10 Exotic Zen Seed Pack"] = { GiftId = 3338826793; NormalId = 3338826790; Display = "10 Exotic Zen Seed Packs"; Category = "Seed Pack" };
+	["+1 Exotic Gourmet Seed Pack"] = { GiftId = 3354839820; NormalId = 3354839803; Display = "1 Exotic Gourmet Seed Pack"; Category = "Seed Pack" };
+	["+3 Exotic Gourmet Seed Packs"] = { GiftId = 3354839819; NormalId = 3354839826; Display = "3 Exotic Gourmet Seed Packs"; Category = "Seed Pack" };
+	["+10 Exotic Gourmet Seed Packs"] = { GiftId = 3354839818; NormalId = 3354839817; Display = "10 Exotic Gourmet Seed Packs"; Category = "Seed Pack" };
+	["+1 Exotic Sprout Seed Pack"] = { GiftId = 3371226361; NormalId = 3371226353; Display = "1 Exotic Sprout Seed Pack"; Category = "Seed Pack" };
+	["+3 Exotic Sprout Seed Packs"] = { GiftId = 3371226362; NormalId = 3371226360; Display = "3 Exotic Sprout Seed Packs"; Category = "Seed Pack" };
+	["+10 Exotic Sprout Seed Packs"] = { GiftId = 3371226364; NormalId = 3371226363; Display = "10 Exotic Sprout Seed Packs"; Category = "Seed Pack" };
+	["+1 Exotic Enchanted Seed Pack"] = { GiftId = 3387753639; NormalId = 3387753641; Display = "1 Exotic Enchanted Seed Pack"; Category = "Seed Pack" };
+	["+3 Exotic Enchanted Seed Packs"] = { GiftId = 3387753637; NormalId = 3387753634; Display = "3 Exotic Enchanted Seed Packs"; Category = "Seed Pack" };
+	["+10 Exotic Enchanted Seed Packs"] = { GiftId = 3387753640; NormalId = 3387753638; Display = "10 Exotic Enchanted Seed Packs"; Category = "Seed Pack" };
+	["+1 Exotic Fall Seed Pack"] = { GiftId = 3407391673; NormalId = 3407391662; Display = "1 Exotic Fall Seed Pack"; Category = "Seed Pack" };
+	["+3 Exotic Fall Seed Packs"] = { GiftId = 3407391664; NormalId = 3407391663; Display = "3 Exotic Fall Seed Packs"; Category = "Seed Pack" };
+	["+10 Exotic Fall Seed Packs"] = { GiftId = 3407391665; NormalId = 3407391666; Display = "10 Exotic Fall Seed Packs"; Category = "Seed Pack" };
+	["+1 Exotic Safari Seed Pack"] = { GiftId = 3449810468; NormalId = 3449810469; Display = "1 Exotic Safari Seed Pack"; Category = "Seed Pack" };
+	["+3 Exotic Safari Seed Packs"] = { GiftId = 3449810470; NormalId = 3449810472; Display = "3 Exotic Safari Seed Packs"; Category = "Seed Pack" };
+	["+10 Exotic Safari Seed Packs"] = { GiftId = 3449810473; NormalId = 3449810471; Display = "10 Exotic Safari Seed Packs"; Category = "Seed Pack" };
 	-- CHESTS
-	["+1 Exotic Culinarian Chests"]    = { GiftId = 3362680913; NormalId = 3362680911; Display = "1 Exotic Culinarian Chest";   Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Culinarian Chests"]    = { GiftId = 3362680919; NormalId = 3362680917; Display = "3 Exotic Culinarian Chests";  Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+1 Exotic Kitsune Chest"]        = { GiftId = 3345819471; NormalId = 3345819463; Display = "1 Exotic Kitsune Chest";      Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Kitsune Chests"]       = { GiftId = 3345819477; NormalId = 3345819470; Display = "3 Exotic Kitsune Chests";     Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Kitsune Chests"]      = { GiftId = 3345819473; NormalId = 3345819472; Display = "10 Exotic Kitsune Chests";    Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Skyroot Chest"]        = { GiftId = 3379038160; NormalId = 3379038157; Display = "1 Exotic Skyroot Chest";      Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Skyroot Chests"]       = { GiftId = 3379038158; NormalId = 3379038152; Display = "3 Exotic Skyroot Chests";     Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Skyroot Chests"]      = { GiftId = 3379038166; NormalId = 3379038159; Display = "10 Exotic Skyroot Chests";    Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Enchanted Chest"]      = { GiftId = 3394224240; NormalId = 3394224231; Display = "1 Exotic Enchanted Chest";    Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Enchanted Chests"]     = { GiftId = 3394224238; NormalId = 3394224239; Display = "3 Exotic Enchanted Chests";   Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Enchanted Chests"]    = { GiftId = 3394224256; NormalId = 3394224237; Display = "10 Exotic Enchanted Chests";  Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Nutty Chest"]          = { GiftId = 3420021048; NormalId = 3420021045; Display = "1 Exotic Nutty Chest";        Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Nutty Chests"]         = { GiftId = 3420021049; NormalId = 3420021043; Display = "3 Exotic Nutty Chests";       Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Nutty Chests"]        = { GiftId = 3420021050; NormalId = 3420021044; Display = "10 Exotic Nutty Chests";      Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Spooky Chest"]         = { GiftId = 3438653515; NormalId = 3438653519; Display = "1 Exotic Spooky Chest";       Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Spooky Chests"]        = { GiftId = 3438653520; NormalId = 3438653518; Display = "3 Exotic Spooky Chests";      Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Spooky Chests"]       = { GiftId = 3438653521; NormalId = 3438653517; Display = "10 Exotic Spooky Chests";     Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Gem Chest"]            = { GiftId = 3460600738; NormalId = 3460600740; Display = "1 Exotic Gem Chest";          Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Gem Chests"]           = { GiftId = 3460600739; NormalId = 3460600737; Display = "3 Exotic Gem Chests";         Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Gem Chests"]          = { GiftId = 3460600741; NormalId = 3460600736; Display = "10 Exotic Gem Chests";        Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Buttercup Chest"]      = { GiftId = 3520430333; NormalId = 3520430329; Display = "1 Exotic Buttercup Chest";    Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Buttercup Chests"]     = { GiftId = 3520430330; NormalId = 3520430327; Display = "3 Exotic Buttercup Chests";   Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Buttercup Chests"]    = { GiftId = 3520430332; NormalId = 3520430328; Display = "10 Exotic Buttercup Chests";  Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+50 Exotic Buttercup Chests"]    = { GiftId = 3520430334; NormalId = 3520430331; Display = "50 Exotic Buttercup Chests";  Category = "Chests";     Price = 3500; isGiftable = true  };
+	["+1 Exotic Culinarian Chests"] = { GiftId = 3362680913; NormalId = 3362680911; Display = "1 Exotic Culinarian Chest"; Category = "Chests" };
+	["+3 Exotic Culinarian Chests"] = { GiftId = 3362680919; NormalId = 3362680917; Display = "3 Exotic Culinarian Chests"; Category = "Chests" };
+	["+1 Exotic Kitsune Chest"] = { GiftId = 3345819471; NormalId = 3345819463; Display = "1 Exotic Kitsune Chest"; Category = "Chests" };
+	["+3 Exotic Kitsune Chests"] = { GiftId = 3345819477; NormalId = 3345819470; Display = "3 Exotic Kitsune Chests"; Category = "Chests" };
+	["+10 Exotic Kitsune Chests"] = { GiftId = 3345819473; NormalId = 3345819472; Display = "10 Exotic Kitsune Chests"; Category = "Chests" };
+	["+1 Exotic Skyroot Chest"] = { GiftId = 3379038160; NormalId = 3379038157; Display = "1 Exotic Skyroot Chest"; Category = "Chests" };
+	["+3 Exotic Skyroot Chests"] = { GiftId = 3379038158; NormalId = 3379038152; Display = "3 Exotic Skyroot Chests"; Category = "Chests" };
+	["+10 Exotic Skyroot Chests"] = { GiftId = 3379038166; NormalId = 3379038159; Display = "10 Exotic Skyroot Chests"; Category = "Chests" };
+	["+1 Exotic Enchanted Chest"] = { GiftId = 3394224240; NormalId = 3394224231; Display = "1 Exotic Enchanted Chest"; Category = "Chests" };
+	["+3 Exotic Enchanted Chests"] = { GiftId = 3394224238; NormalId = 3394224239; Display = "3 Exotic Enchanted Chests"; Category = "Chests" };
+	["+10 Exotic Enchanted Chests"] = { GiftId = 3394224256; NormalId = 3394224237; Display = "10 Exotic Enchanted Chests"; Category = "Chests" };
+	["+1 Exotic Nutty Chest"] = { GiftId = 3420021048; NormalId = 3420021045; Display = "1 Exotic Nutty Chest"; Category = "Chests" };
+	["+3 Exotic Nutty Chests"] = { GiftId = 3420021049; NormalId = 3420021043; Display = "3 Exotic Nutty Chests"; Category = "Chests" };
+	["+10 Exotic Nutty Chests"] = { GiftId = 3420021050; NormalId = 3420021044; Display = "10 Exotic Nutty Chests"; Category = "Chests" };
+	["+1 Exotic Spooky Chest"] = { GiftId = 3438653515; NormalId = 3438653519; Display = "1 Exotic Spooky Chest"; Category = "Chests" };
+	["+3 Exotic Spooky Chests"] = { GiftId = 3438653520; NormalId = 3438653518; Display = "3 Exotic Spooky Chests"; Category = "Chests" };
+	["+10 Exotic Spooky Chests"] = { GiftId = 3438653521; NormalId = 3438653517; Display = "10 Exotic Spooky Chests"; Category = "Chests" };
+	["+1 Exotic Gem Chest"] = { GiftId = 3460600738; NormalId = 3460600740; Display = "1 Exotic Gem Chest"; Category = "Chests" };
+	["+3 Exotic Gem Chests"] = { GiftId = 3460600739; NormalId = 3460600737; Display = "3 Exotic Gem Chests"; Category = "Chests" };
+	["+10 Exotic Gem Chests"] = { GiftId = 3460600741; NormalId = 3460600736; Display = "10 Exotic Gem Chests"; Category = "Chests" };
+	["+1 Exotic Buttercup Chest"] = { GiftId = 3520430333; NormalId = 3520430329; Display = "1 Exotic Buttercup Chest"; Category = "Chests" };
+	["+3 Exotic Buttercup Chests"] = { GiftId = 3520430330; NormalId = 3520430327; Display = "3 Exotic Buttercup Chests"; Category = "Chests" };
+	["+10 Exotic Buttercup Chests"] = { GiftId = 3520430332; NormalId = 3520430328; Display = "10 Exotic Buttercup Chests"; Category = "Chests" };
+	["+50 Exotic Buttercup Chests"] = { GiftId = 3520430334; NormalId = 3520430331; Display = "50 Exotic Buttercup Chests"; Category = "Chests" };
 	-- CRATES
-	["+1 Iconic Gonme Crate"]          = { GiftId = 3300962951; NormalId = 3300962946; Display = "1 Iconic Gonme Crate";        Category = "Crates";     Price = 100;  isGiftable = true  };
-	["+3 Iconic Gonme Crate"]          = { GiftId = 3300962954; NormalId = 3300962950; Display = "3 Iconic Gonme Crates";       Category = "Crates";     Price = 275;  isGiftable = true  };
-	["+10 Iconic Gonme Crate"]         = { GiftId = 3300962960; NormalId = 3300962952; Display = "10 Iconic Gonme Crates";      Category = "Crates";     Price = 850;  isGiftable = true  };
+	["+1 Iconic Gonme Crate"] = { GiftId = 3300962951; NormalId = 3300962946; Display = "1 Iconic Gonme Crate"; Category = "Crates" };
+	["+3 Iconic Gonme Crate"] = { GiftId = 3300962954; NormalId = 3300962950; Display = "3 Iconic Gonme Crates"; Category = "Crates" };
+	["+10 Iconic Gonme Crate"] = { GiftId = 3300962960; NormalId = 3300962952; Display = "10 Iconic Gonme Crates"; Category = "Crates" };
 	-- PREMIUM EGGS
-	["+1 Premium Anti Bee Egg"]        = { GiftId = 3301567956; NormalId = 3301567958; Display = "1 Premium Anti Bee Egg";      Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Anti Bee Egg"]        = { GiftId = 3301567959; NormalId = 3301567955; Display = "3 Premium Anti Bee Eggs";     Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Anti Bee Egg"]       = { GiftId = 3301567957; NormalId = 3301567960; Display = "10 Premium Anti Bee Eggs";    Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Oasis Egg"]           = { GiftId = 3317459189; NormalId = 3317459182; Display = "1 Premium Oasis Egg";         Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Oasis Egg"]           = { GiftId = 3317459185; NormalId = 3317459186; Display = "3 Premium Oasis Eggs";        Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Oasis Egg"]          = { GiftId = 3317459187; NormalId = 3317459188; Display = "10 Premium Oasis Eggs";       Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Primal Egg"]          = { GiftId = 3330286152; NormalId = 3330286154; Display = "1 Premium Primal Egg";        Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Primal Egg"]          = { GiftId = 3330286153; NormalId = 3330286155; Display = "3 Premium Primal Eggs";       Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Primal Egg"]         = { GiftId = 3330286160; NormalId = 3330286148; Display = "10 Premium Primal Eggs";      Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Fall Egg"]            = { GiftId = 3401426986; NormalId = 3401426983; Display = "1 Premium Fall Egg";          Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Fall Eggs"]           = { GiftId = 3401426987; NormalId = 3401426985; Display = "3 Premium Fall Eggs";         Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Fall Eggs"]          = { GiftId = 3401426988; NormalId = 3401426984; Display = "10 Premium Fall Eggs";        Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Spooky Egg"]          = { GiftId = 3427163851; NormalId = 3427163857; Display = "1 Premium Spooky Egg";        Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Spooky Eggs"]         = { GiftId = 3427163855; NormalId = 3427163854; Display = "3 Premium Spooky Eggs";       Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Spooky Eggs"]        = { GiftId = 3427163856; NormalId = 3427163853; Display = "10 Premium Spooky Eggs";      Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Safari Egg"]          = { GiftId = 3444449490; NormalId = 3444449487; Display = "1 Premium Safari Egg";        Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Safari Eggs"]         = { GiftId = 3444449488; NormalId = 3444449485; Display = "3 Premium Safari Eggs";       Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Safari Eggs"]        = { GiftId = 3444449489; NormalId = 3444449486; Display = "10 Premium Safari Eggs";      Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Christmas Egg"]       = { GiftId = 3477922694; NormalId = 3477922698; Display = "1 Premium Christmas Egg";     Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Christmas Eggs"]      = { GiftId = 3477922696; NormalId = 3477922697; Display = "3 Premium Christmas Eggs";    Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Christmas Eggs"]     = { GiftId = 3477922699; NormalId = 3477922700; Display = "10 Premium Christmas Eggs";   Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+50 Premium Christmas Eggs"]     = { GiftId = 3478044311; NormalId = 3478043835; Display = "50 Premium Christmas Eggs";   Category = "Premium Eggs"; Price = 5500;isGiftable = true  };
-	["+1 Premium Winter Egg"]          = { GiftId = 3483801742; NormalId = 3483801741; Display = "1 Premium Winter Egg";        Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Winter Eggs"]         = { GiftId = 3483801746; NormalId = 3483801745; Display = "3 Premium Winter Eggs";       Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Winter Eggs"]        = { GiftId = 3483801749; NormalId = 3483801744; Display = "10 Premium Winter Eggs";      Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+50 Premium Winter Eggs"]        = { GiftId = 3483801747; NormalId = 3483801743; Display = "50 Premium Winter Eggs";      Category = "Premium Eggs"; Price = 5500;isGiftable = true  };
-	["+1 Premium New Year's Egg"]      = { GiftId = 3489363340; NormalId = 3489363343; Display = "1 Premium New Year's Egg";    Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium New Year's Eggs"]     = { GiftId = 3489363337; NormalId = 3489363338; Display = "3 Premium New Year's Eggs";   Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium New Year's Eggs"]    = { GiftId = 3489363341; NormalId = 3489363342; Display = "10 Premium New Year's Eggs";  Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+50 Premium New Year's Eggs"]    = { GiftId = 3489363345; NormalId = 3489363344; Display = "50 Premium New Year's Eggs";  Category = "Premium Eggs"; Price = 5500;isGiftable = true  };
-	["+1 Premium Carnival Egg"]        = { GiftId = 3497475841; NormalId = 3497475839; Display = "1 Premium Carnival Egg";      Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Carnival Eggs"]       = { GiftId = 3497475845; NormalId = 3497475846; Display = "3 Premium Carnival Eggs";     Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Carnival Eggs"]      = { GiftId = 3497475840; NormalId = 3497475844; Display = "10 Premium Carnival Eggs";    Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+50 Premium Carnival Eggs"]      = { GiftId = 3497475842; NormalId = 3497475843; Display = "50 Premium Carnival Eggs";    Category = "Premium Eggs"; Price = 5500;isGiftable = true  };
-	["+1 Premium Bird Egg"]            = { GiftId = 3512151974; NormalId = 3512151971; Display = "1 Premium Bird Egg";          Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Bird Eggs"]           = { GiftId = 3512151972; NormalId = 3512151973; Display = "3 Premium Bird Eggs";         Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Bird Eggs"]          = { GiftId = 3512151975; NormalId = 3512151976; Display = "10 Premium Bird Eggs";        Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+50 Premium Bird Eggs"]          = { GiftId = 3512151981; NormalId = 3512151977; Display = "50 Premium Bird Eggs";        Category = "Premium Eggs"; Price = 5500;isGiftable = true  };
-	["+1 Premium Golden Egg"]          = { GiftId = 3568827750; NormalId = 3568827015; Display = "1 Premium Golden Egg";        Category = "Premium Eggs"; Price = 200; isGiftable = true  };
-	["+3 Premium Golden Eggs"]         = { GiftId = 3568828285; NormalId = 3568827227; Display = "3 Premium Golden Eggs";       Category = "Premium Eggs"; Price = 550; isGiftable = true  };
-	["+10 Premium Golden Eggs"]        = { GiftId = 3568828441; NormalId = 3568827595; Display = "10 Premium Golden Eggs";      Category = "Premium Eggs"; Price = 1700;isGiftable = true  };
-	["+50 Premium Golden Eggs"]        = { GiftId = 3570157336; NormalId = 3570157250; Display = "50 Premium Golden Eggs";      Category = "Premium Eggs"; Price = 7500;isGiftable = true  };
-	-- TOKENS  (ForcedRobuxPurchase — cannot be gifted via GiftRemote)
-	["Trade Token 50"]                 = { GiftId = 3425758808; NormalId = 3460376533; Display = "Trade Token 50";    Category = "Tokens"; Price = 50;   isGiftable = false; ForcedRobuxPurchase = true };
-	["Trade Token 250"]                = { GiftId = 3425758810; NormalId = 3460378135; Display = "Trade Token 250";   Category = "Tokens"; Price = 200;  isGiftable = false; ForcedRobuxPurchase = true };
-	["Trade Token 1000"]               = { GiftId = 3425758809; NormalId = 3460378800; Display = "Trade Token 1000";  Category = "Tokens"; Price = 700;  isGiftable = false; ForcedRobuxPurchase = true };
-	["Trade Token 5000"]               = { GiftId = 3425758811; NormalId = 3460379424; Display = "Trade Token 5000";  Category = "Tokens"; Price = 3000; isGiftable = false; ForcedRobuxPurchase = true };
-	["Trade Token 25000"]              = { GiftId = 3425758812; NormalId = 3460379831; Display = "Trade Token 25000"; Category = "Tokens"; Price = 12000;isGiftable = false; ForcedRobuxPurchase = true };
-	-- CURRENCY (not giftable — credits go to purchaser only)
-	["Sheckles 1"]                     = { GiftId = 3269363716; NormalId = 3250137172; Display = "100¢";    Category = "Currency"; Price = 25;   isGiftable = false };
-	["Sheckles 2"]                     = { GiftId = 3269364749; NormalId = 3250137261; Display = "250¢";    Category = "Currency"; Price = 60;   isGiftable = false };
-	["Sheckles 3"]                     = { GiftId = 3269364968; NormalId = 3250137355; Display = "1,000¢";  Category = "Currency"; Price = 200;  isGiftable = false };
-	["Sheckles 4"]                     = { GiftId = 3269365441; NormalId = 3250139018; Display = "5,000¢";  Category = "Currency"; Price = 800;  isGiftable = false };
+	["+1 Premium Anti Bee Egg"] = { GiftId = 3301567956; NormalId = 3301567958; Display = "1 Premium Anti Bee Egg"; Category = "Premium Eggs" };
+	["+3 Premium Anti Bee Egg"] = { GiftId = 3301567959; NormalId = 3301567955; Display = "3 Premium Anti Bee Eggs"; Category = "Premium Eggs" };
+	["+10 Premium Anti Bee Egg"] = { GiftId = 3301567957; NormalId = 3301567960; Display = "10 Premium Anti Bee Eggs"; Category = "Premium Eggs" };
+	["+1 Premium Oasis Egg"] = { GiftId = 3317459189; NormalId = 3317459182; Display = "1 Premium Oasis Egg"; Category = "Premium Eggs" };
+	["+3 Premium Oasis Egg"] = { GiftId = 3317459185; NormalId = 3317459186; Display = "3 Premium Oasis Eggs"; Category = "Premium Eggs" };
+	["+10 Premium Oasis Egg"] = { GiftId = 3317459187; NormalId = 3317459188; Display = "10 Premium Oasis Eggs"; Category = "Premium Eggs" };
+	["+1 Premium Primal Egg"] = { GiftId = 3330286152; NormalId = 3330286154; Display = "1 Premium Primal Egg"; Category = "Premium Eggs" };
+	["+3 Premium Primal Egg"] = { GiftId = 3330286153; NormalId = 3330286155; Display = "3 Premium Primal Eggs"; Category = "Premium Eggs" };
+	["+10 Premium Primal Egg"] = { GiftId = 3330286160; NormalId = 3330286148; Display = "10 Premium Primal Eggs"; Category = "Premium Eggs" };
+	["+1 Premium Fall Egg"] = { GiftId = 3401426986; NormalId = 3401426983; Display = "1 Premium Fall Egg"; Category = "Premium Eggs" };
+	["+3 Premium Fall Eggs"] = { GiftId = 3401426987; NormalId = 3401426985; Display = "3 Premium Fall Eggs"; Category = "Premium Eggs" };
+	["+10 Premium Fall Eggs"] = { GiftId = 3401426988; NormalId = 3401426984; Display = "10 Premium Fall Eggs"; Category = "Premium Eggs" };
+	["+1 Premium Spooky Egg"] = { GiftId = 3427163851; NormalId = 3427163857; Display = "1 Premium Spooky Egg"; Category = "Premium Eggs" };
+	["+3 Premium Spooky Eggs"] = { GiftId = 3427163855; NormalId = 3427163854; Display = "3 Premium Spooky Eggs"; Category = "Premium Eggs" };
+	["+10 Premium Spooky Eggs"] = { GiftId = 3427163856; NormalId = 3427163853; Display = "10 Premium Spooky Eggs"; Category = "Premium Eggs" };
+	["+1 Premium Safari Egg"] = { GiftId = 3444449490; NormalId = 3444449487; Display = "1 Premium Safari Egg"; Category = "Premium Eggs" };
+	["+3 Premium Safari Eggs"] = { GiftId = 3444449488; NormalId = 3444449485; Display = "3 Premium Safari Eggs"; Category = "Premium Eggs" };
+	["+10 Premium Safari Eggs"] = { GiftId = 3444449489; NormalId = 3444449486; Display = "10 Premium Safari Eggs"; Category = "Premium Eggs" };
+	["+1 Premium Christmas Egg"] = { GiftId = 3477922694; NormalId = 3477922698; Display = "1 Premium Christmas Egg"; Category = "Premium Eggs" };
+	["+3 Premium Christmas Eggs"] = { GiftId = 3477922696; NormalId = 3477922697; Display = "3 Premium Christmas Eggs"; Category = "Premium Eggs" };
+	["+10 Premium Christmas Eggs"] = { GiftId = 3477922699; NormalId = 3477922700; Display = "10 Premium Christmas Eggs"; Category = "Premium Eggs" };
+	["+50 Premium Christmas Eggs"] = { GiftId = 3478044311; NormalId = 3478043835; Display = "50 Premium Christmas Eggs"; Category = "Premium Eggs" };
+	["+1 Premium Winter Egg"] = { GiftId = 3483801742; NormalId = 3483801741; Display = "1 Premium Winter Egg"; Category = "Premium Eggs" };
+	["+3 Premium Winter Eggs"] = { GiftId = 3483801746; NormalId = 3483801745; Display = "3 Premium Winter Eggs"; Category = "Premium Eggs" };
+	["+10 Premium Winter Eggs"] = { GiftId = 3483801749; NormalId = 3483801744; Display = "10 Premium Winter Eggs"; Category = "Premium Eggs" };
+	["+50 Premium Winter Eggs"] = { GiftId = 3483801747; NormalId = 3483801743; Display = "50 Premium Winter Eggs"; Category = "Premium Eggs" };
+	["+1 Premium New Year's Egg"] = { GiftId = 3489363340; NormalId = 3489363343; Display = "1 Premium New Year's Egg"; Category = "Premium Eggs" };
+	["+3 Premium New Year's Eggs"] = { GiftId = 3489363337; NormalId = 3489363338; Display = "3 Premium New Year's Eggs"; Category = "Premium Eggs" };
+	["+10 Premium New Year's Eggs"] = { GiftId = 3489363341; NormalId = 3489363342; Display = "10 Premium New Year's Eggs"; Category = "Premium Eggs" };
+	["+50 Premium New Year's Eggs"] = { GiftId = 3489363345; NormalId = 3489363344; Display = "50 Premium New Year's Eggs"; Category = "Premium Eggs" };
+	["+1 Premium Carnival Egg"] = { GiftId = 3497475841; NormalId = 3497475839; Display = "1 Premium Carnival Egg"; Category = "Premium Eggs" };
+	["+3 Premium Carnival Eggs"] = { GiftId = 3497475845; NormalId = 3497475846; Display = "3 Premium Carnival Eggs"; Category = "Premium Eggs" };
+	["+10 Premium Carnival Eggs"] = { GiftId = 3497475840; NormalId = 3497475844; Display = "10 Premium Carnival Eggs"; Category = "Premium Eggs" };
+	["+50 Premium Carnival Eggs"] = { GiftId = 3497475842; NormalId = 3497475843; Display = "50 Premium Carnival Eggs"; Category = "Premium Eggs" };
+	["+1 Premium Bird Egg"] = { GiftId = 3512151974; NormalId = 3512151971; Display = "1 Premium Bird Egg"; Category = "Premium Eggs" };
+	["+3 Premium Bird Eggs"] = { GiftId = 3512151972; NormalId = 3512151973; Display = "3 Premium Bird Eggs"; Category = "Premium Eggs" };
+	["+10 Premium Bird Eggs"] = { GiftId = 3512151975; NormalId = 3512151976; Display = "10 Premium Bird Eggs"; Category = "Premium Eggs" };
+	["+50 Premium Bird Eggs"] = { GiftId = 3512151981; NormalId = 3512151977; Display = "50 Premium Bird Eggs"; Category = "Premium Eggs" };
+	["+1 Premium Golden Egg"] = { GiftId = 3568827750; NormalId = 3568827015; Display = "1 Premium Golden Egg"; Category = "Premium Eggs" };
+	["+3 Premium Golden Eggs"] = { GiftId = 3568828285; NormalId = 3568827227; Display = "3 Premium Golden Eggs"; Category = "Premium Eggs" };
+	["+10 Premium Golden Eggs"] = { GiftId = 3568828441; NormalId = 3568827595; Display = "10 Premium Golden Eggs"; Category = "Premium Eggs" };
+	["+50 Premium Golden Eggs"] = { GiftId = 3570157336; NormalId = 3570157250; Display = "50 Premium Golden Eggs"; Category = "Premium Eggs" };
+	-- TOKENS
+	["Trade Token 50"] = { GiftId = 3425758808; NormalId = 3460376533; Display = "Trade Token 50"; Category = "Tokens"; ForcedRobuxPurchase = true };
+	["Trade Token 250"] = { GiftId = 3425758810; NormalId = 3460378135; Display = "Trade Token 250"; Category = "Tokens"; ForcedRobuxPurchase = true };
+	["Trade Token 1000"] = { GiftId = 3425758809; NormalId = 3460378800; Display = "Trade Token 1000"; Category = "Tokens"; ForcedRobuxPurchase = true };
+	["Trade Token 5000"] = { GiftId = 3425758811; NormalId = 3460379424; Display = "Trade Token 5000"; Category = "Tokens"; ForcedRobuxPurchase = true };
+	["Trade Token 25000"] = { GiftId = 3425758812; NormalId = 3460379831; Display = "Trade Token 25000"; Category = "Tokens"; ForcedRobuxPurchase = true };
+	-- CURRENCY
+	["Sheckles 1"] = { GiftId = 3269363716; NormalId = 3250137172; Display = "100¢"; Category = "Currency" };
+	["Sheckles 2"] = { GiftId = 3269364749; NormalId = 3250137261; Display = "250¢"; Category = "Currency" };
+	["Sheckles 3"] = { GiftId = 3269364968; NormalId = 3250137355; Display = "1,000¢"; Category = "Currency" };
+	["Sheckles 4"] = { GiftId = 3269365441; NormalId = 3250139018; Display = "5,000¢"; Category = "Currency" };
 	-- CONTAINERS
-	["Artisan Container"]              = { GiftId = 3467103686; NormalId = 3460380041; Display = "1 Artisan Container";   Category = "Container"; Price = 120;  isGiftable = true  };
-	["3 Artisan Containers"]           = { GiftId = 3467103689; NormalId = 3467103688; Display = "3 Artisan Containers";  Category = "Container"; Price = 325;  isGiftable = true  };
-	["10 Artisan Containers"]          = { GiftId = 3467103690; NormalId = 3467103687; Display = "10 Artisan Containers"; Category = "Container"; Price = 1000; isGiftable = true  };
-	["Elemental Container"]            = { GiftId = 3467110139; NormalId = 3460380235; Display = "1 Elemental Container";   Category = "Container"; Price = 120;  isGiftable = true  };
-	["3 Elemental Containers"]         = { GiftId = 3467110144; NormalId = 3467110142; Display = "3 Elemental Containers";  Category = "Container"; Price = 325;  isGiftable = true  };
-	["10 Elemental Containers"]        = { GiftId = 3467110143; NormalId = 3467110145; Display = "10 Elemental Containers"; Category = "Container"; Price = 1000; isGiftable = true  };
-	["Festive Container"]              = { GiftId = 3478032198; NormalId = 3478031738; Display = "1 Festive Container";   Category = "Container"; Price = 120;  isGiftable = true  };
-	["3 Festive Containers"]           = { GiftId = 3478032318; NormalId = 3478031853; Display = "3 Festive Containers";  Category = "Container"; Price = 325;  isGiftable = true  };
-	["10 Festive Containers"]          = { GiftId = 3478032404; NormalId = 3478031941; Display = "10 Festive Containers"; Category = "Container"; Price = 1000; isGiftable = true  };
+	["Artisan Container"] = { GiftId = 3467103686; NormalId = 3460380041; Display = "1 Artisan Container"; Category = "Container" };
+	["3 Artisan Containers"] = { GiftId = 3467103689; NormalId = 3467103688; Display = "3 Artisan Containers"; Category = "Container" };
+	["10 Artisan Containers"] = { GiftId = 3467103690; NormalId = 3467103687; Display = "10 Artisan Containers"; Category = "Container" };
+	["Elemental Container"] = { GiftId = 3467110139; NormalId = 3460380235; Display = "1 Elemental Container"; Category = "Container" };
+	["3 Elemental Containers"] = { GiftId = 3467110144; NormalId = 3467110142; Display = "3 Elemental Containers"; Category = "Container" };
+	["10 Elemental Containers"] = { GiftId = 3467110143; NormalId = 3467110145; Display = "10 Elemental Containers"; Category = "Container" };
+	["Festive Container"] = { GiftId = 3478032198; NormalId = 3478031738; Display = "1 Festive Container"; Category = "Container" };
+	["3 Festive Containers"] = { GiftId = 3478032318; NormalId = 3478031853; Display = "3 Festive Containers"; Category = "Container" };
+	["10 Festive Containers"] = { GiftId = 3478032404; NormalId = 3478031941; Display = "10 Festive Containers"; Category = "Container" };
 	-- PRESENTS
-	["+1 Exotic Santa's Surprise Present"]  = { GiftId = 3472461581; NormalId = 3472461585; Display = "1 Santa's Surprise Present";   Category = "Present"; Price = 100;  isGiftable = true  };
-	["+3 Exotic Santa's Surprise Present"]  = { GiftId = 3472461582; NormalId = 3472461575; Display = "3 Santa's Surprise Presents";  Category = "Present"; Price = 275;  isGiftable = true  };
-	["+10 Exotic Santa's Surprise Present"] = { GiftId = 3472461580; NormalId = 3472461579; Display = "10 Santa's Surprise Presents"; Category = "Present"; Price = 850;  isGiftable = true  };
-	["+50 Exotic Santa's Surprise Present"] = { GiftId = 3472461583; NormalId = 3472461584; Display = "50 Santa's Surprise Presents"; Category = "Present"; Price = 3800; isGiftable = true  };
+	["+1 Exotic Santa's Surprise Present"] = { GiftId = 3472461581; NormalId = 3472461585; Display = "1 Santa's Surprise Present"; Category = "Present" };
+	["+3 Exotic Santa's Surprise Present"] = { GiftId = 3472461582; NormalId = 3472461575; Display = "3 Santa's Surprise Presents"; Category = "Present" };
+	["+10 Exotic Santa's Surprise Present"] = { GiftId = 3472461580; NormalId = 3472461579; Display = "10 Santa's Surprise Presents"; Category = "Present" };
+	["+50 Exotic Santa's Surprise Present"] = { GiftId = 3472461583; NormalId = 3472461584; Display = "50 Santa's Surprise Presents"; Category = "Present" };
 	-- SUPER SEEDS
-	["+1 Super Seed"]                  = { GiftId = 3482199804; NormalId = 3482199602; Display = "+1 Super Seed";              Category = "Super Seed"; Price = 80;   isGiftable = true  };
-	["+3 Super Seed"]                  = { GiftId = 3482200078; NormalId = 3482199918; Display = "+3 Super Seeds";             Category = "Super Seed"; Price = 220;  isGiftable = true  };
-	["+10 Super Seed"]                 = { GiftId = 3482200423; NormalId = 3482200241; Display = "+10 Super Seeds";            Category = "Super Seed"; Price = 650;  isGiftable = true  };
-	["+9 Super Seed"]                  = { GiftId = 3482222113; NormalId = 3249981764; Display = "+9 Super Seeds";             Category = "Super Seed"; Price = 600;  isGiftable = true  };
-	["Rainbow Peppermint Vine Seed"]   = { GiftId = 3482271756; NormalId = 3482271454; Display = "Rainbow Peppermint Vine Seed"; Category = "Super Seed"; Price = 400; isGiftable = true  };
-	["Firework Fern"]                  = { GiftId = 3490207392; NormalId = 3490207231; Display = "Firework Fern";              Category = "Seeds";      Price = 300;  isGiftable = true  };
-	-- BUNDLE PACKS (no GiftId — purchase only)
-	["SaintPatricks Bundle"]           = { NormalId = 3555829934; Display = "Leaf Clover Pack";           Category = "Bundle Pack"; Price = 499;  isGiftable = false };
-	["Blacksmith Bundle"]              = { NormalId = 3456989527; Display = "Blacksmith Pack";             Category = "Bundle Pack"; Price = 799;  isGiftable = false };
-	["Twilight Pack"]                  = { NormalId = 3432380384; Display = "Twilight Pack";               Category = "Bundle Pack"; Price = 599;  isGiftable = false };
-	["Rainbow Shovel Pack"]            = { NormalId = 3560653460; Display = "Rainbow Shovel + Speed Coil"; Category = "Bundle Pack"; Price = 399;  isGiftable = false };
-	-- PASS STORE (GamePass items — not giftable via remote)
-	["Prime Crate"]                    = { Display = "Prime Crate";    Category = "Crate"; Price = 299;  isGiftable = false };
-	["Holiday Crate"]                  = { Display = "Holiday Crate";  Category = "Crate"; Price = 299;  isGiftable = false };
-	["Season 4 Crate"]                 = { Display = "Season 4 Crate"; Category = "Crate"; Price = 299;  isGiftable = false };
-	-- COSMETICS (Pass)
-	["Egg Yolk Mat"]                   = { Display = "Egg Yolk Mat";    Category = "Pass"; Price = 149;  isGiftable = false };
-	["Penguin Statue"]                 = { Display = "Penguin Statue";  Category = "Pass"; Price = 149;  isGiftable = false };
-	["Garden Basin"]                   = { Display = "Garden Basin";    Category = "Pass"; Price = 149;  isGiftable = false };
-	-- GEARS (Pass)
-	["Silver Fertilizer"]              = { Display = "Silver Fertilizer";    Category = "Pass"; Price = 199;  isGiftable = false };
-	["Levelup Lollipop"]               = { Display = "Levelup Lollipop";     Category = "Pass"; Price = 199;  isGiftable = false };
-	["Grow All"]                       = { Display = "Grow All";              Category = "Pass"; Price = 249;  isGiftable = false };
-	["Smith Hammer of Harvest"]        = { Display = "Hammer of Harvest";     Category = "Pass"; Price = 199;  isGiftable = false };
-	-- SEEDS (Pass)
-	["Naval Wort"]                     = { Display = "Naval Wort";        Category = "Seeds"; Price = 99;   isGiftable = false };
-	["Pollen Cone"]                    = { Display = "Pollen Cone";       Category = "Seeds"; Price = 99;   isGiftable = false };
-	["Purple Treeshroom"]              = { Display = "Purple Treeshroom"; Category = "Seeds"; Price = 99;   isGiftable = false };
-	-- SEED PACKS (Pass)
-	["Prime Seed Pack"]                = { Display = "Prime Seed Pack";    Category = "Seed Pack"; Price = 299;  isGiftable = false };
-	["Holiday Seed Pack"]              = { Display = "Holiday Seed Pack";  Category = "Seed Pack"; Price = 299;  isGiftable = false };
-	["Season 4 Seed Pack"]             = { Display = "Season 4 Seed Pack"; Category = "Seed Pack"; Price = 299;  isGiftable = false };
+	["+1 Super Seed"] = { GiftId = 3482199804; NormalId = 3482199602; Display = "+1 Super Seed"; Category = "Super Seed" };
+	["+3 Super Seed"] = { GiftId = 3482200078; NormalId = 3482199918; Display = "+3 Super Seeds"; Category = "Super Seed" };
+	["+10 Super Seed"] = { GiftId = 3482200423; NormalId = 3482200241; Display = "+10 Super Seeds"; Category = "Super Seed" };
+	["+9 Super Seed"] = { GiftId = 3482222113; NormalId = 3249981764; Display = "+9 Super Seeds"; Category = "Super Seed" };
+	["Rainbow Peppermint Vine Seed"] = { GiftId = 3482271756; NormalId = 3482271454; Display = "Rainbow Peppermint Vine Seed"; Category = "Super Seed" };
+	["Firework Fern"] = { GiftId = 3490207392; NormalId = 3490207231; Display = "Firework Fern"; Category = "Seeds" };
+	-- BUNDLE PACKS
+	["SaintPatricks Bundle"] = { NormalId = 3555829934; Display = "Leaf Clover Pack"; Category = "Bundle Pack" };
+	["Blacksmith Bundle"] = { NormalId = 3456989527; Display = "Blacksmith Pack"; Category = "Bundle Pack" };
+	["Twilight Pack"] = { NormalId = 3432380384; Display = "Twilight Pack"; Category = "Bundle Pack" };
+	["Rainbow Shovel Pack"] = { NormalId = 3560653460; Display = "Rainbow Shovel + Speed Coil"; Category = "Bundle Pack" };
+    -- PASS STORE
+   ["Prime Crate"] = {Display = "Prime Crate"; Category = "Crate"},
+	["Holiday Crate"] = {Display = "Holiday Crate"; Category = "Crate"},
+	["Season 4 Crate"] = {Display = "Season 4 Crate"; Category = "Crate"},
+
+	--////////////////////////////////////////////////////
+	-- 🎁 COSMETICS
+	--////////////////////////////////////////////////////
+	["Egg Yolk Mat"] = {Display = "Egg Yolk Mat"; Category = "Pass"},
+	["Penguin Statue"] = {Display = "Penguin Statue"; Category = "Pass"},
+	["Garden Basin"] = {Display = "Garden Basin"; Category = "Pass"},
+
+	--////////////////////////////////////////////////////
+	-- ⚙️ GEARS
+	--////////////////////////////////////////////////////
+	["Silver Fertilizer"] = {Display = "Silver Fertilizer"; Category = "Pass"},
+	["Levelup Lollipop"] = {Display = "Levelup Lollipop"; Category = "Pass"},
+	["Grow All"] = {Display = "Grow All"; Category = "Pass"},
+	["Smith Hammer of Harvest"] = {Display = "Hammer of Harvest"; Category = "Pass"},
+
+	--////////////////////////////////////////////////////
+	-- 🌱 SEEDS
+	--////////////////////////////////////////////////////
+	["Naval Wort"] = {Display = "Naval Wort"; Category = "Seeds"},
+	["Pollen Cone"] = {Display = "Pollen Cone"; Category = "Seeds"},
+	["Purple Treeshroom"] = {Display = "Purple Treeshroom"; Category = "Seeds"},
+
+	--////////////////////////////////////////////////////
+	-- 🌿 SEED PACKS
+	--////////////////////////////////////////////////////
+	["Prime Seed Pack"] = {Display = "Prime Seed Pack"; Category = "Seed Pack"},
+	["Holiday Seed Pack"] = {Display = "Holiday Seed Pack"; Category = "Seed Pack"},
+	["Season 4 Seed Pack"] = {Display = "Season 4 Seed Pack"; Category = "Seed Pack"},
+   
 }
 
 local Categories = {
@@ -223,7 +232,7 @@ local CategoryColors = {
 	["Currency"]     = Color3.fromRGB(255, 220,  60),
 	["Bundle Pack"]  = Color3.fromRGB(100, 250,  90),
 	["Pet Shard"]    = Color3.fromRGB(255, 125, 150),
-	["Pass"]         = Color3.fromRGB(255, 125, 150),
+    ["Pass"]    = Color3.fromRGB(255, 125, 150),
 }
 
 local DEFAULT_COLOR = Color3.fromRGB(120, 120, 120)
@@ -240,16 +249,6 @@ end
 
 local FAST = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local MED  = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-
--- Format price as "R$ 75" with comma separators for large numbers
-local function formatPrice(price)
-	if not price then return "" end
-	local s = tostring(math.floor(price))
-	-- Insert commas
-	local result = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
-	result = result:gsub("^,", "")
-	return "R$ " .. result
-end
 
 ------------------------------------------------
 -- GUI ROOT
@@ -286,7 +285,10 @@ MainStroke.Transparency = 0.88
 MainStroke.Thickness    = 1
 
 ------------------------------------------------
--- DRAGGABLE WINDOW
+-- FIX 1: DRAGGABLE WINDOW
+-- Dragging is initiated only when pressing on the title bar (top 52px).
+-- We track everything through UserInputService so it works in CoreGui
+-- where InputBegan on child frames can be unreliable.
 ------------------------------------------------
 do
 	local dragging  = false
@@ -296,12 +298,14 @@ do
 	local function beginDrag(inputPos)
 		dragging  = true
 		dragStart = Vector2.new(inputPos.X, inputPos.Y)
+		-- Capture current absolute pixel position of the window centre
 		winStart  = Vector2.new(
 			Main.AbsolutePosition.X + Main.AbsoluteSize.X / 2,
 			Main.AbsolutePosition.Y + Main.AbsoluteSize.Y / 2
 		)
 	end
 
+	-- Only start drag when clicking within the top title bar strip
 	Main.InputBegan:Connect(function(input)
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
 		local relY = input.Position.Y - Main.AbsolutePosition.Y
@@ -317,6 +321,9 @@ do
 			input.Position.X - dragStart.X,
 			input.Position.Y - dragStart.Y
 		)
+		-- Move by setting absolute pixel offset; keep Scale at 0.5 so it
+		-- stays anchored by AnchorPoint and doesn't drift on resize.
+		local vp = workspace.CurrentCamera.ViewportSize
 		Main.Position = UDim2.new(
 			0, winStart.X + delta.X,
 			0, winStart.Y + delta.Y
@@ -377,6 +384,7 @@ TitleBar.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
 TitleBar.BorderSizePixel  = 0
 Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 14)
 
+-- Flat-bottom patch so the rounded top corners don't show at the join
 local TitleCover = Instance.new("Frame", TitleBar)
 TitleCover.Size             = UDim2.new(1, 0, 0, 14)
 TitleCover.Position         = UDim2.new(0, 0, 1, -14)
@@ -393,6 +401,8 @@ TitleLabel.Font                 = Enum.Font.GothamBold
 TitleLabel.TextSize             = 16
 TitleLabel.TextXAlignment       = Enum.TextXAlignment.Left
 
+-- FIX 2: Close button – use plain ASCII "X" with GothamBold so it
+-- never renders as a Unicode square regardless of executor/font loading.
 local CloseBtn = Instance.new("TextButton", TitleBar)
 CloseBtn.Size             = UDim2.new(0, 28, 0, 28)
 CloseBtn.Position         = UDim2.new(1, -42, 0.5, -14)
@@ -468,20 +478,9 @@ PlayerPadding.PaddingBottom = UDim.new(0, 8)
 
 ------------------------------------------------
 -- PLAYER SELECTION
--- When a player is selected, we broadcast to all cards so they can
--- show or hide their Gift button accordingly.
 ------------------------------------------------
 local SelectedPlayer = LocalPlayer
 local SelectedButton = nil
-
--- Callbacks registered by each card to react to player selection changes
-local onPlayerChangedCallbacks = {}
-
-local function notifyPlayerChanged(newPlayer)
-	for _, cb in ipairs(onPlayerChangedCallbacks) do
-		cb(newPlayer)
-	end
-end
 
 local function getInitials(name)
 	local up = string.gmatch(name, "%u")
@@ -503,11 +502,9 @@ local function selectPlayer(plr, btn)
 	tween(btn, FAST, { BackgroundColor3 = Color3.fromRGB(40, 70, 140) })
 	local lbl = btn:FindFirstChild("NameLabel")
 	if lbl then tween(lbl, FAST, { TextColor3 = Color3.fromRGB(150, 190, 255) }) end
-
-	-- Tell every card about the new selection
-	notifyPlayerChanged(plr)
 end
 
+-- FIX 3: Real player avatars via GetUserThumbnailAsync (async, non-blocking)
 local function createPlayerButton(plr)
 	local btn = Instance.new("TextButton", PlayerScroll)
 	btn.Name                   = "PlayerBtn_" .. plr.Name
@@ -519,7 +516,7 @@ local function createPlayerButton(plr)
 	btn.BorderSizePixel        = 0
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
 
-	-- Avatar frame (circle)
+	-- Avatar container (circle)
 	local avFrame = Instance.new("Frame", btn)
 	avFrame.Name             = "Avatar"
 	avFrame.Size             = UDim2.new(0, 34, 0, 34)
@@ -528,6 +525,7 @@ local function createPlayerButton(plr)
 	avFrame.BorderSizePixel  = 0
 	Instance.new("UICorner", avFrame).CornerRadius = UDim.new(1, 0)
 
+	-- Initials fallback shown while thumbnail loads
 	local initLabel = Instance.new("TextLabel", avFrame)
 	initLabel.Size                  = UDim2.fromScale(1, 1)
 	initLabel.BackgroundTransparency = 1
@@ -536,6 +534,7 @@ local function createPlayerButton(plr)
 	initLabel.Font                  = Enum.Font.GothamBold
 	initLabel.TextSize              = 12
 
+	-- Actual headshot image (invisible until loaded)
 	local avImg = Instance.new("ImageLabel", avFrame)
 	avImg.Size                   = UDim2.fromScale(1, 1)
 	avImg.BackgroundTransparency = 1
@@ -544,6 +543,7 @@ local function createPlayerButton(plr)
 	avImg.ScaleType              = Enum.ScaleType.Crop
 	Instance.new("UICorner", avImg).CornerRadius = UDim.new(1, 0)
 
+	-- Load thumbnail in background — never yields the main thread
 	task.spawn(function()
 		local ok, url = pcall(function()
 			return Players:GetUserThumbnailAsync(
@@ -559,6 +559,7 @@ local function createPlayerButton(plr)
 		end
 	end)
 
+	-- Name label
 	local nameLabel = Instance.new("TextLabel", btn)
 	nameLabel.Name             = "NameLabel"
 	nameLabel.Size             = UDim2.new(1, -54, 0, 20)
@@ -571,6 +572,7 @@ local function createPlayerButton(plr)
 	nameLabel.TextXAlignment   = Enum.TextXAlignment.Left
 	nameLabel.TextTruncate     = Enum.TextTruncate.AtEnd
 
+	-- "you" tag for local player
 	if plr == LocalPlayer then
 		local youLabel = Instance.new("TextLabel", btn)
 		youLabel.Size             = UDim2.new(1, -54, 0, 14)
@@ -629,17 +631,24 @@ Right.Position               = UDim2.new(0, 220, 0, 52)
 Right.BackgroundTransparency = 1
 Right.BorderSizePixel        = 0
 
--- Horizontally scrollable filter bar
+-- FIX 4: Horizontally scrollable filter bar.
+-- The outer FilterBar clips horizontally but NOT vertically, so pills
+-- that are 30px tall are never cut off by the 46px bar height.
+-- The inner FilterScroll is a proper ScrollingFrame so any number of
+-- category pills can overflow and be reached by scrolling left/right.
 local FilterBar = Instance.new("Frame", Right)
 FilterBar.Size                   = UDim2.new(1, 0, 0, 46)
 FilterBar.BackgroundTransparency = 1
 FilterBar.BorderSizePixel        = 0
+-- Do NOT set ClipsDescendants on the outer bar — it would clip the
+-- pill shadows/strokes vertically. Clipping is handled by the inner
+-- ScrollingFrame's own scroll viewport.
 
 local FilterScroll = Instance.new("ScrollingFrame", FilterBar)
 FilterScroll.Size                 = UDim2.new(1, -24, 1, 0)
 FilterScroll.Position             = UDim2.new(0, 12, 0, 0)
 FilterScroll.BackgroundTransparency = 1
-FilterScroll.ScrollBarThickness   = 0
+FilterScroll.ScrollBarThickness   = 0    -- invisible scrollbar; user scrolls with mouse wheel
 FilterScroll.ScrollingDirection   = Enum.ScrollingDirection.X
 FilterScroll.AutomaticCanvasSize  = Enum.AutomaticSize.X
 FilterScroll.CanvasSize           = UDim2.new(0, 0, 0, 0)
@@ -671,7 +680,7 @@ ProductScroll.AutomaticCanvasSize  = Enum.AutomaticSize.Y
 ProductScroll.BorderSizePixel      = 0
 
 local Grid = Instance.new("UIGridLayout", ProductScroll)
-Grid.CellSize    = UDim2.new(0, 220, 0, 150)  -- slightly taller to fit price label
+Grid.CellSize    = UDim2.new(0, 220, 0, 140)
 Grid.CellPadding = UDim2.new(0, 10, 0, 10)
 Grid.SortOrder   = Enum.SortOrder.LayoutOrder
 
@@ -721,6 +730,8 @@ for i, cat in ipairs(Categories) do
 	fb.Font            = Enum.Font.Gotham
 	fb.TextSize        = 12
 	fb.Text            = cat
+	-- Fixed 30px height so top/bottom UIPadding on the ScrollingFrame
+	-- never squashes the pill regardless of container height
 	fb.Size            = UDim2.new(0, 0, 0, 30)
 	fb.AutomaticSize   = Enum.AutomaticSize.X
 	fb.BorderSizePixel = 0
@@ -750,12 +761,10 @@ end
 ------------------------------------------------
 -- PRODUCT CARD BUILDER
 ------------------------------------------------
-
--- Returns a buy button that spans full width when alone, or half-width at xOff
-local function makeButton(parent, text, xOff, width, color)
+local function makeButton(parent, text, xOff, color)
 	local btn = Instance.new("TextButton", parent)
-	btn.Size             = UDim2.new(width, -4, 0, 28)
-	btn.Position         = UDim2.new(xOff, 4, 1, -34)
+	btn.Size             = UDim2.new(0.48, 0, 0, 30)
+	btn.Position         = UDim2.new(xOff, 4, 1, -36)
 	btn.BackgroundColor3 = color
 	btn.Text             = text
 	btn.TextColor3       = Color3.fromRGB(220, 220, 220)
@@ -775,7 +784,6 @@ end
 
 local function createProductCard(data)
 	local accentColor = categoryColor(data.Category)
-	local giftable    = data.isGiftable == true  -- explicit opt-in
 
 	local card = Instance.new("Frame", ProductScroll)
 	card.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
@@ -813,7 +821,7 @@ local function createProductCard(data)
 
 	-- Product name
 	local title = Instance.new("TextLabel", card)
-	title.Size                   = UDim2.new(1, -20, 0, 44)
+	title.Size                   = UDim2.new(1, -20, 0, 50)
 	title.Position               = UDim2.new(0, 10, 0, 32)
 	title.BackgroundTransparency = 1
 	title.Text                   = data.Display
@@ -824,48 +832,11 @@ local function createProductCard(data)
 	title.TextYAlignment         = Enum.TextYAlignment.Top
 	title.TextWrapped            = true
 
-	-- Price label (Robux icon approximated with "R$" text)
-	local priceLabel = Instance.new("TextLabel", card)
-	priceLabel.Size                   = UDim2.new(1, -20, 0, 18)
-	priceLabel.Position               = UDim2.new(0, 10, 0, 78)
-	priceLabel.BackgroundTransparency = 1
-	priceLabel.Text                   = data.Price and formatPrice(data.Price) or "Free"
-	priceLabel.TextColor3             = Color3.fromRGB(100, 200, 100)   -- green for Robux feel
-	priceLabel.Font                   = Enum.Font.GothamBold
-	priceLabel.TextSize               = 13
-	priceLabel.TextXAlignment         = Enum.TextXAlignment.Left
+	local buyBtn  = makeButton(card, "Buy",    0.01, Color3.fromRGB(30,  60, 130))
+	local giftBtn = makeButton(card, "Gift →", 0.51, Color3.fromRGB(100, 35,  80))
 
-	-- Buttons: layout depends on whether this item is giftable
-	-- • Giftable  → Buy (48%) | Gift (48%) — gift hidden when self selected
-	-- • Not giftable → Buy (full width)
-	local buyBtn, giftBtn
-
-	if giftable then
-		buyBtn  = makeButton(card, "Buy",    0,    0.5, Color3.fromRGB(30,  60, 130))
-		giftBtn = makeButton(card, "Gift →", 0.5,  0.5, Color3.fromRGB(100, 35,  80))
-
-		-- Immediately set correct visibility based on current selection
-		giftBtn.Visible = (SelectedPlayer ~= LocalPlayer)
-
-		-- Re-evaluate whenever the selected player changes
-		table.insert(onPlayerChangedCallbacks, function(newPlayer)
-			if not card.Parent then return end  -- card was destroyed
-			local isSelf = (newPlayer == LocalPlayer)
-			giftBtn.Visible = not isSelf
-			-- Expand Buy to full width when Gift is hidden
-			buyBtn.Size     = UDim2.new(isSelf and 0.97 or 0.5, -4, 0, 28)
-		end)
-	else
-		-- Non-giftable: single full-width Buy button
-		buyBtn = makeButton(card, "Buy", 0, 0.97, Color3.fromRGB(30, 60, 130))
-	end
-
-	-- BUY handler
+	-- BUY — server expects: InvokeServer(productId)
 	buyBtn.MouseButton1Click:Connect(function()
-		if not data.NormalId then
-			showToast("This item has no purchasable ID.", Color3.fromRGB(200, 80, 80))
-			return
-		end
 		setButtonLoading(buyBtn, true, "Buy")
 		task.spawn(function()
 			local ok, err = pcall(function()
@@ -880,40 +851,31 @@ local function createProductCard(data)
 		end)
 	end)
 
-	-- GIFT handler (only wired when giftable)
-	if giftable and giftBtn then
-		giftBtn.MouseButton1Click:Connect(function()
-			-- Extra runtime guard: never gift to self even if button is visible
-			if SelectedPlayer == LocalPlayer then
-				showToast("You can't gift to yourself.", Color3.fromRGB(200, 80, 80))
-				return
-			end
-			local target = Players:GetPlayerByUserId(SelectedPlayer.UserId)
-			if not target then
-				showToast("That player has left the game.", Color3.fromRGB(200, 80, 80))
-				return
-			end
-			if not data.NormalId then
-				showToast("This item cannot be gifted.", Color3.fromRGB(200, 80, 80))
-				return
-			end
-			setButtonLoading(giftBtn, true, "Gift →")
-			task.spawn(function()
-				local ok, err = pcall(function()
-					GiftRemote:FireServer({
-						productId    = data.NormalId,
-						targetUserId = target.UserId,
-					})
-				end)
-				setButtonLoading(giftBtn, false, "Gift →")
-				if ok then
-					showToast("Gifted " .. data.Display .. " to " .. target.Name, categoryColor(data.Category))
-				else
-					showToast("Gift failed: " .. tostring(err), Color3.fromRGB(200, 80, 80))
-				end
+	-- GIFT — server expects: FireServer({ productId = ..., targetUserId = ... })
+	-- Uses GiftId when available (separate gift-specific product id), else NormalId.
+	giftBtn.MouseButton1Click:Connect(function()
+		local target = Players:GetPlayerByUserId(SelectedPlayer.UserId)
+		if not target then
+			showToast("That player has left the game.", Color3.fromRGB(200, 80, 80))
+			return
+		end
+		local giftProductId = data.NormalId
+		setButtonLoading(giftBtn, true, "Gift →")
+		task.spawn(function()
+			local ok, err = pcall(function()
+				GiftRemote:FireServer({
+					productId    = giftProductId,
+					targetUserId = target.UserId,
+				})
 			end)
+			setButtonLoading(giftBtn, false, "Gift →")
+			if ok then
+				showToast("Gifted " .. data.Display .. " to " .. target.Name, categoryColor(data.Category))
+			else
+				showToast("Gift failed: " .. tostring(err), Color3.fromRGB(200, 80, 80))
+			end
 		end)
-	end
+	end)
 
 	table.insert(ProductCards, { Card = card, Category = data.Category })
 end
