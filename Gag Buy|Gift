@@ -210,9 +210,9 @@ local Products = {
 	["Season 4 Seed Pack"] = {Display = "Season 4 Seed Pack"; Category = "Seed Pack"},
     -- ufo shard
 	--////////////////////////////////////////////////////
-	["UFO Shard x1"] = {Display = "UFO Shard x1"; Category = "Pet Shard"},
-	["UFO Shard x3"] = {Display = "UFO Shard x3"; Category = "Pet Shard"},
-	["UFO Shard x10"] = {Display = "UFO Shard x10"; Category = "Pet Shard"},
+	["UFO Shard x1"] = {NormalId = 3546404036; Display = "UFO Shard x1"; Category = "Pet Shard"},
+	["UFO Shard x3"] = {NormalId = 3546404197; Display = "UFO Shard x3"; Category = "Pet Shard"},
+	["UFO Shard x10"] = {NormalId = 3546404927; Display = "UFO Shard x10"; Category = "Pet Shard"},
    
 }
 
