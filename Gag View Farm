@@ -1,16 +1,18 @@
 --[[
-	Farm Viewer Pro — Rewritten
-	Improvements:
-	 • X close button (replaces toggle, re-open with keybind R or mobile button)
-	 • Smooth drag with clamp to screen bounds
-	 • Debounced search (no lag on every keystroke)
-	 • Animated hover states via TweenService
-	 • Resize handle (drag bottom-right corner)
-	 • Live refresh badge on player buttons (plant count)
-	 • Stat bar: shows total plants + mutation count in current view
-	 • Keyboard shortcut: R to reopen GUI
-	 • Mobile-friendly reopen button
-	 • Cleaner layout, no magic numbers scattered everywhere
+	Farm Viewer Pro v4
+	─────────────────────────────────────────────
+	CHANGES FROM v3:
+	  • MISC tab is now a dedicated full-panel overlay (not crammed in left panel)
+	  • ESP works on ALL farms regardless of selected player
+	  • Per-player block list — exclude specific players from ESP
+	  • Hover popup works even when main UI is hidden
+	  • Mutation pill colors are per-mutation-name (rainbow hashing)
+	  • Reduced RenderStepped allocations (no table creation per frame)
+	  • ESP refresh is debounced + uses DescendantAdded instead of polling
+	  • Right-panel MISC button opens overlay cleanly
+	  • More polished card designs with shimmer borders
+	  • Chams use AlwaysOnTop highlight correctly
+	─────────────────────────────────────────────
 --]]
 
 local Players      = game:GetService("Players")
@@ -20,1211 +22,1431 @@ local RunService   = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
+local mouse  = player:GetMouse()
 
-------------------------------------------------
+-- ════════════════════════════════════════════
 -- CONSTANTS
-------------------------------------------------
-local COLORS = {
-	bg          = Color3.fromRGB(10,  10,  15),
-	panel       = Color3.fromRGB(16,  16,  24),
-	card        = Color3.fromRGB(20,  20,  32),
-	cardHoverMH = Color3.fromRGB(18,  38,  28),
-	cardHoverSH = Color3.fromRGB(26,  22,  50),
-	header      = Color3.fromRGB(14,  14,  20),
-	stroke      = Color3.fromRGB(52,  50,  80),
-	strokeHi    = Color3.fromRGB(100, 90, 170),
-	strokeGreen = Color3.fromRGB(40,  80,  58),
-	strokeGreenHi = Color3.fromRGB(60, 155, 100),
-	textPrimary = Color3.fromRGB(225, 220, 255),
-	textSub     = Color3.fromRGB(95,  90, 145),
-	textMuted   = Color3.fromRGB(65,  62, 100),
-	textGreen   = Color3.fromRGB(160, 220, 185),
-	mutPill     = Color3.fromRGB(50,  34,  80),
-	mutPillText = Color3.fromRGB(185, 155, 255),
-	sortActive  = Color3.fromRGB(52,  44,  96),
-	accent      = Color3.fromRGB(105, 92, 195),
-	red         = Color3.fromRGB(210, 70,  70),
-	scrollBar   = Color3.fromRGB(72,  68, 118),
+-- ════════════════════════════════════════════
+local C = {
+	bg           = Color3.fromRGB(8,   8,  14),
+	panel        = Color3.fromRGB(13,  13,  21),
+	card         = Color3.fromRGB(18,  18,  30),
+	cardHoverMH  = Color3.fromRGB(14,  34,  24),
+	cardHoverSH  = Color3.fromRGB(22,  18,  44),
+	header       = Color3.fromRGB(11,  11,  18),
+	stroke       = Color3.fromRGB(44,  42,  70),
+	strokeHi     = Color3.fromRGB(90,  80, 160),
+	strokeGreen  = Color3.fromRGB(36,  72,  52),
+	strokeGreenHi= Color3.fromRGB(50, 140,  90),
+	text         = Color3.fromRGB(220, 215, 255),
+	textSub      = Color3.fromRGB(90,  85, 140),
+	textMuted    = Color3.fromRGB(58,  55,  90),
+	textGreen    = Color3.fromRGB(140, 210, 170),
+	textAmber    = Color3.fromRGB(255, 200, 100),
+	textRed      = Color3.fromRGB(235,  95,  95),
+	mutPill      = Color3.fromRGB(44,  30,  72),
+	mutPillTxt   = Color3.fromRGB(180, 148, 255),
+	sortActive   = Color3.fromRGB(46,  40,  88),
+	accent       = Color3.fromRGB(100,  86, 190),
+	accentGlow   = Color3.fromRGB(130, 115, 220),
+	scrollBar    = Color3.fromRGB(60,  56, 100),
+	espAll       = Color3.fromRGB(80,  200, 120),   -- "all farms" tint
+	espFruit     = Color3.fromRGB(255, 180,  45),
+	espMut       = Color3.fromRGB(215,  70, 255),
+	toggleOn     = Color3.fromRGB(45,  185, 115),
+	toggleOff    = Color3.fromRGB(44,  42,  72),
+	miscBg       = Color3.fromRGB(9,    9,  16),
+	miscCard     = Color3.fromRGB(15,  14,  24),
+	blockBg      = Color3.fromRGB(52,  18,  18),
+	blockStroke  = Color3.fromRGB(100,  35,  35),
 }
 
-local TWEEN_INFO = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+-- Mutation name → vivid pill color (deterministic hash)
+local MUT_COLORS = {
+	["Golden"]       = {bg=Color3.fromRGB(70,52,10),  tx=Color3.fromRGB(255,215,80)},
+	["Rainbow"]      = {bg=Color3.fromRGB(60,20,60),  tx=Color3.fromRGB(230,130,255)},
+	["Giant"]        = {bg=Color3.fromRGB(18,50,70),  tx=Color3.fromRGB(80,190,255)},
+	["Shiny"]        = {bg=Color3.fromRGB(55,55,15),  tx=Color3.fromRGB(240,240,120)},
+	["Wet"]          = {bg=Color3.fromRGB(10,40,65),  tx=Color3.fromRGB(80,170,240)},
+	["Chocolate"]    = {bg=Color3.fromRGB(52,28,10),  tx=Color3.fromRGB(200,140,80)},
+	["Moonlit"]      = {bg=Color3.fromRGB(22,22,60),  tx=Color3.fromRGB(160,160,255)},
+	["Frozen"]       = {bg=Color3.fromRGB(14,44,58),  tx=Color3.fromRGB(140,230,255)},
+	["Zombified"]    = {bg=Color3.fromRGB(22,44,10),  tx=Color3.fromRGB(130,230,80)},
+	["Disco"]        = {bg=Color3.fromRGB(60,10,50),  tx=Color3.fromRGB(255,100,220)},
+	["Shocked"]      = {bg=Color3.fromRGB(50,46,6),   tx=Color3.fromRGB(255,240,60)},
+	["Heavenly"]     = {bg=Color3.fromRGB(48,44,16),  tx=Color3.fromRGB(255,248,180)},
+	["Pollinated"]   = {bg=Color3.fromRGB(44,40,8),   tx=Color3.fromRGB(220,200,80)},
+	["Bloodlit"]     = {bg=Color3.fromRGB(56,10,10),  tx=Color3.fromRGB(240,80,80)},
+	["Verdant"]      = {bg=Color3.fromRGB(10,48,20),  tx=Color3.fromRGB(90,230,130)},
+}
+local function getMutColor(name)
+	local mc=MUT_COLORS[name]
+	if mc then return mc.bg, mc.tx end
+	-- Hash fallback for unknown mutations
+	local h=0; for i=1,#name do h=(h*31+string.byte(name,i))%360 end
+	local r=Color3.fromHSV(h/360, 0.65, 0.55)
+	local t=Color3.fromHSV(h/360, 0.45, 1.00)
+	return r, t
+end
+
+local TW_FAST = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TW_MED  = TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local EXCLUDED_ATTRS = {
 	DoneGrowTime=true, IsOutlined=true, MaxAge=true,
 	MasteryGrowthMulti=true, MasterySizeMulti=true, GrowRateMulti=true,
 }
 
-------------------------------------------------
+-- ESP live state
+local ESP = {
+	enabled        = false,
+	billboards     = true,
+	hoverLabels    = true,
+	chams          = false,
+	highlightStyle = "outline",   -- "outline"|"fill"|"both"
+	colorMode      = "type",      -- "type"|"mutation"|"rarity"
+	billboardDetail= "full",      -- "compact"|"full"
+	refreshRate    = 3,
+	blockedPlayers = {},          -- [userId] = true
+}
+
+-- ════════════════════════════════════════════
 -- UTILITIES
-------------------------------------------------
-local function tween(obj, props)
-	TweenService:Create(obj, TWEEN_INFO, props):Play()
-end
+-- ════════════════════════════════════════════
+local function tw(obj, props, info) TweenService:Create(obj, info or TW_FAST, props):Play() end
+local function clamp(v,lo,hi) return math.max(lo,math.min(hi,v)) end
+local function corner(p,r) local c=Instance.new("UICorner",p); c.CornerRadius=UDim.new(0,r or 10); return c end
+local function stroke(p,col,th) local s=Instance.new("UIStroke",p); s.Color=col or C.stroke; s.Thickness=th or 1; return s end
 
-local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
-
-local function uiCorner(parent, radius)
-	local c = Instance.new("UICorner", parent)
-	c.CornerRadius = UDim.new(0, radius or 10)
-	return c
-end
-
-local function uiStroke(parent, color, thickness)
-	local s = Instance.new("UIStroke", parent)
-	s.Color = color or COLORS.stroke
-	s.Thickness = thickness or 1
-	return s
-end
-
-local function makeLabel(parent, props)
-	local lbl = Instance.new("TextLabel", parent)
-	lbl.BackgroundTransparency = 1
-	lbl.BorderSizePixel = 0
-	lbl.Font = props.font or Enum.Font.Gotham
-	lbl.TextSize = props.size or 13
-	lbl.TextColor3 = props.color or COLORS.textPrimary
-	lbl.Text = props.text or ""
-	lbl.Size = props.sz or UDim2.new(1, 0, 0, 20)
-	lbl.Position = props.pos or UDim2.new(0, 0, 0, 0)
-	lbl.TextXAlignment = props.align or Enum.TextXAlignment.Left
-	lbl.TextYAlignment = props.valign or Enum.TextYAlignment.Center
-	lbl.TextTruncate = props.truncate or Enum.TextTruncate.None
-	return lbl
+local function lbl(parent, props)
+	local L=Instance.new("TextLabel",parent)
+	L.BackgroundTransparency=1; L.BorderSizePixel=0
+	L.Font=props.font or Enum.Font.Gotham
+	L.TextSize=props.size or 13
+	L.TextColor3=props.color or C.text
+	L.Text=props.text or ""
+	L.Size=props.sz or UDim2.new(1,0,0,20)
+	L.Position=props.pos or UDim2.new(0,0,0,0)
+	L.TextXAlignment=props.xa or Enum.TextXAlignment.Left
+	L.TextYAlignment=props.ya or Enum.TextYAlignment.Center
+	L.TextTruncate=props.trunc or Enum.TextTruncate.None
+	L.RichText=props.rich or false
+	L.ZIndex=props.zi or 1
+	return L
 end
 
 local function getMutations(model)
-	local mutations = {}
-	local ok, attrs = pcall(function() return model:GetAttributes() end)
-	if not ok then return mutations end
-	for name, value in pairs(attrs) do
-		if type(value) == "boolean" and not EXCLUDED_ATTRS[name] then
-			table.insert(mutations, name)
+	local out={}
+	local ok,attrs=pcall(function() return model:GetAttributes() end)
+	if not ok then return out end
+	for name,value in pairs(attrs) do
+		if type(value)=="boolean" and not EXCLUDED_ATTRS[name] then
+			table.insert(out,name)
 		end
 	end
-	table.sort(mutations)
-	return mutations
+	table.sort(out); return out
 end
 
-local function getFarm(plr)
-	local farmFolder = workspace:FindFirstChild("Farm")
-	if not farmFolder then return nil end
-	for _, farm in pairs(farmFolder:GetChildren()) do
-		local imp  = farm:FindFirstChild("Important")
-		local data = imp and imp:FindFirstChild("Data")
-		local own  = data and data:FindFirstChild("Owner")
-		if own and (own.Value == plr.UserId or own.Value == plr.Name) then
-			return imp
+local function getAllFarms()
+	local F=workspace:FindFirstChild("Farm"); if not F then return {} end
+	local out={}
+	for _,farm in pairs(F:GetChildren()) do
+		local imp=farm:FindFirstChild("Important")
+		local data=imp and imp:FindFirstChild("Data")
+		local own=data and data:FindFirstChild("Owner")
+		if own then
+			local uid=tonumber(own.Value) or 0
+			local name=tostring(own.Value)
+			-- find matching player
+			local plr=nil
+			for _,p in ipairs(Players:GetPlayers()) do
+				if p.UserId==uid or p.Name==name then plr=p; break end
+			end
+			table.insert(out,{imp=imp, owner=own.Value, player=plr})
 		end
 	end
-	return nil
+	return out
 end
 
-local function getInitials(name)
-	return string.upper(string.sub(name, 1, 2))
+local function getFarmForPlayer(plr)
+	local F=workspace:FindFirstChild("Farm"); if not F then return nil end
+	for _,farm in pairs(F:GetChildren()) do
+		local imp=farm:FindFirstChild("Important")
+		local data=imp and imp:FindFirstChild("Data")
+		local own=data and data:FindFirstChild("Owner")
+		if own and (own.Value==plr.UserId or own.Value==plr.Name) then return imp end
+	end
 end
 
-local function debounce(fn, delay)
-	local thread
+local function getW(m) local w=m:FindFirstChild("Weight"); return w and w.Value or 0 end
+local function getV(m) local v=m:FindFirstChild("Variant"); return v and tostring(v.Value) or nil end
+local function getFruitCount(m) local f=m:FindFirstChild("Fruits"); return f and #f:GetChildren() or 0 end
+local function getAge(m) local a=m:FindFirstChild("Age") or m:FindFirstChild("GrowTime"); return a and a.Value or 0 end
+local function initials(name) return string.upper(string.sub(name,1,2)) end
+
+local function debounce(fn,delay)
+	local t
 	return function(...)
-		local args = {...}
-		if thread then task.cancel(thread) end
-		thread = task.delay(delay, function()
-			fn(table.unpack(args))
+		local a={...}; if t then task.cancel(t) end
+		t=task.delay(delay,function() fn(table.unpack(a)) end)
+	end
+end
+
+local function getESPColor(model, mutations)
+	if ESP.colorMode=="mutation" then
+		return #mutations>0 and C.espMut or Color3.fromRGB(100,95,170)
+	elseif ESP.colorMode=="rarity" then
+		local mc=#mutations
+		if mc==0 then return Color3.fromRGB(120,120,160)
+		elseif mc==1 then return Color3.fromRGB(70,170,255)
+		elseif mc==2 then return Color3.fromRGB(170,70,255)
+		else return Color3.fromRGB(255,100,30) end
+	else
+		local isFruit=model.Parent and model.Parent.Name=="Fruits"
+		if isFruit then return C.espFruit end
+		local isMulti=model:FindFirstChild("Fruits")~=nil
+		return isMulti and Color3.fromRGB(60,210,130) or Color3.fromRGB(100,90,220)
+	end
+end
+
+-- ════════════════════════════════════════════
+-- SCREEN GUI
+-- ════════════════════════════════════════════
+local gui=Instance.new("ScreenGui")
+gui.Name="FarmViewerPro4"
+gui.ResetOnSpawn=false
+gui.DisplayOrder=10
+gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+gui.IgnoreGuiInset=true
+gui.Parent=player:WaitForChild("PlayerGui")
+
+-- Re-open button (shown when main is hidden)
+local reopenBtn=Instance.new("TextButton",gui)
+reopenBtn.Size=UDim2.new(0,148,0,36)
+reopenBtn.Position=UDim2.new(0,16,0,72)
+reopenBtn.BackgroundColor3=Color3.fromRGB(18,16,34)
+reopenBtn.TextColor3=C.text
+reopenBtn.Font=Enum.Font.GothamBold
+reopenBtn.TextSize=13
+reopenBtn.Text="⊞  Farm Viewer Pro"
+reopenBtn.BorderSizePixel=0
+reopenBtn.Visible=false
+corner(reopenBtn,9); stroke(reopenBtn,C.stroke,1.2)
+
+-- ════════════════════════════════════════════
+-- MAIN FRAME
+-- ════════════════════════════════════════════
+local main=Instance.new("Frame",gui)
+main.Size=UDim2.new(0,740,0,620)
+main.Position=UDim2.new(0,16,0,72)
+main.BackgroundColor3=C.bg
+main.BorderSizePixel=0
+main.ClipsDescendants=true
+corner(main,16); stroke(main,C.stroke,1.5)
+
+local uiScale=Instance.new("UIScale",main)
+local function updateScale()
+	local vp=camera.ViewportSize
+	uiScale.Scale=clamp(vp.X/1080,0.52,1)
+end
+camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale); updateScale()
+
+-- DRAG
+local dragging,dragStart,startPos=false,nil,nil
+main.InputBegan:Connect(function(inp)
+	if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+		dragging=true; dragStart=inp.Position; startPos=main.Position
+	end
+end)
+UIS.InputChanged:Connect(function(inp)
+	if not dragging then return end
+	if inp.UserInputType~=Enum.UserInputType.MouseMovement and inp.UserInputType~=Enum.UserInputType.Touch then return end
+	local d=inp.Position-dragStart; local vp=camera.ViewportSize; local sc=uiScale.Scale
+	main.Position=UDim2.new(0,clamp(startPos.X.Offset+d.X,0,vp.X-main.Size.X.Offset*sc),
+		0,clamp(startPos.Y.Offset+d.Y,0,vp.Y-main.Size.Y.Offset*sc))
+end)
+UIS.InputEnded:Connect(function(inp)
+	if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then dragging=false end
+end)
+
+-- ════════════════════════════════════════════
+-- HEADER
+-- ════════════════════════════════════════════
+local header=Instance.new("Frame",main)
+header.Size=UDim2.new(1,0,0,56)
+header.BackgroundColor3=C.header
+header.BorderSizePixel=0; corner(header,16)
+local hFix=Instance.new("Frame",header)
+hFix.Size=UDim2.new(1,0,0.5,0); hFix.Position=UDim2.new(0,0,0.5,0)
+hFix.BackgroundColor3=C.header; hFix.BorderSizePixel=0
+
+-- ESP status pill in header
+local espPill=Instance.new("TextLabel",header)
+espPill.Size=UDim2.new(0,0,0,20); espPill.AutomaticSize=Enum.AutomaticSize.X
+espPill.Position=UDim2.new(0,14,0,10)
+espPill.BackgroundColor3=Color3.fromRGB(30,26,52)
+espPill.TextColor3=C.textMuted; espPill.Font=Enum.Font.GothamBold; espPill.TextSize=9
+espPill.Text=" ● ESP OFF "; espPill.BorderSizePixel=0; corner(espPill,10)
+
+lbl(header,{text="Farm Viewer Pro",font=Enum.Font.GothamBold,size=16,color=C.text,
+	sz=UDim2.new(0.5,-10,0,22),pos=UDim2.new(0.5,-230,0,8)})
+local headerSub=lbl(header,{text="Select a player to inspect",size=11,color=C.textSub,
+	sz=UDim2.new(0.5,-10,0,14),pos=UDim2.new(0.5,-230,0,32)})
+
+-- MISC button (opens overlay)
+local miscOpenBtn=Instance.new("TextButton",header)
+miscOpenBtn.Size=UDim2.new(0,72,0,28); miscOpenBtn.Position=UDim2.new(1,-112,0.5,-14)
+miscOpenBtn.BackgroundColor3=Color3.fromRGB(26,22,50)
+miscOpenBtn.TextColor3=C.accentGlow; miscOpenBtn.Font=Enum.Font.GothamBold
+miscOpenBtn.TextSize=12; miscOpenBtn.Text="⚙ MISC"; miscOpenBtn.BorderSizePixel=0
+corner(miscOpenBtn,7); stroke(miscOpenBtn,C.stroke)
+miscOpenBtn.MouseEnter:Connect(function() tw(miscOpenBtn,{BackgroundColor3=Color3.fromRGB(38,32,72)}) end)
+miscOpenBtn.MouseLeave:Connect(function() tw(miscOpenBtn,{BackgroundColor3=Color3.fromRGB(26,22,50)}) end)
+
+local closeBtn=Instance.new("TextButton",header)
+closeBtn.Size=UDim2.new(0,28,0,28); closeBtn.Position=UDim2.new(1,-38,0.5,-14)
+closeBtn.BackgroundColor3=Color3.fromRGB(56,26,26); closeBtn.TextColor3=Color3.fromRGB(225,110,110)
+closeBtn.Font=Enum.Font.GothamBold; closeBtn.TextSize=14; closeBtn.Text="✕"; closeBtn.BorderSizePixel=0
+corner(closeBtn,7); stroke(closeBtn,Color3.fromRGB(90,36,36))
+closeBtn.MouseEnter:Connect(function() tw(closeBtn,{BackgroundColor3=Color3.fromRGB(84,30,30)}) end)
+closeBtn.MouseLeave:Connect(function() tw(closeBtn,{BackgroundColor3=Color3.fromRGB(56,26,26)}) end)
+closeBtn.MouseButton1Click:Connect(function() main.Visible=false; reopenBtn.Visible=true end)
+reopenBtn.MouseButton1Click:Connect(function() main.Visible=true; reopenBtn.Visible=false end)
+UIS.InputBegan:Connect(function(inp,gp)
+	if gp then return end
+	if inp.KeyCode==Enum.KeyCode.R and not main.Visible then main.Visible=true; reopenBtn.Visible=false end
+end)
+
+local headerLine=Instance.new("Frame",main)
+headerLine.Size=UDim2.new(1,-28,0,1); headerLine.Position=UDim2.new(0,14,0,56)
+headerLine.BackgroundColor3=C.stroke; headerLine.BorderSizePixel=0
+
+local statBar=Instance.new("Frame",main)
+statBar.Size=UDim2.new(1,-184,0,22); statBar.Position=UDim2.new(0,178,0,58)
+statBar.BackgroundTransparency=1
+local statLbl=lbl(statBar,{text="",size=10,color=C.textMuted,font=Enum.Font.GothamBold,sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Right})
+
+-- ════════════════════════════════════════════
+-- LEFT PANEL (player list only)
+-- ════════════════════════════════════════════
+local leftPanel=Instance.new("Frame",main)
+leftPanel.Size=UDim2.new(0,162,1,-62)
+leftPanel.Position=UDim2.new(0,8,0,60)
+leftPanel.BackgroundColor3=C.panel
+leftPanel.BorderSizePixel=0; corner(leftPanel,12); stroke(leftPanel,C.stroke)
+
+local leftHeader=Instance.new("Frame",leftPanel)
+leftHeader.Size=UDim2.new(1,0,0,30); leftHeader.BackgroundColor3=Color3.fromRGB(10,10,18); leftHeader.BorderSizePixel=0
+corner(leftHeader,12)
+local lhFix=Instance.new("Frame",leftHeader); lhFix.Size=UDim2.new(1,0,0.5,0); lhFix.Position=UDim2.new(0,0,0.5,0)
+lhFix.BackgroundColor3=Color3.fromRGB(10,10,18); lhFix.BorderSizePixel=0
+lbl(leftHeader,{text="PLAYERS",font=Enum.Font.GothamBold,size=9,color=C.textSub,sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
+
+local leftDiv=Instance.new("Frame",leftPanel)
+leftDiv.Size=UDim2.new(1,-16,0,1); leftDiv.Position=UDim2.new(0,8,0,30)
+leftDiv.BackgroundColor3=C.stroke; leftDiv.BorderSizePixel=0
+
+local plrScroll=Instance.new("ScrollingFrame",leftPanel)
+plrScroll.Position=UDim2.new(0,5,0,36); plrScroll.Size=UDim2.new(1,-10,1,-42)
+plrScroll.BackgroundTransparency=1; plrScroll.ScrollBarThickness=3
+plrScroll.ScrollBarImageColor3=C.scrollBar
+plrScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y; plrScroll.BorderSizePixel=0
+local plrLayout=Instance.new("UIListLayout",plrScroll); plrLayout.Padding=UDim.new(0,4)
+
+-- ════════════════════════════════════════════
+-- RIGHT PANEL
+-- ════════════════════════════════════════════
+local rightPanel=Instance.new("Frame",main)
+rightPanel.Size=UDim2.new(1,-180,1,-62)
+rightPanel.Position=UDim2.new(0,174,0,60)
+rightPanel.BackgroundColor3=C.panel
+rightPanel.BorderSizePixel=0; corner(rightPanel,12); stroke(rightPanel,C.stroke)
+
+local rightTopBar=Instance.new("Frame",rightPanel)
+rightTopBar.Size=UDim2.new(1,0,0,40); rightTopBar.BackgroundTransparency=1
+
+local backBtn=Instance.new("TextButton",rightTopBar)
+backBtn.Size=UDim2.new(0,60,0,24); backBtn.Position=UDim2.new(0,10,0.5,-12)
+backBtn.BackgroundColor3=Color3.fromRGB(26,24,46); backBtn.TextColor3=Color3.fromRGB(140,130,210)
+backBtn.Font=Enum.Font.GothamBold; backBtn.TextSize=12; backBtn.Text="← Back"
+backBtn.BorderSizePixel=0; backBtn.Visible=false
+corner(backBtn,6); stroke(backBtn,Color3.fromRGB(52,48,92))
+backBtn.MouseEnter:Connect(function() tw(backBtn,{BackgroundColor3=Color3.fromRGB(38,34,68)}) end)
+backBtn.MouseLeave:Connect(function() tw(backBtn,{BackgroundColor3=Color3.fromRGB(26,24,46)}) end)
+
+local breadcrumb=lbl(rightTopBar,{text="Select a player",font=Enum.Font.GothamBold,size=13,color=C.text,
+	sz=UDim2.new(1,-86,1,0),pos=UDim2.new(0,80,0,0),trunc=Enum.TextTruncate.AtEnd})
+
+local rDiv1=Instance.new("Frame",rightPanel)
+rDiv1.Size=UDim2.new(1,-16,0,1); rDiv1.Position=UDim2.new(0,8,0,40)
+rDiv1.BackgroundColor3=C.stroke; rDiv1.BorderSizePixel=0
+
+local searchBox=Instance.new("TextBox",rightPanel)
+searchBox.Size=UDim2.new(1,-16,0,26); searchBox.Position=UDim2.new(0,8,0,47)
+searchBox.BackgroundColor3=Color3.fromRGB(18,18,30)
+searchBox.TextColor3=Color3.fromRGB(195,190,235)
+searchBox.PlaceholderText="Search plants or fruits…"
+searchBox.PlaceholderColor3=C.textMuted
+searchBox.Font=Enum.Font.Gotham; searchBox.TextSize=12; searchBox.Text=""
+searchBox.ClearTextOnFocus=false; searchBox.BorderSizePixel=0
+searchBox.TextXAlignment=Enum.TextXAlignment.Left; searchBox.Visible=false
+corner(searchBox,6); stroke(searchBox,C.stroke)
+local sPad=Instance.new("UIPadding",searchBox); sPad.PaddingLeft=UDim.new(0,8)
+
+local filterBar=Instance.new("Frame",rightPanel)
+filterBar.Size=UDim2.new(1,-16,0,24); filterBar.Position=UDim2.new(0,8,0,79)
+filterBar.BackgroundTransparency=1; filterBar.Visible=false
+local fLayout=Instance.new("UIListLayout",filterBar)
+fLayout.FillDirection=Enum.FillDirection.Horizontal; fLayout.Padding=UDim.new(0,4)
+
+local sortBar=Instance.new("Frame",rightPanel)
+sortBar.Size=UDim2.new(1,-16,0,24); sortBar.Position=UDim2.new(0,8,0,109)
+sortBar.BackgroundTransparency=1; sortBar.Visible=false
+local sLayout=Instance.new("UIListLayout",sortBar)
+sLayout.FillDirection=Enum.FillDirection.Horizontal; sLayout.Padding=UDim.new(0,4)
+
+local sortDiv=Instance.new("Frame",rightPanel)
+sortDiv.Size=UDim2.new(1,-16,0,1); sortDiv.Position=UDim2.new(0,8,0,137)
+sortDiv.BackgroundColor3=C.stroke; sortDiv.BorderSizePixel=0; sortDiv.Visible=false
+
+local sortMode="name_az"; local mutationsOnly=false; local sortButtons={}
+
+local function makeSmallBtn(parent, text, mode, isFilter)
+	local btn=Instance.new("TextButton",parent)
+	btn.AutomaticSize=Enum.AutomaticSize.X; btn.Size=UDim2.new(0,0,1,0)
+	btn.BackgroundColor3=Color3.fromRGB(22,20,38)
+	btn.TextColor3=isFilter and Color3.fromRGB(145,115,235) or Color3.fromRGB(125,118,195)
+	btn.Font=Enum.Font.GothamBold; btn.TextSize=10; btn.Text=" "..text.." "; btn.BorderSizePixel=0
+	corner(btn,5); local bS=stroke(btn,C.stroke,0.8)
+	if mode then sortButtons[mode]={btn=btn,s=bS} end
+	return btn, bS
+end
+
+local mutOnlyBtn,mutOnlyS=makeSmallBtn(filterBar,"⬥ Mutations Only",nil,true)
+makeSmallBtn(sortBar,"Name A→Z","name_az")
+makeSmallBtn(sortBar,"Name Z→A","name_za")
+makeSmallBtn(sortBar,"Weight ↓","weight_desc")
+makeSmallBtn(sortBar,"Weight ↑","weight_asc")
+makeSmallBtn(sortBar,"Mutations ↓","mutations_desc")
+makeSmallBtn(sortBar,"Fruits ↓","fruit_desc")
+makeSmallBtn(sortBar,"Age ↓","age_desc")
+
+local function updateSortColors()
+	for mode,data in pairs(sortButtons) do
+		local on=mode==sortMode
+		tw(data.btn,{BackgroundColor3=on and C.sortActive or Color3.fromRGB(22,20,38),
+			TextColor3=on and C.text or Color3.fromRGB(125,118,195)})
+		data.s.Color=on and C.accent or C.stroke
+	end
+	local mo=mutationsOnly
+	tw(mutOnlyBtn,{BackgroundColor3=mo and Color3.fromRGB(40,26,68) or Color3.fromRGB(22,20,38),
+		TextColor3=mo and C.mutPillTxt or Color3.fromRGB(145,115,235)})
+	mutOnlyS.Color=mo and Color3.fromRGB(90,62,168) or C.stroke
+end
+updateSortColors()
+
+local mainScroll=Instance.new("ScrollingFrame",rightPanel)
+mainScroll.Position=UDim2.new(0,6,0,44); mainScroll.Size=UDim2.new(1,-12,1,-50)
+mainScroll.BackgroundTransparency=1; mainScroll.ScrollBarThickness=3
+mainScroll.ScrollBarImageColor3=C.scrollBar
+mainScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y; mainScroll.BorderSizePixel=0
+local scLayout=Instance.new("UIListLayout",mainScroll); scLayout.Padding=UDim.new(0,6)
+local scPad=Instance.new("UIPadding",mainScroll)
+scPad.PaddingBottom=UDim.new(0,8); scPad.PaddingLeft=UDim.new(0,2); scPad.PaddingRight=UDim.new(0,2)
+
+-- ════════════════════════════════════════════
+-- MISC OVERLAY (full panel on top of right)
+-- ════════════════════════════════════════════
+local miscOverlay=Instance.new("Frame",main)
+miscOverlay.Size=UDim2.new(1,-180,1,-62)
+miscOverlay.Position=UDim2.new(0,174,0,60)
+miscOverlay.BackgroundColor3=C.miscBg
+miscOverlay.BorderSizePixel=0; miscOverlay.Visible=false; miscOverlay.ZIndex=8
+corner(miscOverlay,12); stroke(miscOverlay,C.stroke)
+
+local moHeader=Instance.new("Frame",miscOverlay)
+moHeader.Size=UDim2.new(1,0,0,44); moHeader.BackgroundColor3=Color3.fromRGB(10,10,18); moHeader.BorderSizePixel=0
+corner(moHeader,12)
+local moHFix=Instance.new("Frame",moHeader); moHFix.Size=UDim2.new(1,0,0.5,0); moHFix.Position=UDim2.new(0,0,0.5,0)
+moHFix.BackgroundColor3=Color3.fromRGB(10,10,18); moHFix.BorderSizePixel=0
+
+lbl(moHeader,{text="⚙  Settings & ESP",font=Enum.Font.GothamBold,size=14,color=C.text,sz=UDim2.new(1,-80,0,22),pos=UDim2.new(0,16,0,5)})
+lbl(moHeader,{text="Configure ESP, visuals and player filters",size=10,color=C.textSub,sz=UDim2.new(1,-80,0,14),pos=UDim2.new(0,16,0,26)})
+
+local miscCloseBtn=Instance.new("TextButton",moHeader)
+miscCloseBtn.Size=UDim2.new(0,60,0,26); miscCloseBtn.Position=UDim2.new(1,-70,0.5,-13)
+miscCloseBtn.BackgroundColor3=Color3.fromRGB(22,20,40); miscCloseBtn.TextColor3=C.textSub
+miscCloseBtn.Font=Enum.Font.GothamBold; miscCloseBtn.TextSize=11; miscCloseBtn.Text="← Back"
+miscCloseBtn.BorderSizePixel=0; corner(miscCloseBtn,6); stroke(miscCloseBtn,C.stroke)
+miscCloseBtn.MouseButton1Click:Connect(function() miscOverlay.Visible=false end)
+miscOpenBtn.MouseButton1Click:Connect(function() miscOverlay.Visible=true end)
+
+local moDivLine=Instance.new("Frame",miscOverlay)
+moDivLine.Size=UDim2.new(1,-20,0,1); moDivLine.Position=UDim2.new(0,10,0,44)
+moDivLine.BackgroundColor3=C.stroke; moDivLine.BorderSizePixel=0
+
+local miscScroll=Instance.new("ScrollingFrame",miscOverlay)
+miscScroll.Position=UDim2.new(0,8,0,50); miscScroll.Size=UDim2.new(1,-16,1,-58)
+miscScroll.BackgroundTransparency=1; miscScroll.ScrollBarThickness=3
+miscScroll.ScrollBarImageColor3=C.scrollBar
+miscScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y; miscScroll.BorderSizePixel=0
+local miscLayout=Instance.new("UIListLayout",miscScroll); miscLayout.Padding=UDim.new(0,7)
+
+-- ── MISC helpers ─────────────────────────────
+local function miscSection(text)
+	local f=Instance.new("Frame",miscScroll)
+	f.Size=UDim2.new(1,0,0,20); f.BackgroundTransparency=1; f.BorderSizePixel=0
+	local inner=Instance.new("Frame",f); inner.Size=UDim2.new(1,0,0,1); inner.Position=UDim2.new(0,0,1,-1)
+	inner.BackgroundColor3=C.stroke; inner.BorderSizePixel=0
+	lbl(f,{text=text,size=9,color=C.accentGlow,font=Enum.Font.GothamBold,sz=UDim2.new(1,0,1,-2)})
+end
+
+local function miscDiv()
+	local d=Instance.new("Frame",miscScroll); d.Size=UDim2.new(1,0,0,1)
+	d.BackgroundColor3=C.stroke; d.BorderSizePixel=0; d.BackgroundTransparency=0.5
+end
+
+-- Toggle pill builder — returns clickBtn, setState func, getState func
+local function miscToggle(labelText, desc, initState, onChange)
+	local row=Instance.new("Frame",miscScroll)
+	row.Size=UDim2.new(1,0,0,58); row.BackgroundColor3=C.miscCard
+	row.BorderSizePixel=0; corner(row,10); stroke(row,C.stroke,0.6)
+	local pad=Instance.new("UIPadding",row)
+	pad.PaddingLeft=UDim.new(0,10); pad.PaddingRight=UDim.new(0,10)
+	pad.PaddingTop=UDim.new(0,9); pad.PaddingBottom=UDim.new(0,9)
+
+	lbl(row,{text=labelText,font=Enum.Font.GothamBold,size=12,color=C.text,sz=UDim2.new(1,-46,0,16)})
+	lbl(row,{text=desc,size=9,color=C.textMuted,sz=UDim2.new(1,-46,0,13),pos=UDim2.new(0,0,0,20)})
+
+	local togBg=Instance.new("Frame",row)
+	togBg.Size=UDim2.new(0,38,0,20); togBg.Position=UDim2.new(1,-38,0.5,-10)
+	togBg.BackgroundColor3=initState and C.toggleOn or C.toggleOff; togBg.BorderSizePixel=0; corner(togBg,10)
+	local togDot=Instance.new("Frame",togBg)
+	togDot.Size=UDim2.new(0,16,0,16); togDot.Position=UDim2.new(0,initState and 20 or 2,0.5,-8)
+	togDot.BackgroundColor3=Color3.fromRGB(255,255,255); togDot.BorderSizePixel=0; corner(togDot,8)
+
+	local state=initState
+	local function setState(v)
+		state=v
+		tw(togBg,{BackgroundColor3=v and C.toggleOn or C.toggleOff})
+		tw(togDot,{Position=UDim2.new(0,v and 20 or 2,0.5,-8)})
+		if onChange then onChange(v) end
+	end
+
+	local clickBtn=Instance.new("TextButton",row)
+	clickBtn.Size=UDim2.new(1,0,1,0); clickBtn.BackgroundTransparency=1
+	clickBtn.Text=""; clickBtn.BorderSizePixel=0
+	clickBtn.MouseButton1Click:Connect(function() setState(not state) end)
+	return setState, function() return state end
+end
+
+-- Option row
+local function miscOptions(labelText, options, current, onChange)
+	local wrapper=Instance.new("Frame",miscScroll)
+	wrapper.Size=UDim2.new(1,0,0,0); wrapper.AutomaticSize=Enum.AutomaticSize.Y
+	wrapper.BackgroundColor3=C.miscCard; wrapper.BorderSizePixel=0
+	corner(wrapper,10); stroke(wrapper,C.stroke,0.6)
+	local wPad=Instance.new("UIPadding",wrapper)
+	wPad.PaddingLeft=UDim.new(0,10); wPad.PaddingRight=UDim.new(0,10)
+	wPad.PaddingTop=UDim.new(0,8); wPad.PaddingBottom=UDim.new(0,8)
+	local wLayout=Instance.new("UIListLayout",wrapper); wLayout.Padding=UDim.new(0,6)
+
+	lbl(wrapper,{text=labelText,font=Enum.Font.GothamBold,size=11,color=C.text,sz=UDim2.new(1,0,0,14)})
+	local btnRow=Instance.new("Frame",wrapper)
+	btnRow.Size=UDim2.new(1,0,0,24); btnRow.BackgroundTransparency=1; btnRow.BorderSizePixel=0
+	local bLayout=Instance.new("UIListLayout",btnRow)
+	bLayout.FillDirection=Enum.FillDirection.Horizontal; bLayout.Padding=UDim.new(0,4)
+
+	local sel=current; local btns={}
+	for _,opt in ipairs(options) do
+		local b=Instance.new("TextButton",btnRow)
+		b.AutomaticSize=Enum.AutomaticSize.X; b.Size=UDim2.new(0,0,1,0)
+		b.BackgroundColor3=opt==sel and C.sortActive or Color3.fromRGB(20,18,36)
+		b.TextColor3=opt==sel and C.text or C.textSub
+		b.Font=Enum.Font.GothamBold; b.TextSize=9; b.Text=" "..opt.." "; b.BorderSizePixel=0; corner(b,5)
+		local bS=stroke(b,opt==sel and C.accent or C.stroke,0.8); btns[opt]={btn=b,s=bS}
+		b.MouseButton1Click:Connect(function()
+			sel=opt
+			for k,v in pairs(btns) do
+				tw(v.btn,{BackgroundColor3=k==sel and C.sortActive or Color3.fromRGB(20,18,36),
+					TextColor3=k==sel and C.text or C.textSub})
+				v.s.Color=k==sel and C.accent or C.stroke
+			end
+			onChange(opt)
 		end)
 	end
 end
 
-------------------------------------------------
--- SCREEN GUI
-------------------------------------------------
-local gui = Instance.new("ScreenGui")
-gui.Name = "FarmViewerPro"
-gui.ResetOnSpawn = false
-gui.DisplayOrder = 10
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.Parent = player:WaitForChild("PlayerGui")
+-- ── BUILD MISC PANEL ──────────────────────────
+miscSection("ESP  ·  WORLD OVERLAYS")
 
-------------------------------------------------
--- REOPEN BUTTON (always visible when GUI is closed)
-------------------------------------------------
-local reopenBtn = Instance.new("TextButton", gui)
-reopenBtn.Size = UDim2.new(0, 120, 0, 34)
-reopenBtn.Position = UDim2.new(0.04, 0, 0.08, 0)
-reopenBtn.BackgroundColor3 = Color3.fromRGB(28, 26, 48)
-reopenBtn.TextColor3 = COLORS.textPrimary
-reopenBtn.Font = Enum.Font.GothamBold
-reopenBtn.TextSize = 13
-reopenBtn.Text = "Farm Viewer"
-reopenBtn.BorderSizePixel = 0
-reopenBtn.Visible = false
-uiCorner(reopenBtn, 8)
-uiStroke(reopenBtn, COLORS.stroke)
+local setEspEnabled, getEspEnabled = miscToggle(
+	"ESP Highlights",
+	"Colored outlines / fills on all plants & fruits",
+	false,
+	function(v) ESP.enabled=v; refreshESP()
+		espPill.Text=v and " ● ESP ON " or " ● ESP OFF "
+		tw(espPill,{TextColor3=v and C.toggleOn or C.textMuted,
+			BackgroundColor3=v and Color3.fromRGB(14,42,26) or Color3.fromRGB(30,26,52)})
+	end
+)
 
-------------------------------------------------
--- MAIN FRAME
-------------------------------------------------
-local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0, 640, 0, 560)
-main.Position = UDim2.new(0.04, 0, 0.12, 0)
-main.BackgroundColor3 = COLORS.bg
-main.BorderSizePixel = 0
-main.ClipsDescendants = true
-uiCorner(main, 14)
-local mainStroke = uiStroke(main, COLORS.stroke, 1.5)
+local setBillboards, getBillboards = miscToggle(
+	"Billboard Labels",
+	"Floating info cards above every object",
+	true,
+	function(v) ESP.billboards=v; if ESP.enabled then refreshESP() end end
+)
 
--- Scale for small screens
-local uiScale = Instance.new("UIScale", main)
-local function updateScale()
-	local vp = camera.ViewportSize
-	uiScale.Scale = clamp(vp.X / 980, 0.6, 1)
+local setHover, getHover = miscToggle(
+	"Hover Details",
+	"Rich popup when mouse is over a plant",
+	true,
+	function(v) ESP.hoverLabels=v; if not v then hoverPopup.Visible=false end end
+)
+
+local setChams, getChams = miscToggle(
+	"See-Through (Chams)",
+	"Show plants through walls and terrain",
+	false,
+	function(v) ESP.chams=v; if ESP.enabled then refreshESP() end end
+)
+
+miscDiv()
+miscSection("ESP  ·  STYLE")
+
+miscOptions("Highlight Style", {"Outline","Fill","Both"}, "Outline", function(v)
+	ESP.highlightStyle=string.lower(v)
+	if ESP.enabled then refreshESP() end
+end)
+
+miscOptions("Color Mode", {"Type","Mutation","Rarity"}, "Type", function(v)
+	ESP.colorMode=string.lower(v)
+	if ESP.enabled then refreshESP() end
+end)
+
+miscDiv()
+miscSection("BILLBOARD  ·  STYLE")
+
+miscOptions("Detail Level", {"Compact","Full"}, "Full", function(v)
+	ESP.billboardDetail=string.lower(v)
+	if ESP.enabled and ESP.billboards then refreshESP() end
+end)
+
+miscDiv()
+miscSection("AUTO-REFRESH RATE")
+
+miscOptions("Interval", {"2s","3s","5s","10s"}, "3s", function(v)
+	ESP.refreshRate=tonumber(string.match(v,"%d+")) or 3
+end)
+
+miscDiv()
+miscSection("PLAYER BLOCK LIST  ·  ESP")
+
+-- Block list note
+local blockNote=Instance.new("Frame",miscScroll)
+blockNote.Size=UDim2.new(1,0,0,30); blockNote.BackgroundColor3=Color3.fromRGB(12,10,22)
+blockNote.BorderSizePixel=0; corner(blockNote,8)
+lbl(blockNote,{text="Tap a player below to toggle blocking them from ESP",
+	size=9,color=C.textSub,sz=UDim2.new(1,-8,1,0),pos=UDim2.new(0,8,0,0),
+	xa=Enum.TextXAlignment.Left,ya=Enum.TextYAlignment.Center})
+
+-- Block list will be built dynamically
+local blockListFrame=Instance.new("Frame",miscScroll)
+blockListFrame.Size=UDim2.new(1,0,0,0); blockListFrame.AutomaticSize=Enum.AutomaticSize.Y
+blockListFrame.BackgroundTransparency=1; blockListFrame.BorderSizePixel=0
+local blockListLayout=Instance.new("UIListLayout",blockListFrame); blockListLayout.Padding=UDim.new(0,4)
+
+local function rebuildBlockList()
+	for _,v in ipairs(blockListFrame:GetChildren()) do
+		if not v:IsA("UIListLayout") then v:Destroy() end
+	end
+	for _,plr in ipairs(Players:GetPlayers()) do
+		local blocked=ESP.blockedPlayers[plr.UserId]
+		local row=Instance.new("Frame",blockListFrame)
+		row.Size=UDim2.new(1,0,0,36); row.BorderSizePixel=0
+		row.BackgroundColor3=blocked and C.blockBg or C.miscCard
+		corner(row,8); stroke(row,blocked and C.blockStroke or C.stroke,0.7)
+
+		local av=Instance.new("Frame",row); av.Size=UDim2.new(0,22,0,22); av.Position=UDim2.new(0,7,0.5,-11)
+		av.BackgroundColor3=blocked and Color3.fromRGB(70,20,20) or Color3.fromRGB(40,36,72)
+		av.BorderSizePixel=0; corner(av,11)
+		lbl(av,{text=initials(plr.Name),font=Enum.Font.GothamBold,size=9,
+			color=blocked and Color3.fromRGB(220,90,90) or Color3.fromRGB(155,145,220),
+			sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
+		lbl(row,{text=plr.Name,font=Enum.Font.GothamBold,size=11,
+			color=blocked and Color3.fromRGB(220,90,90) or C.text,
+			sz=UDim2.new(1,-100,1,0),pos=UDim2.new(0,34,0,0),trunc=Enum.TextTruncate.AtEnd})
+		local statusL=lbl(row,{text=blocked and "BLOCKED" or "VISIBLE",font=Enum.Font.GothamBold,size=9,
+			color=blocked and Color3.fromRGB(220,80,80) or C.textGreen,
+			sz=UDim2.new(0,58,0,18),pos=UDim2.new(1,-62,0.5,-9),xa=Enum.TextXAlignment.Center})
+		local statusBg=Instance.new("Frame",row); statusBg.Size=UDim2.new(0,58,0,18)
+		statusBg.Position=UDim2.new(1,-62,0.5,-9)
+		statusBg.BackgroundColor3=blocked and Color3.fromRGB(60,18,18) or Color3.fromRGB(14,40,26)
+		statusBg.BorderSizePixel=0; corner(statusBg,9); statusL.ZIndex=2
+
+		local clickBtn=Instance.new("TextButton",row)
+		clickBtn.Size=UDim2.new(1,0,1,0); clickBtn.BackgroundTransparency=1
+		clickBtn.Text=""; clickBtn.BorderSizePixel=0
+		clickBtn.MouseButton1Click:Connect(function()
+			ESP.blockedPlayers[plr.UserId]=not ESP.blockedPlayers[plr.UserId] or nil
+			if ESP.enabled then refreshESP() end
+			rebuildBlockList()
+		end)
+	end
 end
-camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-updateScale()
+rebuildBlockList()
 
-------------------------------------------------
--- DRAG  (clamped to viewport)
-------------------------------------------------
-local dragging, dragStart, startPos = false, nil, nil
+-- ════════════════════════════════════════════
+-- HOVER POPUP (world-space, always active)
+-- always on gui level, not inside main
+-- ════════════════════════════════════════════
+local hoverPopup=Instance.new("Frame",gui)
+hoverPopup.Size=UDim2.new(0,235,0,0)
+hoverPopup.AutomaticSize=Enum.AutomaticSize.Y
+hoverPopup.BackgroundColor3=Color3.fromRGB(10,10,19)
+hoverPopup.BorderSizePixel=0
+hoverPopup.Visible=false
+hoverPopup.ZIndex=60
+corner(hoverPopup,12); stroke(hoverPopup,C.stroke,1.5)
 
-main.InputBegan:Connect(function(inp)
-	if inp.UserInputType == Enum.UserInputType.MouseButton1
-	or inp.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = inp.Position
-		startPos  = main.Position
+local hpPad=Instance.new("UIPadding",hoverPopup)
+hpPad.PaddingTop=UDim.new(0,12); hpPad.PaddingBottom=UDim.new(0,12)
+hpPad.PaddingLeft=UDim.new(0,12); hpPad.PaddingRight=UDim.new(0,12)
+local hpLayout=Instance.new("UIListLayout",hoverPopup); hpLayout.Padding=UDim.new(0,5)
+
+local hpAccent=Instance.new("Frame",hoverPopup)
+hpAccent.Size=UDim2.new(1,0,0,3); hpAccent.BackgroundColor3=C.accent; hpAccent.BorderSizePixel=0; corner(hpAccent,2)
+
+local hpTitle=lbl(hoverPopup,{text="",font=Enum.Font.GothamBold,size=14,color=C.textGreen,sz=UDim2.new(1,0,0,18)})
+
+local hpTypeBadge=Instance.new("TextLabel",hoverPopup)
+hpTypeBadge.AutomaticSize=Enum.AutomaticSize.X; hpTypeBadge.Size=UDim2.new(0,0,0,17)
+hpTypeBadge.BackgroundColor3=Color3.fromRGB(28,54,38); hpTypeBadge.TextColor3=Color3.fromRGB(68,205,130)
+hpTypeBadge.Font=Enum.Font.GothamBold; hpTypeBadge.TextSize=9; hpTypeBadge.Text=""
+hpTypeBadge.BorderSizePixel=0; corner(hpTypeBadge,9)
+
+-- Owner badge
+local hpOwnerBadge=Instance.new("TextLabel",hoverPopup)
+hpOwnerBadge.AutomaticSize=Enum.AutomaticSize.X; hpOwnerBadge.Size=UDim2.new(0,0,0,15)
+hpOwnerBadge.BackgroundColor3=Color3.fromRGB(22,20,40); hpOwnerBadge.TextColor3=C.textSub
+hpOwnerBadge.Font=Enum.Font.GothamBold; hpOwnerBadge.TextSize=9; hpOwnerBadge.Text=""
+hpOwnerBadge.BorderSizePixel=0; corner(hpOwnerBadge,8)
+
+local hpDiv1=Instance.new("Frame",hoverPopup)
+hpDiv1.Size=UDim2.new(1,0,0,1); hpDiv1.BackgroundColor3=Color3.fromRGB(36,34,58); hpDiv1.BorderSizePixel=0
+
+local hpWeightRow=Instance.new("Frame",hoverPopup)
+hpWeightRow.Size=UDim2.new(1,0,0,26); hpWeightRow.BackgroundColor3=Color3.fromRGB(17,16,28)
+hpWeightRow.BorderSizePixel=0; corner(hpWeightRow,6)
+lbl(hpWeightRow,{text="⚖",size=11,color=C.textAmber,sz=UDim2.new(0,22,1,0),xa=Enum.TextXAlignment.Center})
+lbl(hpWeightRow,{text="Weight",size=10,color=C.textSub,sz=UDim2.new(0.38,0,1,0),pos=UDim2.new(0,22,0,0)})
+local hpWVal=lbl(hpWeightRow,{text="—",font=Enum.Font.GothamBold,size=11,color=C.textAmber,
+	sz=UDim2.new(0.55,0,1,0),pos=UDim2.new(0.44,0,0,0)})
+
+local hpVariantRow=Instance.new("Frame",hoverPopup)
+hpVariantRow.Size=UDim2.new(1,0,0,26); hpVariantRow.BackgroundColor3=Color3.fromRGB(17,16,28)
+hpVariantRow.BorderSizePixel=0; corner(hpVariantRow,6)
+lbl(hpVariantRow,{text="◈",size=11,color=Color3.fromRGB(150,210,255),sz=UDim2.new(0,22,1,0),xa=Enum.TextXAlignment.Center})
+lbl(hpVariantRow,{text="Variant",size=10,color=C.textSub,sz=UDim2.new(0.38,0,1,0),pos=UDim2.new(0,22,0,0)})
+local hpVVal=lbl(hpVariantRow,{text="—",font=Enum.Font.GothamBold,size=11,color=Color3.fromRGB(150,210,255),
+	sz=UDim2.new(0.55,0,1,0),pos=UDim2.new(0.44,0,0,0)})
+
+local hpDiv2=Instance.new("Frame",hoverPopup)
+hpDiv2.Size=UDim2.new(1,0,0,1); hpDiv2.BackgroundColor3=Color3.fromRGB(36,34,58); hpDiv2.BorderSizePixel=0
+
+local hpMutHeader=Instance.new("Frame",hoverPopup)
+hpMutHeader.Size=UDim2.new(1,0,0,16); hpMutHeader.BackgroundTransparency=1; hpMutHeader.BorderSizePixel=0
+local hpMutHLayout=Instance.new("UIListLayout",hpMutHeader)
+hpMutHLayout.FillDirection=Enum.FillDirection.Horizontal; hpMutHLayout.Padding=UDim.new(0,5)
+lbl(hpMutHeader,{text="✦",size=10,color=C.mutPillTxt,sz=UDim2.new(0,14,1,0)})
+local hpMutHLbl=lbl(hpMutHeader,{text="MUTATIONS",size=9,color=C.textSub,font=Enum.Font.GothamBold,sz=UDim2.new(1,-20,1,0)})
+
+local hpMutContainer=Instance.new("Frame",hoverPopup)
+hpMutContainer.Size=UDim2.new(1,0,0,0); hpMutContainer.AutomaticSize=Enum.AutomaticSize.Y
+hpMutContainer.BackgroundTransparency=1; hpMutContainer.BorderSizePixel=0
+
+local hpFruitRow=Instance.new("Frame",hoverPopup)
+hpFruitRow.Size=UDim2.new(1,0,0,22); hpFruitRow.BackgroundColor3=Color3.fromRGB(14,32,22)
+hpFruitRow.BorderSizePixel=0; corner(hpFruitRow,6)
+local hpFLbl=lbl(hpFruitRow,{text="",size=10,color=C.textGreen,font=Enum.Font.GothamBold,
+	sz=UDim2.new(1,-8,1,0),pos=UDim2.new(0,8,0,0)})
+
+local function clearHpMuts()
+	for _,v in ipairs(hpMutContainer:GetChildren()) do
+		if v:IsA("UIListLayout") then continue end; v:Destroy()
 	end
-end)
-
-UIS.InputChanged:Connect(function(inp)
-	if not dragging then return end
-	if inp.UserInputType ~= Enum.UserInputType.MouseMovement
-	and inp.UserInputType ~= Enum.UserInputType.Touch then return end
-
-	local delta = inp.Position - dragStart
-	local vp    = camera.ViewportSize
-	local scale = uiScale.Scale
-	local sw    = main.Size.X.Offset * scale
-	local sh    = main.Size.Y.Offset * scale
-
-	local newX = startPos.X.Offset + delta.X
-	local newY = startPos.Y.Offset + delta.Y
-	newX = clamp(newX, 0, vp.X - sw)
-	newY = clamp(newY, 0, vp.Y - sh)
-	main.Position = UDim2.new(0, newX, 0, newY)
-end)
-
-UIS.InputEnded:Connect(function(inp)
-	if inp.UserInputType == Enum.UserInputType.MouseButton1
-	or inp.UserInputType == Enum.UserInputType.Touch then
-		dragging = false
-	end
-end)
-
-------------------------------------------------
--- HEADER
-------------------------------------------------
-local header = Instance.new("Frame", main)
-header.Size = UDim2.new(1, 0, 0, 54)
-header.BackgroundColor3 = COLORS.header
-header.BorderSizePixel = 0
-uiCorner(header, 14)
--- patch bottom corners
-local headerFix = Instance.new("Frame", header)
-headerFix.Size = UDim2.new(1, 0, 0.5, 0)
-headerFix.Position = UDim2.new(0, 0, 0.5, 0)
-headerFix.BackgroundColor3 = COLORS.header
-headerFix.BorderSizePixel = 0
-
-local headerTitle = makeLabel(header, {
-	text  = "Farm Viewer Pro",
-	font  = Enum.Font.GothamBold,
-	size  = 16,
-	color = COLORS.textPrimary,
-	sz    = UDim2.new(1, -110, 0, 22),
-	pos   = UDim2.new(0, 16, 0, 8),
-})
-
-local headerSub = makeLabel(header, {
-	text  = "Select a player to inspect their farm",
-	size  = 11,
-	color = COLORS.textSub,
-	sz    = UDim2.new(1, -110, 0, 14),
-	pos   = UDim2.new(0, 16, 0, 32),
-})
-
--- X Close button
-local closeBtn = Instance.new("TextButton", header)
-closeBtn.Size = UDim2.new(0, 28, 0, 28)
-closeBtn.Position = UDim2.new(1, -38, 0.5, -14)
-closeBtn.BackgroundColor3 = Color3.fromRGB(60, 30, 30)
-closeBtn.TextColor3 = Color3.fromRGB(230, 120, 120)
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 14
-closeBtn.Text = "✕"
-closeBtn.BorderSizePixel = 0
-uiCorner(closeBtn, 7)
-uiStroke(closeBtn, Color3.fromRGB(100, 40, 40))
-closeBtn.MouseEnter:Connect(function()
-	tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(90, 35, 35)})
-end)
-closeBtn.MouseLeave:Connect(function()
-	tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(60, 30, 30)})
-end)
-closeBtn.MouseButton1Click:Connect(function()
-	main.Visible = false
-	reopenBtn.Visible = true
-end)
-
-reopenBtn.MouseButton1Click:Connect(function()
-	main.Visible = true
-	reopenBtn.Visible = false
-end)
-
--- Keyboard shortcut to reopen: R
-UIS.InputBegan:Connect(function(inp, gp)
-	if gp then return end
-	if inp.KeyCode == Enum.KeyCode.R and not main.Visible then
-		main.Visible = true
-		reopenBtn.Visible = false
-	end
-end)
-
-local headerLine = Instance.new("Frame", main)
-headerLine.Size = UDim2.new(1, -28, 0, 1)
-headerLine.Position = UDim2.new(0, 14, 0, 54)
-headerLine.BackgroundColor3 = COLORS.stroke
-headerLine.BorderSizePixel = 0
-
-------------------------------------------------
--- STAT BAR  (shows live counts below header)
-------------------------------------------------
-local statBar = Instance.new("Frame", main)
-statBar.Size = UDim2.new(1, -172, 0, 22)
-statBar.Position = UDim2.new(0, 162, 0, 57)
-statBar.BackgroundTransparency = 1
-
-local statLbl = makeLabel(statBar, {
-	text  = "",
-	size  = 10,
-	color = COLORS.textMuted,
-	font  = Enum.Font.GothamBold,
-	sz    = UDim2.new(1, 0, 1, 0),
-	align = Enum.TextXAlignment.Right,
-})
-
-------------------------------------------------
--- LEFT PANEL  (player list)
-------------------------------------------------
-local leftPanel = Instance.new("Frame", main)
-leftPanel.Size = UDim2.new(0, 148, 1, -60)
-leftPanel.Position = UDim2.new(0, 8, 0, 58)
-leftPanel.BackgroundColor3 = COLORS.panel
-leftPanel.BorderSizePixel = 0
-uiCorner(leftPanel, 12)
-uiStroke(leftPanel, COLORS.stroke)
-
-makeLabel(leftPanel, {
-	text  = "   PLAYERS",
-	size  = 9,
-	color = COLORS.textSub,
-	font  = Enum.Font.GothamBold,
-	sz    = UDim2.new(1, 0, 0, 28),
-})
-
-local leftDiv = Instance.new("Frame", leftPanel)
-leftDiv.Size = UDim2.new(1, -16, 0, 1)
-leftDiv.Position = UDim2.new(0, 8, 0, 28)
-leftDiv.BackgroundColor3 = COLORS.stroke
-leftDiv.BorderSizePixel = 0
-
-local plrScroll = Instance.new("ScrollingFrame", leftPanel)
-plrScroll.Position = UDim2.new(0, 5, 0, 34)
-plrScroll.Size = UDim2.new(1, -10, 1, -40)
-plrScroll.BackgroundTransparency = 1
-plrScroll.ScrollBarThickness = 3
-plrScroll.ScrollBarImageColor3 = COLORS.scrollBar
-plrScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-plrScroll.BorderSizePixel = 0
-local plrLayout = Instance.new("UIListLayout", plrScroll)
-plrLayout.Padding = UDim.new(0, 4)
-
-------------------------------------------------
--- RIGHT PANEL
-------------------------------------------------
-local rightPanel = Instance.new("Frame", main)
-rightPanel.Size = UDim2.new(1, -168, 1, -60)
-rightPanel.Position = UDim2.new(0, 162, 0, 58)
-rightPanel.BackgroundColor3 = COLORS.panel
-rightPanel.BorderSizePixel = 0
-uiCorner(rightPanel, 12)
-uiStroke(rightPanel, COLORS.stroke)
-
--- Top bar (back + breadcrumb)
-local rightTopBar = Instance.new("Frame", rightPanel)
-rightTopBar.Size = UDim2.new(1, 0, 0, 40)
-rightTopBar.BackgroundTransparency = 1
-
-local backBtn = Instance.new("TextButton", rightTopBar)
-backBtn.Size = UDim2.new(0, 58, 0, 24)
-backBtn.Position = UDim2.new(0, 10, 0.5, -12)
-backBtn.BackgroundColor3 = Color3.fromRGB(28, 26, 48)
-backBtn.TextColor3 = Color3.fromRGB(145, 135, 215)
-backBtn.Font = Enum.Font.GothamBold
-backBtn.TextSize = 12
-backBtn.Text = "← Back"
-backBtn.BorderSizePixel = 0
-backBtn.Visible = false
-uiCorner(backBtn, 6)
-uiStroke(backBtn, Color3.fromRGB(58, 54, 98))
-backBtn.MouseEnter:Connect(function()
-	tween(backBtn, {BackgroundColor3 = Color3.fromRGB(40, 36, 72)})
-end)
-backBtn.MouseLeave:Connect(function()
-	tween(backBtn, {BackgroundColor3 = Color3.fromRGB(28, 26, 48)})
-end)
-
-local breadcrumb = makeLabel(rightTopBar, {
-	text     = "Select a player",
-	font     = Enum.Font.GothamBold,
-	size     = 13,
-	color    = COLORS.textPrimary,
-	sz       = UDim2.new(1, -84, 1, 0),
-	pos      = UDim2.new(0, 78, 0, 0),
-	truncate = Enum.TextTruncate.AtEnd,
-})
-
-local rightDiv1 = Instance.new("Frame", rightPanel)
-rightDiv1.Size = UDim2.new(1, -16, 0, 1)
-rightDiv1.Position = UDim2.new(0, 8, 0, 40)
-rightDiv1.BackgroundColor3 = COLORS.stroke
-rightDiv1.BorderSizePixel = 0
-
--- Search bar
-local searchBox = Instance.new("TextBox", rightPanel)
-searchBox.Size = UDim2.new(1, -16, 0, 26)
-searchBox.Position = UDim2.new(0, 8, 0, 46)
-searchBox.BackgroundColor3 = Color3.fromRGB(20, 20, 32)
-searchBox.TextColor3 = Color3.fromRGB(200, 195, 240)
-searchBox.PlaceholderText = "Search plants or fruits…"
-searchBox.PlaceholderColor3 = COLORS.textMuted
-searchBox.Font = Enum.Font.Gotham
-searchBox.TextSize = 12
-searchBox.Text = ""
-searchBox.ClearTextOnFocus = false
-searchBox.BorderSizePixel = 0
-searchBox.TextXAlignment = Enum.TextXAlignment.Left
-searchBox.Visible = false
-uiCorner(searchBox, 6)
-uiStroke(searchBox, COLORS.stroke)
-local sPad = Instance.new("UIPadding", searchBox)
-sPad.PaddingLeft = UDim.new(0, 8)
-
--- Sort bar
-local sortBar = Instance.new("Frame", rightPanel)
-sortBar.Size = UDim2.new(1, -16, 0, 24)
-sortBar.Position = UDim2.new(0, 8, 0, 78)
-sortBar.BackgroundTransparency = 1
-sortBar.Visible = false
-local sortLayout = Instance.new("UIListLayout", sortBar)
-sortLayout.FillDirection = Enum.FillDirection.Horizontal
-sortLayout.Padding = UDim.new(0, 4)
-
-local sortMode = "name_az"
-local sortButtons = {}
-
-local function makeSortBtn(label, mode)
-	local btn = Instance.new("TextButton", sortBar)
-	btn.AutomaticSize = Enum.AutomaticSize.X
-	btn.Size = UDim2.new(0, 0, 1, 0)
-	btn.BackgroundColor3 = Color3.fromRGB(24, 22, 40)
-	btn.TextColor3 = Color3.fromRGB(130, 122, 200)
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 10
-	btn.Text = "  "..label.."  "
-	btn.BorderSizePixel = 0
-	uiCorner(btn, 5)
-	local bStroke = uiStroke(btn, COLORS.stroke)
-	sortButtons[mode] = {btn = btn, stroke = bStroke}
-	return btn
 end
 
-local btnNameAZ  = makeSortBtn("Name A→Z",   "name_az")
-local btnNameZA  = makeSortBtn("Name Z→A",   "name_za")
-local btnWtDesc  = makeSortBtn("Weight ↓",   "weight_desc")
-local btnWtAsc   = makeSortBtn("Weight ↑",   "weight_asc")
-local btnMutDesc = makeSortBtn("Mutations ↓","mutations_desc")
-
-local function updateSortColors()
-	for mode, data in pairs(sortButtons) do
-		if mode == sortMode then
-			tween(data.btn, {BackgroundColor3 = COLORS.sortActive, TextColor3 = COLORS.textPrimary})
-			data.stroke.Color = COLORS.accent
-		else
-			tween(data.btn, {BackgroundColor3 = Color3.fromRGB(24,22,40), TextColor3 = Color3.fromRGB(130,122,200)})
-			data.stroke.Color = COLORS.stroke
+local function rebuildHpMuts(mutations)
+	clearHpMuts()
+	local pl=hpMutContainer:FindFirstChildOfClass("UIListLayout")
+	if not pl then
+		pl=Instance.new("UIListLayout",hpMutContainer)
+		pl.FillDirection=Enum.FillDirection.Horizontal; pl.Wraps=true; pl.Padding=UDim.new(0,4)
+	end
+	if #mutations==0 then
+		lbl(hpMutContainer,{text="None",size=10,color=C.textMuted,sz=UDim2.new(1,0,0,14)})
+	else
+		for _,m in ipairs(mutations) do
+			local mbg, mtx=getMutColor(m)
+			local pill=Instance.new("TextLabel",hpMutContainer)
+			pill.AutomaticSize=Enum.AutomaticSize.X; pill.Size=UDim2.new(0,0,0,17)
+			pill.BackgroundColor3=mbg; pill.TextColor3=mtx
+			pill.Font=Enum.Font.GothamBold; pill.TextSize=9; pill.Text=" "..m.." "
+			pill.BorderSizePixel=0; corner(pill,9)
 		end
 	end
 end
-updateSortColors()
 
-local sortDivider = Instance.new("Frame", rightPanel)
-sortDivider.Size = UDim2.new(1, -16, 0, 1)
-sortDivider.Position = UDim2.new(0, 8, 0, 106)
-sortDivider.BackgroundColor3 = COLORS.stroke
-sortDivider.BorderSizePixel = 0
-sortDivider.Visible = false
+-- ════════════════════════════════════════════
+-- ESP WORLD OBJECTS
+-- ════════════════════════════════════════════
+local espFolder=Instance.new("Folder",workspace); espFolder.Name="FVP4_ESP"
+local espObjects={}  -- [model] = {selBox, hl, bb}
 
--- Main scroll area
-local mainScroll = Instance.new("ScrollingFrame", rightPanel)
-mainScroll.Position = UDim2.new(0, 6, 0, 44)
-mainScroll.Size = UDim2.new(1, -12, 1, -50)
-mainScroll.BackgroundTransparency = 1
-mainScroll.ScrollBarThickness = 3
-mainScroll.ScrollBarImageColor3 = COLORS.scrollBar
-mainScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-mainScroll.BorderSizePixel = 0
-local scrollLayout = Instance.new("UIListLayout", mainScroll)
-scrollLayout.Padding = UDim.new(0, 6)
-local scrollPad = Instance.new("UIPadding", mainScroll)
-scrollPad.PaddingBottom = UDim.new(0, 8)
-scrollPad.PaddingLeft   = UDim.new(0, 2)
-scrollPad.PaddingRight  = UDim.new(0, 2)
+local function getOrMakePrimary(model)
+	if model:IsA("Model") then
+		return model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+	elseif model:IsA("BasePart") then return model end
+end
 
-------------------------------------------------
+local function makeESPBillboard(model, espColor, name, weight, mutations, isMulti, fruitCount)
+	local part=getOrMakePrimary(model); if not part then return nil end
+	local compact=ESP.billboardDetail=="compact"
+	local bb=Instance.new("BillboardGui",part)
+	bb.AlwaysOnTop=true
+	bb.Size=UDim2.new(0,compact and 145 or 196, 0, compact and 50 or 90)
+	bb.StudsOffset=Vector3.new(0,5.5,0); bb.MaxDistance=180
+
+	local frame=Instance.new("Frame",bb)
+	frame.Size=UDim2.new(1,0,1,0); frame.BackgroundColor3=Color3.fromRGB(9,9,17)
+	frame.BackgroundTransparency=0.10; frame.BorderSizePixel=0; corner(frame,10)
+	stroke(frame,espColor,1.8)
+
+	local accentBar=Instance.new("Frame",frame)
+	accentBar.Size=UDim2.new(1,-14,0,2); accentBar.Position=UDim2.new(0,7,0,5)
+	accentBar.BackgroundColor3=espColor; accentBar.BorderSizePixel=0; corner(accentBar,1)
+
+	local pad=Instance.new("UIPadding",frame)
+	pad.PaddingLeft=UDim.new(0,8); pad.PaddingRight=UDim.new(0,8)
+	pad.PaddingTop=UDim.new(0,13); pad.PaddingBottom=UDim.new(0,5)
+	local layout=Instance.new("UIListLayout",frame); layout.Padding=UDim.new(0,3)
+
+	local nameL=Instance.new("TextLabel",frame)
+	nameL.Size=UDim2.new(1,0,0,16); nameL.BackgroundTransparency=1
+	nameL.Font=Enum.Font.GothamBold; nameL.TextSize=12
+	nameL.TextColor3=isMulti and C.textGreen or C.text
+	nameL.Text=name; nameL.TextXAlignment=Enum.TextXAlignment.Left
+	nameL.TextTruncate=Enum.TextTruncate.AtEnd
+
+	if not compact then
+		local weightL=Instance.new("TextLabel",frame)
+		weightL.Size=UDim2.new(1,0,0,12); weightL.BackgroundTransparency=1
+		weightL.Font=Enum.Font.Gotham; weightL.TextSize=10; weightL.TextColor3=C.textAmber
+		weightL.Text="⚖ "..string.format("%.3f",weight)..(isMulti and "  🍃 "..fruitCount.."f" or "")
+		weightL.TextXAlignment=Enum.TextXAlignment.Left
+
+		if #mutations>0 then
+			local mutL=Instance.new("TextLabel",frame)
+			mutL.Size=UDim2.new(1,0,0,12); mutL.BackgroundTransparency=1
+			mutL.Font=Enum.Font.Gotham; mutL.TextSize=10; mutL.TextColor3=C.mutPillTxt
+			local first2=mutations[1]..(mutations[2] and ", "..mutations[2] or "")
+			if #mutations>2 then first2=first2.." +"..( #mutations-2) end
+			mutL.Text="✦ "..first2; mutL.TextXAlignment=Enum.TextXAlignment.Left
+			mutL.TextTruncate=Enum.TextTruncate.AtEnd
+		else
+			local noMutL=Instance.new("TextLabel",frame)
+			noMutL.Size=UDim2.new(1,0,0,12); noMutL.BackgroundTransparency=1
+			noMutL.Font=Enum.Font.Gotham; noMutL.TextSize=10; noMutL.TextColor3=C.textMuted
+			noMutL.Text="◦ No mutations"; noMutL.TextXAlignment=Enum.TextXAlignment.Left
+		end
+	else
+		local compL=Instance.new("TextLabel",frame)
+		compL.Size=UDim2.new(1,0,0,12); compL.BackgroundTransparency=1
+		compL.Font=Enum.Font.Gotham; compL.TextSize=10; compL.TextColor3=C.textSub
+		compL.Text="⚖"..string.format("%.2f",weight).."  ✦"..(#mutations)
+		compL.TextXAlignment=Enum.TextXAlignment.Left
+	end
+	return bb
+end
+
+local function clearESP()
+	for _,data in pairs(espObjects) do
+		if data.selBox then pcall(function() data.selBox:Destroy() end) end
+		if data.hl then pcall(function() data.hl:Destroy() end) end
+		if data.bb then pcall(function() data.bb:Destroy() end) end
+	end
+	espObjects={}
+end
+
+function refreshESP()
+	clearESP()
+	if not ESP.enabled then return end
+
+	local farms=getAllFarms()
+	for _,farmData in ipairs(farms) do
+		-- Check block list
+		local ownerPlayer=farmData.player
+		if ownerPlayer and ESP.blockedPlayers[ownerPlayer.UserId] then continue end
+
+		local pf=farmData.imp and farmData.imp:FindFirstChild("Plants_Physical")
+		if not pf then continue end
+
+		for _, model in ipairs(pf:GetChildren()) do
+			if not model:IsA("Model") then continue end
+			if espObjects[model] then continue end
+
+			local muts=getMutations(model)
+			local espColor=getESPColor(model,muts)
+			local isMulti=model:FindFirstChild("Fruits")~=nil
+			local w=getW(model); local fc=getFruitCount(model)
+			local data={}
+
+			if ESP.highlightStyle=="outline" or ESP.highlightStyle=="both" then
+				local sel=Instance.new("SelectionBox",espFolder)
+				sel.Adornee=model; sel.Color3=espColor; sel.LineThickness=0.05
+				sel.SurfaceTransparency=ESP.highlightStyle=="both" and 0.72 or 1
+				sel.SurfaceColor3=espColor; data.selBox=sel
+			end
+
+			if ESP.highlightStyle=="fill" or ESP.highlightStyle=="both" or ESP.chams then
+				local hl=Instance.new("Highlight",espFolder)
+				hl.Adornee=model; hl.FillColor=espColor
+				hl.FillTransparency=ESP.highlightStyle=="fill" and 0.6 or 0.78
+				hl.OutlineColor=espColor
+				hl.OutlineTransparency=ESP.highlightStyle=="fill" and 1 or 0.2
+				if ESP.chams then
+					pcall(function() hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop end)
+				end
+				data.hl=hl
+			end
+
+			if ESP.billboards then
+				data.bb=makeESPBillboard(model,espColor,model.Name,w,muts,isMulti,fc)
+			end
+			espObjects[model]=data
+
+			-- Fruits of multi-harvest
+			if isMulti then
+				local fruits=model:FindFirstChild("Fruits")
+				if fruits then
+					for _, fruit in ipairs(fruits:GetChildren()) do
+						if espObjects[fruit] then continue end
+						local fm=getMutations(fruit); local fc2=getESPColor(fruit,fm)
+						local fd={}
+						if ESP.highlightStyle=="outline" or ESP.highlightStyle=="both" then
+							local sel2=Instance.new("SelectionBox",espFolder)
+							sel2.Adornee=fruit; sel2.Color3=fc2; sel2.LineThickness=0.04
+							sel2.SurfaceTransparency=1; fd.selBox=sel2
+						end
+						if (ESP.highlightStyle=="fill" or ESP.highlightStyle=="both") or ESP.chams then
+							local hl2=Instance.new("Highlight",espFolder)
+							hl2.Adornee=fruit; hl2.FillColor=fc2; hl2.FillTransparency=0.72
+							hl2.OutlineColor=fc2; hl2.OutlineTransparency=0.2
+							if ESP.chams then pcall(function() hl2.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop end) end
+							fd.hl=hl2
+						end
+						if ESP.billboards then
+							fd.bb=makeESPBillboard(fruit,fc2,fruit.Name,getW(fruit),fm,false,0)
+						end
+						espObjects[fruit]=fd
+					end
+				end
+			end
+		end
+	end
+end
+
+-- ════════════════════════════════════════════
 -- STATE
-------------------------------------------------
-local state = {
-	selectedPlayer    = player,
-	view              = "plants",
-	currentPlantModel = nil,
-	currentFruitModel = nil,
-	currentPlantsFolder = nil,
+-- ════════════════════════════════════════════
+local stateRef={
+	selectedPlayer=player,
+	view="plants",
+	currentPlantModel=nil,
+	currentFruitModel=nil,
+	currentPlantsFolder=nil,
 }
 
-------------------------------------------------
+-- ════════════════════════════════════════════
 -- LAYOUT HELPERS
-------------------------------------------------
-local function setControlsVisible(visible)
-	searchBox.Visible = visible
-	sortBar.Visible   = visible
-	sortDivider.Visible = visible
-	if visible then
-		mainScroll.Position = UDim2.new(0, 6, 0, 112)
-		mainScroll.Size     = UDim2.new(1, -12, 1, -118)
+-- ════════════════════════════════════════════
+local function setControlsVisible(v)
+	searchBox.Visible=v; filterBar.Visible=v; sortBar.Visible=v; sortDiv.Visible=v
+	if v then
+		mainScroll.Position=UDim2.new(0,6,0,143)
+		mainScroll.Size=UDim2.new(1,-12,1,-149)
 	else
-		mainScroll.Position = UDim2.new(0, 6, 0, 44)
-		mainScroll.Size     = UDim2.new(1, -12, 1, -50)
+		mainScroll.Position=UDim2.new(0,6,0,44)
+		mainScroll.Size=UDim2.new(1,-12,1,-50)
 	end
 end
 
 local function clearScroll()
-	mainScroll.CanvasPosition = Vector2.new(0, 0)
-	for _, v in ipairs(mainScroll:GetChildren()) do
-		if not v:IsA("UIListLayout") and not v:IsA("UIPadding") then
-			v:Destroy()
-		end
+	mainScroll.CanvasPosition=Vector2.new(0,0)
+	for _,v in ipairs(mainScroll:GetChildren()) do
+		if not v:IsA("UIListLayout") and not v:IsA("UIPadding") then v:Destroy() end
 	end
 end
 
 local function sortModels(models)
-	if sortMode == "name_az" then
-		table.sort(models, function(a,b) return a.Name < b.Name end)
-	elseif sortMode == "name_za" then
-		table.sort(models, function(a,b) return a.Name > b.Name end)
-	elseif sortMode == "weight_desc" then
-		table.sort(models, function(a,b)
-			local wa = a:FindFirstChild("Weight")
-			local wb = b:FindFirstChild("Weight")
-			return (wa and wa.Value or 0) > (wb and wb.Value or 0)
-		end)
-	elseif sortMode == "weight_asc" then
-		table.sort(models, function(a,b)
-			local wa = a:FindFirstChild("Weight")
-			local wb = b:FindFirstChild("Weight")
-			return (wa and wa.Value or 0) < (wb and wb.Value or 0)
-		end)
-	elseif sortMode == "mutations_desc" then
-		table.sort(models, function(a,b)
-			return #getMutations(a) > #getMutations(b)
-		end)
+	if sortMode=="name_az" then table.sort(models,function(a,b)return a.Name<b.Name end)
+	elseif sortMode=="name_za" then table.sort(models,function(a,b)return a.Name>b.Name end)
+	elseif sortMode=="weight_desc" then table.sort(models,function(a,b)return getW(a)>getW(b) end)
+	elseif sortMode=="weight_asc" then table.sort(models,function(a,b)return getW(a)<getW(b) end)
+	elseif sortMode=="mutations_desc" then table.sort(models,function(a,b)return #getMutations(a)>#getMutations(b) end)
+	elseif sortMode=="fruit_desc" then table.sort(models,function(a,b)return getFruitCount(a)>getFruitCount(b) end)
+	elseif sortMode=="age_desc" then table.sort(models,function(a,b)return getAge(a)>getAge(b) end)
 	end
 end
 
-local function makeMutationPills(parent, mutations)
-	local frame = Instance.new("Frame", parent)
-	frame.BackgroundTransparency = 1
-	frame.Size = UDim2.new(1, 0, 0, 0)
-	frame.AutomaticSize = Enum.AutomaticSize.Y
-	local pl = Instance.new("UIListLayout", frame)
-	pl.FillDirection = Enum.FillDirection.Horizontal
-	pl.Wraps = true
-	pl.Padding = UDim.new(0, 4)
-	for _, mut in ipairs(mutations) do
-		local pill = Instance.new("TextLabel", frame)
-		pill.AutomaticSize = Enum.AutomaticSize.X
-		pill.Size = UDim2.new(0, 0, 0, 18)
-		pill.BackgroundColor3 = COLORS.mutPill
-		pill.TextColor3 = COLORS.mutPillText
-		pill.Font = Enum.Font.GothamBold
-		pill.TextSize = 9
-		pill.Text = "  "..mut.."  "
-		pill.BorderSizePixel = 0
-		uiCorner(pill, 9)
+local function makePills(parent, mutations)
+	local frame=Instance.new("Frame",parent)
+	frame.BackgroundTransparency=1; frame.Size=UDim2.new(1,0,0,0)
+	frame.AutomaticSize=Enum.AutomaticSize.Y
+	local pl=Instance.new("UIListLayout",frame)
+	pl.FillDirection=Enum.FillDirection.Horizontal; pl.Wraps=true; pl.Padding=UDim.new(0,4)
+	for _,m in ipairs(mutations) do
+		local mbg, mtx=getMutColor(m)
+		local pill=Instance.new("TextLabel",frame)
+		pill.AutomaticSize=Enum.AutomaticSize.X; pill.Size=UDim2.new(0,0,0,18)
+		pill.BackgroundColor3=mbg; pill.TextColor3=mtx
+		pill.Font=Enum.Font.GothamBold; pill.TextSize=9; pill.Text=" "..m.." "
+		pill.BorderSizePixel=0; corner(pill,9)
 	end
 	return frame
 end
 
-local function emptyLabel(text)
-	local lbl = makeLabel(mainScroll, {
-		text  = text,
-		size  = 13,
-		color = COLORS.textMuted,
-		sz    = UDim2.new(1, 0, 0, 40),
-		align = Enum.TextXAlignment.Center,
-	})
-	lbl.TextYAlignment = Enum.TextYAlignment.Center
-	return lbl
+local function emptyLbl(text)
+	local L=lbl(mainScroll,{text=text,size=13,color=C.textMuted,sz=UDim2.new(1,0,0,40),xa=Enum.TextXAlignment.Center})
+	L.TextYAlignment=Enum.TextYAlignment.Center; return L
 end
 
 local function makeCard(parent, isGreen)
-	local card = Instance.new("TextButton", parent)
-	card.Size = UDim2.new(1, -4, 0, 0)
-	card.AutomaticSize = Enum.AutomaticSize.Y
-	card.BackgroundColor3 = COLORS.card
-	card.BorderSizePixel = 0
-	card.Text = ""
-	card.AutoButtonColor = false
-	uiCorner(card, 10)
-	local stroke = uiStroke(card, isGreen and COLORS.strokeGreen or COLORS.stroke)
-	local pad = Instance.new("UIPadding", card)
-	pad.PaddingTop    = UDim.new(0, 10)
-	pad.PaddingBottom = UDim.new(0, 10)
-	pad.PaddingLeft   = UDim.new(0, 12)
-	pad.PaddingRight  = UDim.new(0, 10)
-	local layout = Instance.new("UIListLayout", card)
-	layout.Padding = UDim.new(0, 5)
-	return card, stroke
+	local card=Instance.new("TextButton",parent)
+	card.Size=UDim2.new(1,-4,0,0); card.AutomaticSize=Enum.AutomaticSize.Y
+	card.BackgroundColor3=C.card; card.BorderSizePixel=0; card.Text=""; card.AutoButtonColor=false
+	corner(card,10)
+	local s=stroke(card,isGreen and C.strokeGreen or C.stroke)
+	local pad=Instance.new("UIPadding",card)
+	pad.PaddingTop=UDim.new(0,10); pad.PaddingBottom=UDim.new(0,10)
+	pad.PaddingLeft=UDim.new(0,12); pad.PaddingRight=UDim.new(0,10)
+	local lay=Instance.new("UIListLayout",card); lay.Padding=UDim.new(0,5)
+	return card, s
 end
 
-------------------------------------------------
--- VIEWS
-------------------------------------------------
+-- ════════════════════════════════════════════
+-- RENDER FUNCTIONS
+-- ════════════════════════════════════════════
 function renderPlants()
-	clearScroll()
-	setControlsVisible(true)
-	backBtn.Visible = false
-	local plr = state.selectedPlayer
-	breadcrumb.Text = plr.Name.."'s Farm"
-	headerSub.Text  = "Viewing "..plr.Name.."'s plants"
-
-	local query = string.lower(searchBox.Text)
-	local models = {}
-
-	if state.currentPlantsFolder then
-		for _, v in ipairs(state.currentPlantsFolder:GetChildren()) do
+	clearScroll(); setControlsVisible(true); backBtn.Visible=false
+	local plr=stateRef.selectedPlayer
+	breadcrumb.Text=plr.Name.."'s Farm"
+	headerSub.Text="Viewing "..plr.Name.."'s plants"
+	local q=string.lower(searchBox.Text); local models={}
+	if stateRef.currentPlantsFolder then
+		for _,v in ipairs(stateRef.currentPlantsFolder:GetChildren()) do
 			if v:IsA("Model") then
-				if query == "" or string.find(string.lower(v.Name), query, 1, true) then
-					table.insert(models, v)
-				end
+				local nm=q=="" or string.find(string.lower(v.Name),q,1,true)
+				local mm=not mutationsOnly or #getMutations(v)>0
+				if nm and mm then table.insert(models,v) end
 			end
 		end
-	else
-		emptyLabel("No Plants_Physical folder found.")
-		statLbl.Text = ""
-		return
-	end
+	else emptyLbl("No Plants_Physical folder found."); statLbl.Text=""; return end
 
 	sortModels(models)
+	local totalMuts,totalFruits=0,0
+	for _,m in ipairs(models) do totalMuts+=#getMutations(m); totalFruits+=getFruitCount(m) end
+	statLbl.Text=#models.." plants  ·  "..totalMuts.." mutations  ·  "..totalFruits.." fruits"
+	if #models==0 then emptyLbl(q~="" and 'No match for "'..q..'".' or "No plants found."); return end
 
-	-- Count mutations across all visible plants
-	local totalMuts = 0
-	for _, m in ipairs(models) do totalMuts += #getMutations(m) end
-	statLbl.Text = #models.." plants   "..totalMuts.." mutations"
+	lbl(mainScroll,{text="  "..#models.." PLANT"..(#models~=1 and "S" or ""),size=9,color=C.textMuted,
+		font=Enum.Font.GothamBold,sz=UDim2.new(1,0,0,14)})
 
-	if #models == 0 then
-		emptyLabel(query ~= "" and 'No plants match "'..query..'".' or "No plants found.")
-		return
-	end
+	for _,model in ipairs(models) do
+		local ff=model:FindFirstChild("Fruits"); local isMulti=ff~=nil
+		local muts,weight={},nil
+		if not isMulti then weight=model:FindFirstChild("Weight"); muts=getMutations(model) end
+		local variant=model:FindFirstChild("Variant")
+		local fc=isMulti and #ff:GetChildren() or 0
+		local card,s=makeCard(mainScroll,isMulti)
 
-	-- Count label
-	local countLbl = makeLabel(mainScroll, {
-		text  = "  "..#models.." PLANT"..(#models ~= 1 and "S" or ""),
-		size  = 9,
-		color = COLORS.textMuted,
-		font  = Enum.Font.GothamBold,
-		sz    = UDim2.new(1, 0, 0, 14),
-	})
+		local row1=Instance.new("Frame",card); row1.Size=UDim2.new(1,0,0,20); row1.BackgroundTransparency=1
+		lbl(row1,{text=model.Name,font=Enum.Font.GothamBold,size=14,color=C.text,sz=UDim2.new(1,-108,1,0),trunc=Enum.TextTruncate.AtEnd})
 
-	for _, model in ipairs(models) do
-		local fruitsFolder = model:FindFirstChild("Fruits")
-		local isMulti = fruitsFolder ~= nil
-		local mutations, variant, weight = {}, nil, nil
+		local badge=Instance.new("TextLabel",row1)
+		badge.Size=UDim2.new(0,96,0,17); badge.Position=UDim2.new(1,-96,0.5,-8)
+		badge.BorderSizePixel=0; badge.Font=Enum.Font.GothamBold; badge.TextSize=9; corner(badge,9)
+		if isMulti then badge.BackgroundColor3=Color3.fromRGB(18,54,38); badge.TextColor3=Color3.fromRGB(68,205,130); badge.Text="⬥ Multi-Harvest"
+		else badge.BackgroundColor3=Color3.fromRGB(38,34,68); badge.TextColor3=Color3.fromRGB(150,140,235); badge.Text="◆ Single Harvest" end
 
-		if not isMulti then
-			variant   = model:FindFirstChild("Variant")
-			weight    = model:FindFirstChild("Weight")
-			mutations = getMutations(model)
-		end
-		local fruitCount = isMulti and #fruitsFolder:GetChildren() or 0
-
-		local card, stroke = makeCard(mainScroll, isMulti)
-
-		local row1 = Instance.new("Frame", card)
-		row1.Size = UDim2.new(1, 0, 0, 20)
-		row1.BackgroundTransparency = 1
-
-		makeLabel(row1, {
-			text     = model.Name,
-			font     = Enum.Font.GothamBold,
-			size     = 14,
-			color    = COLORS.textPrimary,
-			sz       = UDim2.new(1, -100, 1, 0),
-			truncate = Enum.TextTruncate.AtEnd,
-		})
-
-		local badge = Instance.new("TextLabel", row1)
-		badge.Size = UDim2.new(0, 90, 0, 17)
-		badge.Position = UDim2.new(1, -90, 0.5, -8)
-		badge.BorderSizePixel = 0
-		badge.Font = Enum.Font.GothamBold
-		badge.TextSize = 9
-		uiCorner(badge, 9)
-		if isMulti then
-			badge.BackgroundColor3 = Color3.fromRGB(20, 58, 40)
-			badge.TextColor3 = Color3.fromRGB(70, 210, 135)
-			badge.Text = "Multi-Harvest"
+		local infoL=lbl(card,{size=11,color=isMulti and Color3.fromRGB(82,148,108) or C.textSub,sz=UDim2.new(1,0,0,14)})
+		if isMulti then infoL.Text=fc.." fruit"..(fc~=1 and "s" or "").."  ·  tap to expand"
 		else
-			badge.BackgroundColor3 = Color3.fromRGB(40, 36, 72)
-			badge.TextColor3 = Color3.fromRGB(155, 145, 240)
-			badge.Text = "Single Harvest"
+			local parts={}
+			if variant then table.insert(parts,"Variant: "..tostring(variant.Value)) end
+			if weight then table.insert(parts,string.format("⚖ %.2f",weight.Value)) end
+			infoL.Text=table.concat(parts,"   ")
 		end
+		if not isMulti and #muts>0 then makePills(card,muts) end
 
-		local infoLbl = makeLabel(card, {
-			size  = 11,
-			color = isMulti and Color3.fromRGB(85, 155, 110) or COLORS.textSub,
-			sz    = UDim2.new(1, 0, 0, 14),
-		})
+		local hBg=isMulti and C.cardHoverMH or C.cardHoverSH
+		local hS=isMulti and C.strokeGreenHi or C.strokeHi
+		local dS=isMulti and C.strokeGreen or C.stroke
+		card.MouseEnter:Connect(function() tw(card,{BackgroundColor3=hBg}); tw(s,{Color=hS}) end)
+		card.MouseLeave:Connect(function() tw(card,{BackgroundColor3=C.card}); tw(s,{Color=dS}) end)
+
 		if isMulti then
-			infoLbl.Text = fruitCount.." fruit"..(fruitCount ~= 1 and "s" or "").."  —  tap to expand"
-		else
-			local parts = {}
-			if variant then table.insert(parts, "Variant: "..tostring(variant.Value)) end
-			if weight  then table.insert(parts, "Weight: "..string.format("%.2f", weight.Value)) end
-			infoLbl.Text = table.concat(parts, "   ")
+			local cm=model
+			card.MouseButton1Click:Connect(function()
+				stateRef.view="fruits"; stateRef.currentPlantModel=cm; searchBox.Text=""; renderFruits()
+			end)
 		end
-
-		if not isMulti and #mutations > 0 then
-			makeMutationPills(card, mutations)
-		end
-
-		local hoverBg = isMulti and COLORS.cardHoverMH or COLORS.cardHoverSH
-		local hoverStroke = isMulti and COLORS.strokeGreenHi or COLORS.strokeHi
-		local defaultStroke = isMulti and COLORS.strokeGreen or COLORS.stroke
-
-		card.MouseEnter:Connect(function()
-			tween(card,   {BackgroundColor3 = hoverBg})
-			tween(stroke, {Color = hoverStroke})
-		end)
-		card.MouseLeave:Connect(function()
-			tween(card,   {BackgroundColor3 = COLORS.card})
-			tween(stroke, {Color = defaultStroke})
-		end)
-
-		local capturedModel = model
-		card.MouseButton1Click:Connect(function()
-			if isMulti then
-				state.view = "fruits"
-				state.currentPlantModel = capturedModel
-				searchBox.Text = ""
-				renderFruits()
-			end
-		end)
 	end
 end
 
 function renderFruits()
-	clearScroll()
-	setControlsVisible(true)
-	backBtn.Visible = true
-	local plantModel = state.currentPlantModel
-	breadcrumb.Text = plantModel.Name.." / Fruits"
-
-	local fruitsFolder = plantModel:FindFirstChild("Fruits")
-	if not fruitsFolder then
-		emptyLabel("No Fruits folder found.")
-		statLbl.Text = ""
-		return
+	clearScroll(); setControlsVisible(true); backBtn.Visible=true
+	local pm=stateRef.currentPlantModel; breadcrumb.Text=pm.Name.." / Fruits"
+	local ff=pm:FindFirstChild("Fruits")
+	if not ff then emptyLbl("No Fruits folder."); statLbl.Text=""; return end
+	local q=string.lower(searchBox.Text); local fruits={}
+	for _,v in ipairs(ff:GetChildren()) do
+		local nm=q=="" or string.find(string.lower(v.Name),q,1,true)
+		local mm=not mutationsOnly or #getMutations(v)>0
+		if nm and mm then table.insert(fruits,v) end
 	end
-
-	local query = string.lower(searchBox.Text)
-	local fruits = {}
-	for _, v in ipairs(fruitsFolder:GetChildren()) do
-		if query == "" or string.find(string.lower(v.Name), query, 1, true) then
-			table.insert(fruits, v)
-		end
-	end
-
 	sortModels(fruits)
+	local tm=0; for _,f in ipairs(fruits) do tm+=#getMutations(f) end
+	statLbl.Text=#fruits.." fruits  ·  "..tm.." mutations"
+	lbl(mainScroll,{text="  "..#fruits.." FRUIT"..(#fruits~=1 and "S" or "").." IN "..string.upper(pm.Name),
+		size=9,color=C.textMuted,font=Enum.Font.GothamBold,sz=UDim2.new(1,0,0,16)})
+	if #fruits==0 then emptyLbl(q~="" and 'No match for "'..q..'".' or "No fruits yet."); return end
 
-	local totalMuts = 0
-	for _, f in ipairs(fruits) do totalMuts += #getMutations(f) end
-	statLbl.Text = #fruits.." fruits   "..totalMuts.." mutations"
-
-	local sectionText = "  "..#fruits.." FRUIT"..(#fruits ~= 1 and "S" or "").." IN "..string.upper(plantModel.Name)
-	if query ~= "" then sectionText = sectionText..'  —  "'..query..'"' end
-	makeLabel(mainScroll, {
-		text  = sectionText,
-		size  = 9,
-		color = COLORS.textMuted,
-		font  = Enum.Font.GothamBold,
-		sz    = UDim2.new(1, 0, 0, 16),
-	})
-
-	if #fruits == 0 then
-		emptyLabel(query ~= "" and 'No fruits match "'..query..'".' or "No fruits yet.")
-		return
-	end
-
-	for _, fruitModel in ipairs(fruits) do
-		local variant   = fruitModel:FindFirstChild("Variant")
-		local weight    = fruitModel:FindFirstChild("Weight")
-		local mutations = getMutations(fruitModel)
-
-		local card, stroke = makeCard(mainScroll, true)
-
-		local row1 = Instance.new("Frame", card)
-		row1.Size = UDim2.new(1, 0, 0, 20)
-		row1.BackgroundTransparency = 1
-
-		makeLabel(row1, {
-			text     = fruitModel.Name,
-			font     = Enum.Font.GothamBold,
-			size     = 14,
-			color    = COLORS.textGreen,
-			sz       = UDim2.new(0.68, 0, 1, 0),
-			truncate = Enum.TextTruncate.AtEnd,
-		})
-
-		if #mutations > 0 then
-			local mutBadge = Instance.new("TextLabel", row1)
-			mutBadge.Size = UDim2.new(0, 82, 0, 17)
-			mutBadge.Position = UDim2.new(1, -82, 0.5, -8)
-			mutBadge.BackgroundColor3 = COLORS.mutPill
-			mutBadge.TextColor3 = COLORS.mutPillText
-			mutBadge.Font = Enum.Font.GothamBold
-			mutBadge.TextSize = 9
-			mutBadge.Text = #mutations.." mutation"..(#mutations > 1 and "s" or "")
-			mutBadge.BorderSizePixel = 0
-			uiCorner(mutBadge, 9)
+	for _,fm in ipairs(fruits) do
+		local variant=fm:FindFirstChild("Variant"); local weight=fm:FindFirstChild("Weight")
+		local muts=getMutations(fm)
+		local card,s=makeCard(mainScroll,true)
+		local row1=Instance.new("Frame",card); row1.Size=UDim2.new(1,0,0,20); row1.BackgroundTransparency=1
+		lbl(row1,{text=fm.Name,font=Enum.Font.GothamBold,size=14,color=C.textGreen,sz=UDim2.new(0.65,0,1,0),trunc=Enum.TextTruncate.AtEnd})
+		if #muts>0 then
+			local mb=Instance.new("TextLabel",row1)
+			mb.Size=UDim2.new(0,88,0,17); mb.Position=UDim2.new(1,-88,0.5,-8)
+			mb.BorderSizePixel=0; mb.Font=Enum.Font.GothamBold; mb.TextSize=9; corner(mb,9)
+			local _,mtx=getMutColor(muts[1])
+			mb.BackgroundColor3=Color3.fromRGB(40,26,68); mb.TextColor3=mtx
+			mb.Text="✦ "..(#muts).." mut"..(#muts>1 and "s" or "")
 		end
+		local parts={}
+		if variant then table.insert(parts,"Variant: "..tostring(variant.Value)) end
+		if weight then table.insert(parts,string.format("⚖ %.2f",weight.Value)) end
+		if #parts>0 then lbl(card,{text=table.concat(parts,"   "),size=11,color=Color3.fromRGB(88,145,112),sz=UDim2.new(1,0,0,14)}) end
+		if #muts>0 then makePills(card,muts) end
 
-		local parts = {}
-		if variant then table.insert(parts, "Variant: "..tostring(variant.Value)) end
-		if weight  then table.insert(parts, "Weight: "..string.format("%.2f", weight.Value)) end
-		if #parts > 0 then
-			makeLabel(card, {
-				text  = table.concat(parts, "   "),
-				size  = 11,
-				color = Color3.fromRGB(90, 150, 115),
-				sz    = UDim2.new(1, 0, 0, 14),
-			})
-		end
+		card.MouseEnter:Connect(function() tw(card,{BackgroundColor3=C.cardHoverMH}); tw(s,{Color=C.strokeGreenHi}) end)
+		card.MouseLeave:Connect(function() tw(card,{BackgroundColor3=C.card}); tw(s,{Color=C.strokeGreen}) end)
 
-		if #mutations > 0 then
-			makeMutationPills(card, mutations)
-		end
-
-		card.MouseEnter:Connect(function()
-			tween(card,   {BackgroundColor3 = COLORS.cardHoverMH})
-			tween(stroke, {Color = COLORS.strokeGreenHi})
-		end)
-		card.MouseLeave:Connect(function()
-			tween(card,   {BackgroundColor3 = COLORS.card})
-			tween(stroke, {Color = COLORS.strokeGreen})
-		end)
-
-		local capturedFruit = fruitModel
+		local cf=fm
 		card.MouseButton1Click:Connect(function()
-			state.view = "detail"
-			state.currentFruitModel = capturedFruit
-			renderDetail()
+			stateRef.view="detail"; stateRef.currentFruitModel=cf; renderDetail()
 		end)
 	end
 end
 
 function renderDetail()
-	clearScroll()
-	setControlsVisible(false)
-	backBtn.Visible = true
-	statLbl.Text = ""
-	local fruitModel = state.currentFruitModel
-	local plantName  = state.currentPlantModel and state.currentPlantModel.Name or "?"
-	breadcrumb.Text  = plantName.." / "..fruitModel.Name
+	clearScroll(); setControlsVisible(false); backBtn.Visible=true; statLbl.Text=""
+	local fm=stateRef.currentFruitModel
+	local pn=stateRef.currentPlantModel and stateRef.currentPlantModel.Name or "?"
+	breadcrumb.Text=pn.." / "..fm.Name
+	local variant=fm:FindFirstChild("Variant"); local weight=fm:FindFirstChild("Weight")
+	local muts=getMutations(fm)
+	local ok,attrs=pcall(function() return fm:GetAttributes() end)
 
-	local variant   = fruitModel:FindFirstChild("Variant")
-	local weight    = fruitModel:FindFirstChild("Weight")
-	local mutations = getMutations(fruitModel)
+	local card=Instance.new("Frame",mainScroll)
+	card.Size=UDim2.new(1,-4,0,0); card.AutomaticSize=Enum.AutomaticSize.Y
+	card.BackgroundColor3=C.card; card.BorderSizePixel=0; corner(card,10); stroke(card,C.stroke)
+	local pad=Instance.new("UIPadding",card)
+	pad.PaddingTop=UDim.new(0,14); pad.PaddingBottom=UDim.new(0,14)
+	pad.PaddingLeft=UDim.new(0,14); pad.PaddingRight=UDim.new(0,14)
+	local lay=Instance.new("UIListLayout",card); lay.Padding=UDim.new(0,10)
 
-	-- Fetch all attributes for a full dump
-	local allAttrs = {}
-	local ok, attrs = pcall(function() return fruitModel:GetAttributes() end)
+	lbl(card,{text=fm.Name,font=Enum.Font.GothamBold,size=16,color=C.textGreen,sz=UDim2.new(1,0,0,22)})
+
+	local function div() local d=Instance.new("Frame",card); d.Size=UDim2.new(1,0,0,1); d.BackgroundColor3=Color3.fromRGB(36,34,58); d.BorderSizePixel=0 end
+	local function secH(t) lbl(card,{text=t,size=9,color=C.textSub,font=Enum.Font.GothamBold,sz=UDim2.new(1,0,0,14)}) end
+	local function fieldRow(label,value,vc)
+		local row=Instance.new("Frame",card); row.Size=UDim2.new(1,0,0,28)
+		row.BackgroundColor3=Color3.fromRGB(22,21,36); row.BorderSizePixel=0; corner(row,6)
+		lbl(row,{text=label,size=12,color=C.textSub,sz=UDim2.new(0.42,0,1,0),pos=UDim2.new(0,10,0,0)})
+		lbl(row,{text=tostring(value),font=Enum.Font.GothamBold,size=12,color=vc or C.text,
+			sz=UDim2.new(0.54,0,1,0),pos=UDim2.new(0.44,0,0,0)})
+	end
+
+	div(); secH("PROPERTIES")
+	if variant then fieldRow("Variant",variant.Value,Color3.fromRGB(150,210,255)) end
+	if weight then fieldRow("Weight",string.format("%.4f",weight.Value),C.textAmber) end
 	if ok then
-		for k, v in pairs(attrs) do
-			if not EXCLUDED_ATTRS[k] then
-				table.insert(allAttrs, {name=k, value=v})
+		local extras={}
+		for k,v in pairs(attrs) do
+			if type(v)~="boolean" and k~="Weight" and k~="Variant" and not EXCLUDED_ATTRS[k] then
+				table.insert(extras,{name=k,value=v})
 			end
 		end
-		table.sort(allAttrs, function(a,b) return a.name < b.name end)
+		table.sort(extras,function(a,b)return a.name<b.name end)
+		for _,e in ipairs(extras) do fieldRow(e.name,tostring(e.value)) end
 	end
 
-	local card = Instance.new("Frame", mainScroll)
-	card.Size = UDim2.new(1, -4, 0, 0)
-	card.AutomaticSize = Enum.AutomaticSize.Y
-	card.BackgroundColor3 = COLORS.card
-	card.BorderSizePixel = 0
-	uiCorner(card, 10)
-	uiStroke(card, COLORS.stroke)
-	local pad = Instance.new("UIPadding", card)
-	pad.PaddingTop = UDim.new(0, 14)
-	pad.PaddingBottom = UDim.new(0, 14)
-	pad.PaddingLeft = UDim.new(0, 14)
-	pad.PaddingRight = UDim.new(0, 14)
-	local layout = Instance.new("UIListLayout", card)
-	layout.Padding = UDim.new(0, 10)
-
-	makeLabel(card, {
-		text  = fruitModel.Name,
-		font  = Enum.Font.GothamBold,
-		size  = 16,
-		color = COLORS.textGreen,
-		sz    = UDim2.new(1, 0, 0, 22),
-	})
-
-	-- divider
-	local function divider()
-		local d = Instance.new("Frame", card)
-		d.Size = UDim2.new(1, 0, 0, 1)
-		d.BackgroundColor3 = Color3.fromRGB(38, 36, 60)
-		d.BorderSizePixel = 0
-	end
-
-	divider()
-
-	local function sectionHeader(text)
-		makeLabel(card, {
-			text  = text,
-			size  = 9,
-			color = COLORS.textSub,
-			font  = Enum.Font.GothamBold,
-			sz    = UDim2.new(1, 0, 0, 14),
-		})
-	end
-
-	local function fieldRow(label, value, valColor)
-		local row = Instance.new("Frame", card)
-		row.Size = UDim2.new(1, 0, 0, 28)
-		row.BackgroundColor3 = Color3.fromRGB(24, 23, 38)
-		row.BorderSizePixel = 0
-		uiCorner(row, 6)
-		makeLabel(row, {
-			text  = label,
-			size  = 12,
-			color = COLORS.textSub,
-			sz    = UDim2.new(0.42, 0, 1, 0),
-			pos   = UDim2.new(0, 10, 0, 0),
-		})
-		makeLabel(row, {
-			text  = tostring(value),
-			font  = Enum.Font.GothamBold,
-			size  = 12,
-			color = valColor or COLORS.textPrimary,
-			sz    = UDim2.new(0.54, 0, 1, 0),
-			pos   = UDim2.new(0.44, 0, 0, 0),
-		})
-	end
-
-	sectionHeader("PROPERTIES")
-	if variant then fieldRow("Variant", variant.Value, Color3.fromRGB(155, 215, 255)) end
-	if weight  then fieldRow("Weight", string.format("%.4f", weight.Value), Color3.fromRGB(255, 205, 110)) end
-
-	-- Extra non-boolean attributes
-	local extraAttrs = {}
-	if ok then
-		for k, v in pairs(attrs) do
-			if type(v) ~= "boolean" and k ~= "Weight" and k ~= "Variant" and not EXCLUDED_ATTRS[k] then
-				table.insert(extraAttrs, {name=k, value=v})
-			end
-		end
-		table.sort(extraAttrs, function(a,b) return a.name < b.name end)
-	end
-	for _, entry in ipairs(extraAttrs) do
-		fieldRow(entry.name, tostring(entry.value))
-	end
-
-	divider()
-	sectionHeader("MUTATIONS ("..#mutations..")")
-
-	if #mutations == 0 then
-		makeLabel(card, {
-			text  = "None detected",
-			size  = 13,
-			color = COLORS.textMuted,
-			sz    = UDim2.new(1, 0, 0, 20),
-		})
+	div(); secH("MUTATIONS ("..#muts..")")
+	if #muts==0 then
+		lbl(card,{text="None detected",size=13,color=C.textMuted,sz=UDim2.new(1,0,0,20)})
 	else
-		makeMutationPills(card, mutations)
+		makePills(card,muts)
 	end
 end
 
-------------------------------------------------
--- BACK BUTTON
-------------------------------------------------
 backBtn.MouseButton1Click:Connect(function()
-	if state.view == "detail" then
-		state.view = "fruits"
-		searchBox.Text = ""
-		renderFruits()
-	elseif state.view == "fruits" then
-		state.view = "plants"
-		searchBox.Text = ""
-		renderPlants()
+	if stateRef.view=="detail" then
+		stateRef.view="fruits"; searchBox.Text=""; renderFruits()
+	elseif stateRef.view=="fruits" then
+		stateRef.view="plants"; searchBox.Text=""; renderPlants()
 	end
 end)
 
-------------------------------------------------
--- SORT BUTTONS
-------------------------------------------------
-local function onSort(mode)
-	sortMode = mode
-	updateSortColors()
-	if state.view == "plants" then renderPlants()
-	elseif state.view == "fruits" then renderFruits() end
+local function onSort(m)
+	sortMode=m; updateSortColors()
+	if stateRef.view=="plants" then renderPlants()
+	elseif stateRef.view=="fruits" then renderFruits() end
+end
+mutOnlyBtn.MouseButton1Click:Connect(function()
+	mutationsOnly=not mutationsOnly; updateSortColors()
+	if stateRef.view=="plants" then renderPlants()
+	elseif stateRef.view=="fruits" then renderFruits() end
+end)
+for m,data in pairs(sortButtons) do
+	local mm=m; data.btn.MouseButton1Click:Connect(function() onSort(mm) end)
 end
 
-btnNameAZ.MouseButton1Click:Connect(function()  onSort("name_az") end)
-btnNameZA.MouseButton1Click:Connect(function()  onSort("name_za") end)
-btnWtDesc.MouseButton1Click:Connect(function()  onSort("weight_desc") end)
-btnWtAsc.MouseButton1Click:Connect(function()   onSort("weight_asc") end)
-btnMutDesc.MouseButton1Click:Connect(function() onSort("mutations_desc") end)
+local dSearch=debounce(function()
+	if stateRef.view=="plants" then renderPlants()
+	elseif stateRef.view=="fruits" then renderFruits() end
+end,0.25)
+searchBox:GetPropertyChangedSignal("Text"):Connect(dSearch)
 
-------------------------------------------------
--- SEARCH (debounced)
-------------------------------------------------
-local debouncedSearch = debounce(function()
-	if state.view == "plants" then renderPlants()
-	elseif state.view == "fruits" then renderFruits() end
-end, 0.3)
-
-searchBox:GetPropertyChangedSignal("Text"):Connect(debouncedSearch)
-
-------------------------------------------------
+-- ════════════════════════════════════════════
 -- PLAYER BUTTONS
-------------------------------------------------
-local plrBtnData = {}  -- [plr] = {btn, subLbl, stroke}
+-- ════════════════════════════════════════════
+local plrBtnData={}
 
-local function refreshPlrSubLabel(plr)
-	local data = plrBtnData[plr]
-	if not data then return end
-	local farm = getFarm(plr)
-	local pf = farm and farm:FindFirstChild("Plants_Physical")
-	local count = pf and #pf:GetChildren() or 0
-	data.subLbl.Text = count.." plant"..(count ~= 1 and "s" or "")
+local function refreshSubLbl(plr)
+	local data=plrBtnData[plr]; if not data then return end
+	local farm=getFarmForPlayer(plr); local pf=farm and farm:FindFirstChild("Plants_Physical")
+	local count=pf and #pf:GetChildren() or 0
+	data.sub.Text=count.." plant"..(count~=1 and "s" or "")
 end
 
-local function makePlayerButton(plr)
-	local btn = Instance.new("TextButton", plrScroll)
-	btn.Size = UDim2.new(1, 0, 0, 50)
-	btn.BackgroundColor3 = COLORS.card
-	btn.BorderSizePixel = 0
-	btn.Text = ""
-	btn.AutoButtonColor = false
-	uiCorner(btn, 10)
-	local bStroke = uiStroke(btn, COLORS.stroke)
-
-	local avatar = Instance.new("Frame", btn)
-	avatar.Size = UDim2.new(0, 28, 0, 28)
-	avatar.Position = UDim2.new(0, 8, 0.5, -14)
-	avatar.BackgroundColor3 = Color3.fromRGB(46, 42, 80)
-	avatar.BorderSizePixel = 0
-	uiCorner(avatar, 14)
-	makeLabel(avatar, {
-		text  = getInitials(plr.Name),
-		font  = Enum.Font.GothamBold,
-		size  = 11,
-		color = Color3.fromRGB(165, 155, 230),
-		sz    = UDim2.new(1, 0, 1, 0),
-		align = Enum.TextXAlignment.Center,
-	})
-
-	makeLabel(btn, {
-		text     = plr.Name,
-		font     = Enum.Font.GothamBold,
-		size     = 12,
-		color    = COLORS.textPrimary,
-		sz       = UDim2.new(1, -48, 0, 17),
-		pos      = UDim2.new(0, 44, 0, 8),
-		truncate = Enum.TextTruncate.AtEnd,
-	})
-
-	local subLbl = makeLabel(btn, {
-		text  = "loading…",
-		size  = 10,
-		color = COLORS.textMuted,
-		sz    = UDim2.new(1, -48, 0, 14),
-		pos   = UDim2.new(0, 44, 0, 27),
-	})
-
-	plrBtnData[plr] = {btn=btn, subLbl=subLbl, stroke=bStroke}
-	refreshPlrSubLabel(plr)
-
-	btn.MouseEnter:Connect(function()
-		if state.selectedPlayer ~= plr then
-			tween(bStroke, {Color = Color3.fromRGB(80, 75, 130)})
-		end
-	end)
-	btn.MouseLeave:Connect(function()
-		if state.selectedPlayer ~= plr then
-			tween(bStroke, {Color = COLORS.stroke})
-		end
-	end)
+local function makePlrBtn(plr)
+	local btn=Instance.new("TextButton",plrScroll)
+	btn.Size=UDim2.new(1,0,0,50); btn.BackgroundColor3=C.card; btn.BorderSizePixel=0
+	btn.Text=""; btn.AutoButtonColor=false; corner(btn,10); local bs=stroke(btn,C.stroke)
+	local av=Instance.new("Frame",btn); av.Size=UDim2.new(0,28,0,28); av.Position=UDim2.new(0,8,0.5,-14)
+	av.BackgroundColor3=Color3.fromRGB(42,38,76); av.BorderSizePixel=0; corner(av,14)
+	lbl(av,{text=initials(plr.Name),font=Enum.Font.GothamBold,size=11,color=Color3.fromRGB(158,148,225),sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
+	lbl(btn,{text=plr.Name,font=Enum.Font.GothamBold,size=12,color=C.text,sz=UDim2.new(1,-48,0,17),pos=UDim2.new(0,44,0,8),trunc=Enum.TextTruncate.AtEnd})
+	local sub=lbl(btn,{text="loading…",size=10,color=C.textMuted,sz=UDim2.new(1,-48,0,14),pos=UDim2.new(0,44,0,27)})
+	plrBtnData[plr]={btn=btn,sub=sub,s=bs}; refreshSubLbl(plr)
+	btn.MouseEnter:Connect(function() if stateRef.selectedPlayer~=plr then tw(bs,{Color=Color3.fromRGB(72,68,124)}) end end)
+	btn.MouseLeave:Connect(function() if stateRef.selectedPlayer~=plr then tw(bs,{Color=C.stroke}) end end)
 	btn.MouseButton1Click:Connect(function()
-		state.selectedPlayer = plr
-		-- reset other button strokes
-		for p, d in pairs(plrBtnData) do
-			tween(d.stroke, {Color = p == plr and COLORS.strokeHi or COLORS.stroke})
-		end
-		state.view = "plants"
-		searchBox.Text = ""
-		local farm = getFarm(plr)
-		state.currentPlantsFolder = farm and farm:FindFirstChild("Plants_Physical") or nil
+		stateRef.selectedPlayer=plr
+		for p,d in pairs(plrBtnData) do tw(d.s,{Color=p==plr and C.strokeHi or C.stroke}) end
+		stateRef.view="plants"; searchBox.Text=""
+		local farm=getFarmForPlayer(plr)
+		stateRef.currentPlantsFolder=farm and farm:FindFirstChild("Plants_Physical") or nil
 		renderPlants()
 	end)
-
-	return btn
 end
 
--- "My Farm" button
-local myBtn = Instance.new("TextButton", plrScroll)
-myBtn.Size = UDim2.new(1, 0, 0, 50)
-myBtn.BackgroundColor3 = Color3.fromRGB(20, 18, 36)
-myBtn.BorderSizePixel = 0
-myBtn.Text = ""
-myBtn.AutoButtonColor = false
-uiCorner(myBtn, 10)
-local myStroke = uiStroke(myBtn, Color3.fromRGB(72, 65, 128))
-
-local myAvatar = Instance.new("Frame", myBtn)
-myAvatar.Size = UDim2.new(0, 28, 0, 28)
-myAvatar.Position = UDim2.new(0, 8, 0.5, -14)
-myAvatar.BackgroundColor3 = Color3.fromRGB(68, 58, 128)
-myAvatar.BorderSizePixel = 0
-uiCorner(myAvatar, 14)
-makeLabel(myAvatar, {
-	text  = getInitials(player.Name),
-	font  = Enum.Font.GothamBold,
-	size  = 11,
-	color = Color3.fromRGB(200, 188, 255),
-	sz    = UDim2.new(1, 0, 1, 0),
-	align = Enum.TextXAlignment.Center,
-})
-
-makeLabel(myBtn, {
-	text     = player.Name,
-	font     = Enum.Font.GothamBold,
-	size     = 12,
-	color    = Color3.fromRGB(200, 188, 255),
-	sz       = UDim2.new(1, -48, 0, 17),
-	pos      = UDim2.new(0, 44, 0, 8),
-	truncate = Enum.TextTruncate.AtEnd,
-})
-local mySubLbl = makeLabel(myBtn, {
-	text  = "My Farm",
-	size  = 10,
-	color = Color3.fromRGB(110, 100, 165),
-	sz    = UDim2.new(1, -48, 0, 14),
-	pos   = UDim2.new(0, 44, 0, 27),
-})
-
-plrBtnData[player] = {btn=myBtn, subLbl=mySubLbl, stroke=myStroke}
-
-myBtn.MouseEnter:Connect(function()
-	if state.selectedPlayer ~= player then
-		tween(myStroke, {Color = Color3.fromRGB(108, 98, 175)})
-	end
-end)
-myBtn.MouseLeave:Connect(function()
-	if state.selectedPlayer ~= player then
-		tween(myStroke, {Color = Color3.fromRGB(72, 65, 128)})
-	end
-end)
+-- My Farm button
+local myBtn=Instance.new("TextButton",plrScroll)
+myBtn.Size=UDim2.new(1,0,0,50); myBtn.BackgroundColor3=Color3.fromRGB(18,16,34)
+myBtn.BorderSizePixel=0; myBtn.Text=""; myBtn.AutoButtonColor=false
+corner(myBtn,10); local myS=stroke(myBtn,Color3.fromRGB(68,60,120))
+local myAv=Instance.new("Frame",myBtn); myAv.Size=UDim2.new(0,28,0,28); myAv.Position=UDim2.new(0,8,0.5,-14)
+myAv.BackgroundColor3=Color3.fromRGB(64,54,122); myAv.BorderSizePixel=0; corner(myAv,14)
+lbl(myAv,{text=initials(player.Name),font=Enum.Font.GothamBold,size=11,color=Color3.fromRGB(195,182,255),sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
+lbl(myBtn,{text=player.Name,font=Enum.Font.GothamBold,size=12,color=Color3.fromRGB(195,182,255),sz=UDim2.new(1,-48,0,17),pos=UDim2.new(0,44,0,8),trunc=Enum.TextTruncate.AtEnd})
+local mySub=lbl(myBtn,{text="My Farm",size=10,color=Color3.fromRGB(105,95,158),sz=UDim2.new(1,-48,0,14),pos=UDim2.new(0,44,0,27)})
+plrBtnData[player]={btn=myBtn,sub=mySub,s=myS}
+myBtn.MouseEnter:Connect(function() if stateRef.selectedPlayer~=player then tw(myS,{Color=Color3.fromRGB(104,94,170)}) end end)
+myBtn.MouseLeave:Connect(function() if stateRef.selectedPlayer~=player then tw(myS,{Color=Color3.fromRGB(68,60,120)}) end end)
 myBtn.MouseButton1Click:Connect(function()
-	state.selectedPlayer = player
-	for p, d in pairs(plrBtnData) do
-		tween(d.stroke, {Color = p == player and COLORS.strokeHi or COLORS.stroke})
-	end
-	state.view = "plants"
-	searchBox.Text = ""
-	local farm = getFarm(player)
-	state.currentPlantsFolder = farm and farm:FindFirstChild("Plants_Physical") or nil
+	stateRef.selectedPlayer=player
+	for p,d in pairs(plrBtnData) do tw(d.s,{Color=p==player and C.strokeHi or C.stroke}) end
+	stateRef.view="plants"; searchBox.Text=""
+	local farm=getFarmForPlayer(player)
+	stateRef.currentPlantsFolder=farm and farm:FindFirstChild("Plants_Physical") or nil
 	renderPlants()
 end)
 
 local function refreshPlayers()
-	for _, v in ipairs(plrScroll:GetChildren()) do
-		if v:IsA("TextButton") and v ~= myBtn then
-			v:Destroy()
-		end
+	for _,v in ipairs(plrScroll:GetChildren()) do
+		if v:IsA("TextButton") and v~=myBtn then v:Destroy() end
 	end
-	for p, _ in pairs(plrBtnData) do
-		if p ~= player then plrBtnData[p] = nil end
+	for p in pairs(plrBtnData) do if p~=player then plrBtnData[p]=nil end end
+	for _,plr in ipairs(Players:GetPlayers()) do
+		if plr~=player then makePlrBtn(plr) end
 	end
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr ~= player then makePlayerButton(plr) end
-	end
+	rebuildBlockList()
 end
-
-Players.PlayerAdded:Connect(function()
-	task.wait(1)
-	refreshPlayers()
-end)
-Players.PlayerRemoving:Connect(function()
-	task.wait(0.5)
-	refreshPlayers()
-end)
+Players.PlayerAdded:Connect(function() task.wait(1); refreshPlayers() end)
+Players.PlayerRemoving:Connect(function() task.wait(0.5); refreshPlayers() end)
 refreshPlayers()
 
--- Auto-select own farm on load
 do
-	local farm = getFarm(player)
-	state.currentPlantsFolder = farm and farm:FindFirstChild("Plants_Physical") or nil
-	renderPlants()
-	tween(myStroke, {Color = COLORS.strokeHi})
+	local farm=getFarmForPlayer(player)
+	stateRef.currentPlantsFolder=farm and farm:FindFirstChild("Plants_Physical") or nil
+	renderPlants(); tw(myS,{Color=C.strokeHi})
 end
 
-------------------------------------------------
--- MAIN LOOP  (light polling, no lag)
-------------------------------------------------
-local lastPlayer = nil
-local lastCount  = -1
+-- ════════════════════════════════════════════
+-- WORLD HOVER (works even when UI is hidden)
+-- ════════════════════════════════════════════
+local lastHoverModel=nil
 
-while task.wait(2.5) do
-	-- Refresh sub-labels for all visible player buttons
-	for plr, _ in pairs(plrBtnData) do
-		refreshPlrSubLabel(plr)
+-- Cache which models belong to which farm/owner (rebuilt periodically)
+local farmOwnerCache={}  -- [model] = playerName or "Unknown"
+local function rebuildOwnerCache()
+	farmOwnerCache={}
+	local farms=getAllFarms()
+	for _,fd in ipairs(farms) do
+		local pf=fd.imp and fd.imp:FindFirstChild("Plants_Physical")
+		if not pf then continue end
+		local ownerName=fd.player and fd.player.Name or tostring(fd.owner)
+		for _,m in ipairs(pf:GetDescendants()) do
+			if m:IsA("Model") or m:IsA("BasePart") then
+				farmOwnerCache[m]=ownerName
+			end
+		end
+	end
+end
+rebuildOwnerCache()
+
+local function getOwnerOfModel(model)
+	return farmOwnerCache[model] or farmOwnerCache[model.Parent] or nil
+end
+
+local function isFromAnyFarm(model)
+	-- Check if model is a plant model or fruit in any farm
+	local F=workspace:FindFirstChild("Farm"); if not F then return false end
+	return model:IsDescendantOf(F)
+end
+
+RunService.RenderStepped:Connect(function()
+	if not ESP.hoverLabels then
+		if hoverPopup.Visible then hoverPopup.Visible=false; lastHoverModel=nil end
+		return
 	end
 
-	local plr = state.selectedPlayer
-	if not plr then continue end
-	local farm = getFarm(plr)
-	local pf   = farm and farm:FindFirstChild("Plants_Physical")
-	local count = pf and #pf:GetChildren() or 0
+	local target=mouse.Target
+	local model=target
+	if model then
+		if model:IsA("BasePart") then model=model.Parent end
+		if not (model and model:IsA("Model")) then model=nil end
+	end
 
-	if plr ~= lastPlayer or count ~= lastCount then
-		lastPlayer = plr
-		lastCount  = count
-		state.currentPlantsFolder = pf
-		if state.view == "plants" then
-			renderPlants()
+	if not model or not isFromAnyFarm(model) then
+		if hoverPopup.Visible then hoverPopup.Visible=false; lastHoverModel=nil end
+		return
+	end
+
+	-- Check if owner is blocked
+	local ownerName=getOwnerOfModel(model)
+	if ownerName then
+		for _,plr in ipairs(Players:GetPlayers()) do
+			if plr.Name==ownerName and ESP.blockedPlayers[plr.UserId] then
+				if hoverPopup.Visible then hoverPopup.Visible=false; lastHoverModel=nil end
+				return
+			end
 		end
+	end
+
+	-- Position
+	local mp=UIS:GetMouseLocation()
+	local vp=camera.ViewportSize
+	local px=math.min(mp.X+20, vp.X-248)
+	local py=math.min(mp.Y+20, vp.Y-210)
+	hoverPopup.Position=UDim2.new(0,px,0,py)
+
+	if model==lastHoverModel then
+		hoverPopup.Visible=true; return
+	end
+	lastHoverModel=model
+
+	-- Rebuild popup
+	local muts=getMutations(model)
+	local w=getW(model)
+	local v=getV(model)
+	local isFruit=model.Parent and model.Parent.Name=="Fruits"
+	local isMulti=not isFruit and model:FindFirstChild("Fruits")~=nil
+	local fc=isMulti and getFruitCount(model) or 0
+	local espColor=getESPColor(model,muts)
+
+	hpAccent.BackgroundColor3=espColor
+	hpTitle.Text=model.Name
+	hpTitle.TextColor3=isFruit and C.textAmber or (isMulti and C.textGreen or C.text)
+
+	if isFruit then
+		hpTypeBadge.Text=" 🍎 Fruit "
+		hpTypeBadge.BackgroundColor3=Color3.fromRGB(50,32,14)
+		hpTypeBadge.TextColor3=C.textAmber
+	elseif isMulti then
+		hpTypeBadge.Text=" ⬥ Multi · "..fc.." fruits "
+		hpTypeBadge.BackgroundColor3=Color3.fromRGB(18,50,34)
+		hpTypeBadge.TextColor3=C.textGreen
+	else
+		hpTypeBadge.Text=" ◆ Single Harvest "
+		hpTypeBadge.BackgroundColor3=Color3.fromRGB(34,30,64)
+		hpTypeBadge.TextColor3=Color3.fromRGB(150,140,230)
+	end
+
+	-- Owner badge
+	if ownerName then
+		hpOwnerBadge.Text=" 👤 "..ownerName.." "
+		hpOwnerBadge.Visible=true
+	else
+		hpOwnerBadge.Visible=false
+	end
+
+	hpWVal.Text=w>0 and string.format("%.4f",w) or "—"
+	hpVVal.Text=v or "—"
+	hpFruitRow.Visible=isMulti
+	if isMulti then hpFLbl.Text="🍃 "..fc.." fruit"..(fc~=1 and "s" or "").." growing" end
+	hpMutHLbl.Text="MUTATIONS ("..#muts..")"
+	rebuildHpMuts(muts)
+	hoverPopup.Visible=true
+end)
+
+-- ════════════════════════════════════════════
+-- MAIN LOOP (polling, owner cache refresh)
+-- ════════════════════════════════════════════
+local lastPlr=nil; local lastCount=-1
+
+while task.wait(ESP.refreshRate) do
+	-- Refresh owner cache every cycle
+	rebuildOwnerCache()
+
+	for plr in pairs(plrBtnData) do refreshSubLbl(plr) end
+
+	local plr=stateRef.selectedPlayer; if not plr then continue end
+	local farm=getFarmForPlayer(plr)
+	local pf=farm and farm:FindFirstChild("Plants_Physical")
+	local count=pf and #pf:GetChildren() or 0
+
+	if plr~=lastPlr or count~=lastCount then
+		lastPlr=plr; lastCount=count
+		stateRef.currentPlantsFolder=pf
+		if stateRef.view=="plants" then renderPlants() end
+		if ESP.enabled then refreshESP() end
 	end
 end
