@@ -1,15 +1,20 @@
 --[[
-╔══════════════════════════════════════════════════════╗
-║           FARM VIEWER PRO  v5  (FIXED)               ║
-║   Grow a Garden — Full Mutation Database Edition     ║
-╠══════════════════════════════════════════════════════╣
-║  • Fixed forward-reference on refreshESP             ║
-║  • Main loop moved to task.spawn (non-blocking)      ║
-║  • MISC toggles now safe to call refreshESP          ║
-║  • Owner cache rebuilt on connect                    ║
-╚══════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════╗
+║           FARM VIEWER PRO  v6                            ║
+║   Grow a Garden — Complete Overhaul Edition              ║
+╠══════════════════════════════════════════════════════════╣
+║  • Synced full mutation DB (all multipliers corrected)   ║
+║  • Roblox Highlight instances (inserted into model)      ║
+║  • Collect (mine) / Steal (others) action buttons        ║
+║  • Player-leave safety & state cleanup                   ║
+║  • Zero-lag design: pooled, debounced, safe pcalls       ║
+║  • Cinematic deep-space UI with glowing accents          ║
+╚══════════════════════════════════════════════════════════╝
 --]]
 
+-- ════════════════════════════════════════════════════
+--  SERVICES
+-- ════════════════════════════════════════════════════
 local Players      = game:GetService("Players")
 local UIS          = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -20,110 +25,222 @@ local camera = workspace.CurrentCamera
 local mouse  = player:GetMouse()
 
 -- ════════════════════════════════════════════════════
---  COMPLETE MUTATION DATABASE  (name → {mult, bg, tx})
+--  MUTATION DATABASE  (name → {mult, bg, tx})
+--  Synced from official GaG wiki data
 -- ════════════════════════════════════════════════════
 local MUT_DB = {
-	Silver                 = {mult=5,   bg=Color3.fromRGB(55,58,72),  tx=Color3.fromRGB(200,215,235)},
-	Gold                   = {mult=20,  bg=Color3.fromRGB(68,52,8),   tx=Color3.fromRGB(255,218,60)},
-	Rainbow                = {mult=50,  bg=Color3.fromRGB(60,14,72),  tx=Color3.fromRGB(230,130,255)},
-	Wet                    = {mult=2,   bg=Color3.fromRGB(10,38,62),  tx=Color3.fromRGB(80,175,240)},
-	Windstruck             = {mult=2,   bg=Color3.fromRGB(30,34,50),  tx=Color3.fromRGB(160,190,240)},
-	Moonlit                = {mult=2,   bg=Color3.fromRGB(20,18,52),  tx=Color3.fromRGB(160,155,255)},
-	Chilled                = {mult=2,   bg=Color3.fromRGB(14,42,58),  tx=Color3.fromRGB(130,225,255)},
-	Choc                   = {mult=2,   bg=Color3.fromRGB(52,28,10),  tx=Color3.fromRGB(200,140,80)},
-	Glimmering             = {mult=2,   bg=Color3.fromRGB(52,48,8),   tx=Color3.fromRGB(240,235,100)},
-	Aromatic               = {mult=3,   bg=Color3.fromRGB(40,14,50),  tx=Color3.fromRGB(220,130,255)},
-	Pasta                  = {mult=3,   bg=Color3.fromRGB(58,42,8),   tx=Color3.fromRGB(240,205,100)},
-	Meatball               = {mult=3,   bg=Color3.fromRGB(50,20,10),  tx=Color3.fromRGB(215,120,80)},
-	Sandy                  = {mult=3,   bg=Color3.fromRGB(50,40,10),  tx=Color3.fromRGB(220,195,100)},
-	Pollinated             = {mult=3,   bg=Color3.fromRGB(40,50,8),   tx=Color3.fromRGB(175,225,80)},
-	Sauce                  = {mult=3,   bg=Color3.fromRGB(58,16,10),  tx=Color3.fromRGB(240,100,80)},
-	Cracked                = {mult=4,   bg=Color3.fromRGB(42,34,18),  tx=Color3.fromRGB(195,170,110)},
-	Verdant                = {mult=4,   bg=Color3.fromRGB(10,46,18),  tx=Color3.fromRGB(90,225,125)},
-	Burnt                  = {mult=4,   bg=Color3.fromRGB(40,18,6),   tx=Color3.fromRGB(200,105,50)},
-	Fall                   = {mult=4,   bg=Color3.fromRGB(52,28,6),   tx=Color3.fromRGB(235,145,60)},
-	Wiltproof              = {mult=4,   bg=Color3.fromRGB(18,42,18),  tx=Color3.fromRGB(120,210,120)},
-	Cloudtouched           = {mult=5,   bg=Color3.fromRGB(22,38,58),  tx=Color3.fromRGB(140,200,255)},
-	Plasma                 = {mult=5,   bg=Color3.fromRGB(50,8,50),   tx=Color3.fromRGB(230,80,255)},
-	HoneyGlazed            = {mult=5,   bg=Color3.fromRGB(58,44,6),   tx=Color3.fromRGB(255,210,60)},
-	Clay                   = {mult=5,   bg=Color3.fromRGB(46,32,20),  tx=Color3.fromRGB(195,155,110)},
-	Twisted                = {mult=5,   bg=Color3.fromRGB(40,10,52),  tx=Color3.fromRGB(190,90,255)},
-	Bloodlit               = {mult=5,   bg=Color3.fromRGB(56,8,8),    tx=Color3.fromRGB(240,75,75)},
-	Drenched               = {mult=5,   bg=Color3.fromRGB(8,36,58),   tx=Color3.fromRGB(70,165,240)},
-	Heavenly               = {mult=5,   bg=Color3.fromRGB(50,46,14),  tx=Color3.fromRGB(255,250,175)},
-	Chakra                 = {mult=5,   bg=Color3.fromRGB(8,46,46),   tx=Color3.fromRGB(80,230,230)},
-	Static                 = {mult=8,   bg=Color3.fromRGB(44,44,8),   tx=Color3.fromRGB(240,240,60)},
-	Fried                  = {mult=8,   bg=Color3.fromRGB(52,30,6),   tx=Color3.fromRGB(225,158,60)},
-	Bloom                  = {mult=8,   bg=Color3.fromRGB(52,10,30),  tx=Color3.fromRGB(240,100,175)},
-	Rot                    = {mult=8,   bg=Color3.fromRGB(22,36,8),   tx=Color3.fromRGB(130,195,60)},
-	Wilt                   = {mult=8,   bg=Color3.fromRGB(36,30,8),   tx=Color3.fromRGB(175,162,80)},
-	Frozen                 = {mult=10,  bg=Color3.fromRGB(8,38,56),   tx=Color3.fromRGB(100,210,255)},
-	Amber                  = {mult=10,  bg=Color3.fromRGB(58,38,6),   tx=Color3.fromRGB(255,185,60)},
-	Cooked                 = {mult=10,  bg=Color3.fromRGB(48,24,6),   tx=Color3.fromRGB(210,120,55)},
-	Acidic                 = {mult=12,  bg=Color3.fromRGB(20,50,8),   tx=Color3.fromRGB(110,240,60)},
-	Tempestuous            = {mult=12,  bg=Color3.fromRGB(26,26,50),  tx=Color3.fromRGB(140,160,240)},
-	Oil                    = {mult=15,  bg=Color3.fromRGB(20,20,24),  tx=Color3.fromRGB(150,150,175)},
-	Toxic                  = {mult=15,  bg=Color3.fromRGB(20,46,8),   tx=Color3.fromRGB(120,230,60)},
-	Gilded                 = {mult=15,  bg=Color3.fromRGB(58,46,6),   tx=Color3.fromRGB(255,218,60)},
-	Jackpot                = {mult=15,  bg=Color3.fromRGB(8,50,20),   tx=Color3.fromRGB(60,220,130)},
-	Boil                   = {mult=15,  bg=Color3.fromRGB(50,18,8),   tx=Color3.fromRGB(225,100,60)},
-	Gnomed                 = {mult=18,  bg=Color3.fromRGB(14,44,14),  tx=Color3.fromRGB(90,215,90)},
-	Corrupt                = {mult=20,  bg=Color3.fromRGB(22,6,40),   tx=Color3.fromRGB(175,60,255)},
-	Tranquil               = {mult=20,  bg=Color3.fromRGB(8,40,40),   tx=Color3.fromRGB(80,215,215)},
-	OldAmber               = {mult=20,  bg=Color3.fromRGB(56,36,6),   tx=Color3.fromRGB(240,170,55)},
-	Eclipsed               = {mult=20,  bg=Color3.fromRGB(18,6,36),   tx=Color3.fromRGB(155,80,235)},
-	Zombified              = {mult=25,  bg=Color3.fromRGB(14,42,8),   tx=Color3.fromRGB(105,225,70)},
-	Molten                 = {mult=25,  bg=Color3.fromRGB(56,14,6),   tx=Color3.fromRGB(245,95,50)},
-	Flaming                = {mult=25,  bg=Color3.fromRGB(54,16,6),   tx=Color3.fromRGB(255,105,40)},
-	Gloom                  = {mult=30,  bg=Color3.fromRGB(18,10,28),  tx=Color3.fromRGB(160,100,220)},
-	HarmonisedChakra       = {mult=35,  bg=Color3.fromRGB(6,44,44),   tx=Color3.fromRGB(60,230,230)},
-	Enlightened            = {mult=35,  bg=Color3.fromRGB(50,44,6),   tx=Color3.fromRGB(255,242,80)},
-	Corrosive              = {mult=40,  bg=Color3.fromRGB(14,48,8),   tx=Color3.fromRGB(90,235,60)},
-	Subzero                = {mult=40,  bg=Color3.fromRGB(6,36,54),   tx=Color3.fromRGB(80,200,255)},
-	Junkshock              = {mult=45,  bg=Color3.fromRGB(30,26,6),   tx=Color3.fromRGB(220,195,60)},
-	AncientAmber           = {mult=50,  bg=Color3.fromRGB(54,34,4),   tx=Color3.fromRGB(255,185,40)},
-	Fortune                = {mult=50,  bg=Color3.fromRGB(8,50,20),   tx=Color3.fromRGB(60,230,130)},
-	Cyclonic               = {mult=50,  bg=Color3.fromRGB(24,24,50),  tx=Color3.fromRGB(130,150,245)},
-	Luminous               = {mult=50,  bg=Color3.fromRGB(48,46,6),   tx=Color3.fromRGB(255,252,120)},
-	Ceramic                = {mult=50,  bg=Color3.fromRGB(42,34,24),  tx=Color3.fromRGB(210,190,155)},
-	Blitzshock             = {mult=50,  bg=Color3.fromRGB(40,42,6),   tx=Color3.fromRGB(230,248,60)},
-	Lightcycle             = {mult=50,  bg=Color3.fromRGB(54,44,6),   tx=Color3.fromRGB(255,220,60)},
-	Sliced                 = {mult=50,  bg=Color3.fromRGB(50,10,10),  tx=Color3.fromRGB(240,80,80)},
-	Blazing                = {mult=52,  bg=Color3.fromRGB(56,12,4),   tx=Color3.fromRGB(255,90,40)},
-	Radioactive            = {mult=55,  bg=Color3.fromRGB(18,50,6),   tx=Color3.fromRGB(120,250,50)},
-	Friendbound            = {mult=70,  bg=Color3.fromRGB(50,8,36),   tx=Color3.fromRGB(240,80,190)},
-	Warped                 = {mult=75,  bg=Color3.fromRGB(20,8,44),   tx=Color3.fromRGB(165,80,245)},
-	Infected               = {mult=75,  bg=Color3.fromRGB(14,40,8),   tx=Color3.fromRGB(90,215,65)},
-	Graceful               = {mult=77,  bg=Color3.fromRGB(52,8,30),   tx=Color3.fromRGB(245,80,175)},
-	Sundried               = {mult=85,  bg=Color3.fromRGB(58,38,6),   tx=Color3.fromRGB(255,195,55)},
-	Glitched               = {mult=85,  bg=Color3.fromRGB(6,40,50),   tx=Color3.fromRGB(60,210,240)},
-	FoxfireChakra          = {mult=90,  bg=Color3.fromRGB(52,20,6),   tx=Color3.fromRGB(245,130,50)},
-	CorruptFoxfireChakra   = {mult=90,  bg=Color3.fromRGB(30,8,44),   tx=Color3.fromRGB(195,60,245)},
-	Aurora                 = {mult=90,  bg=Color3.fromRGB(8,40,50),   tx=Color3.fromRGB(60,220,225)},
-	Shocked                = {mult=100, bg=Color3.fromRGB(44,44,6),   tx=Color3.fromRGB(255,252,60)},
-	Paradisal              = {mult=100, bg=Color3.fromRGB(10,48,20),  tx=Color3.fromRGB(80,235,135)},
-	Brainrot               = {mult=100, bg=Color3.fromRGB(22,8,44),   tx=Color3.fromRGB(180,60,250)},
-	Maelstrom              = {mult=100, bg=Color3.fromRGB(14,24,52),  tx=Color3.fromRGB(80,145,255)},
-	Alienlike              = {mult=100, bg=Color3.fromRGB(10,48,18),  tx=Color3.fromRGB(80,240,125)},
-	Celestial              = {mult=120, bg=Color3.fromRGB(8,28,52),   tx=Color3.fromRGB(80,175,255)},
-	Disco                  = {mult=125, bg=Color3.fromRGB(52,6,44),   tx=Color3.fromRGB(250,80,220)},
-	Meteoric               = {mult=125, bg=Color3.fromRGB(42,18,6),   tx=Color3.fromRGB(230,130,55)},
-	Voidtouched            = {mult=135, bg=Color3.fromRGB(10,6,36),   tx=Color3.fromRGB(140,80,245)},
-	Dawnbound              = {mult=150, bg=Color3.fromRGB(48,36,6),   tx=Color3.fromRGB(255,210,80)},
-	Infernal               = {mult=180, bg=Color3.fromRGB(52,8,4),    tx=Color3.fromRGB(255,70,40)},
-	Stormcharged           = {mult=180, bg=Color3.fromRGB(20,22,52),  tx=Color3.fromRGB(110,130,255)},
-	HarmonisedFoxfireChakra= {mult=190, bg=Color3.fromRGB(48,14,4),   tx=Color3.fromRGB(250,120,45)},
-	AscendedChakra         = {mult=230, bg=Color3.fromRGB(6,42,42),   tx=Color3.fromRGB(60,240,230)},
-	Cosmic                 = {mult=240, bg=Color3.fromRGB(6,22,50),   tx=Color3.fromRGB(60,180,255)},
-	Abyssal                = {mult=240, bg=Color3.fromRGB(8,6,36),    tx=Color3.fromRGB(120,80,250)},
-	Astral                 = {mult=365, bg=Color3.fromRGB(6,14,48),   tx=Color3.fromRGB(80,155,255)},
+	-- x2
+	Silver={mult=5,bg=Color3.fromRGB(55,58,72),tx=Color3.fromRGB(200,215,235)},
+	Wet={mult=2,bg=Color3.fromRGB(10,38,62),tx=Color3.fromRGB(80,175,240)},
+	Windstruck={mult=2,bg=Color3.fromRGB(30,34,50),tx=Color3.fromRGB(160,190,240)},
+	Moonlit={mult=2,bg=Color3.fromRGB(20,18,52),tx=Color3.fromRGB(160,155,255)},
+	Chilled={mult=2,bg=Color3.fromRGB(14,42,58),tx=Color3.fromRGB(130,225,255)},
+	Choc={mult=2,bg=Color3.fromRGB(52,28,10),tx=Color3.fromRGB(200,140,80)},
+	Glimmering={mult=2,bg=Color3.fromRGB(52,48,8),tx=Color3.fromRGB(240,235,100)},
+	Snowy={mult=2,bg=Color3.fromRGB(210,225,245),tx=Color3.fromRGB(80,130,200)},
+	Fiery={mult=2,bg=Color3.fromRGB(58,20,8),tx=Color3.fromRGB(255,140,60)},
+	-- x3
+	Pollinated={mult=3,bg=Color3.fromRGB(40,50,8),tx=Color3.fromRGB(175,225,80)},
+	Sandy={mult=3,bg=Color3.fromRGB(50,40,10),tx=Color3.fromRGB(220,195,100)},
+	Lush={mult=3,bg=Color3.fromRGB(14,46,18),tx=Color3.fromRGB(90,215,120)},
+	Sauce={mult=3,bg=Color3.fromRGB(58,16,10),tx=Color3.fromRGB(240,100,80)},
+	Meatball={mult=3,bg=Color3.fromRGB(50,20,10),tx=Color3.fromRGB(215,120,80)},
+	Vamp={mult=3,bg=Color3.fromRGB(40,10,10),tx=Color3.fromRGB(200,60,80)},
+	Moist={mult=3,bg=Color3.fromRGB(8,34,52),tx=Color3.fromRGB(80,185,230)},
+	Heartstruck={mult=3,bg=Color3.fromRGB(50,10,28),tx=Color3.fromRGB(240,80,150)},
+	Luck={mult=3,bg=Color3.fromRGB(8,48,20),tx=Color3.fromRGB(60,230,110)},
+	-- x4
+	Cracked={mult=4,bg=Color3.fromRGB(42,34,18),tx=Color3.fromRGB(195,170,110)},
+	Verdant={mult=4,bg=Color3.fromRGB(10,46,18),tx=Color3.fromRGB(90,225,125)},
+	Bloodlit={mult=4,bg=Color3.fromRGB(56,8,8),tx=Color3.fromRGB(240,75,75)},
+	Twilight={mult=4,bg=Color3.fromRGB(28,14,40),tx=Color3.fromRGB(175,110,240)},
+	Burnt={mult=4,bg=Color3.fromRGB(40,18,6),tx=Color3.fromRGB(200,105,50)},
+	Pasta={mult=4,bg=Color3.fromRGB(58,42,8),tx=Color3.fromRGB(240,205,100)},
+	Fall={mult=4,bg=Color3.fromRGB(52,28,6),tx=Color3.fromRGB(235,145,60)},
+	Wiltproof={mult=4,bg=Color3.fromRGB(18,42,18),tx=Color3.fromRGB(120,210,120)},
+	Nocturnal={mult=4,bg=Color3.fromRGB(14,12,32),tx=Color3.fromRGB(130,110,220)},
+	Peppermint={mult=4,bg=Color3.fromRGB(12,42,22),tx=Color3.fromRGB(80,220,140)},
+	-- x5
+	Gold={mult=20,bg=Color3.fromRGB(68,52,8),tx=Color3.fromRGB(255,218,60)},
+	Clay={mult=5,bg=Color3.fromRGB(46,32,20),tx=Color3.fromRGB(195,155,110)},
+	Twisted={mult=5,bg=Color3.fromRGB(40,10,52),tx=Color3.fromRGB(190,90,255)},
+	Drenched={mult=5,bg=Color3.fromRGB(8,36,58),tx=Color3.fromRGB(70,165,240)},
+	HoneyGlazed={mult=5,bg=Color3.fromRGB(58,44,6),tx=Color3.fromRGB(255,210,60)},
+	Cloudtouched={mult=5,bg=Color3.fromRGB(22,38,58),tx=Color3.fromRGB(140,200,255)},
+	Heavenly={mult=5,bg=Color3.fromRGB(50,46,14),tx=Color3.fromRGB(255,250,175)},
+	Plasma={mult=5,bg=Color3.fromRGB(50,8,50),tx=Color3.fromRGB(230,80,255)},
+	Wildfast={mult=5,bg=Color3.fromRGB(46,30,6),tx=Color3.fromRGB(240,175,60)},
+	Snowtouched={mult=5,bg=Color3.fromRGB(180,210,240),tx=Color3.fromRGB(40,100,200)},
+	Geode={mult=5,bg=Color3.fromRGB(28,28,44),tx=Color3.fromRGB(160,150,240)},
+	-- x6
+	Arid={mult=6,bg=Color3.fromRGB(52,38,10),tx=Color3.fromRGB(230,185,80)},
+	Tempered={mult=6,bg=Color3.fromRGB(46,22,8),tx=Color3.fromRGB(215,130,60)},
+	Whimsical={mult=6,bg=Color3.fromRGB(44,14,48),tx=Color3.fromRGB(220,110,240)},
+	-- x7
+	Brewed={mult=7,bg=Color3.fromRGB(24,14,36),tx=Color3.fromRGB(165,100,220)},
+	-- x8
+	Static={mult=8,bg=Color3.fromRGB(44,44,8),tx=Color3.fromRGB(240,240,60)},
+	Fried={mult=8,bg=Color3.fromRGB(52,30,6),tx=Color3.fromRGB(225,158,60)},
+	Bloom={mult=8,bg=Color3.fromRGB(52,10,30),tx=Color3.fromRGB(240,100,175)},
+	Rot={mult=8,bg=Color3.fromRGB(22,36,8),tx=Color3.fromRGB(130,195,60)},
+	Spooky={mult=8,bg=Color3.fromRGB(26,10,36),tx=Color3.fromRGB(175,80,230)},
+	Blight={mult=8,bg=Color3.fromRGB(18,28,14),tx=Color3.fromRGB(100,180,70)},
+	Pestilent={mult=8,bg=Color3.fromRGB(22,36,10),tx=Color3.fromRGB(110,200,50)},
+	Webbed={mult=8,bg=Color3.fromRGB(32,26,18),tx=Color3.fromRGB(180,165,120)},
+	Eggnog={mult=8,bg=Color3.fromRGB(52,44,14),tx=Color3.fromRGB(240,220,130)},
+	Necrotic={mult=8,bg=Color3.fromRGB(14,24,14),tx=Color3.fromRGB(90,175,80)},
+	Wilt={mult=8,bg=Color3.fromRGB(36,30,8),tx=Color3.fromRGB(175,162,80)},
+	-- x10
+	Frozen={mult=10,bg=Color3.fromRGB(8,38,56),tx=Color3.fromRGB(100,210,255)},
+	Amber={mult=10,bg=Color3.fromRGB(58,38,6),tx=Color3.fromRGB(255,185,60)},
+	Cooked={mult=10,bg=Color3.fromRGB(48,24,6),tx=Color3.fromRGB(210,120,55)},
+	Wilted={mult=10,bg=Color3.fromRGB(38,34,14),tx=Color3.fromRGB(190,175,90)},
+	Ornamented={mult=10,bg=Color3.fromRGB(12,42,28),tx=Color3.fromRGB(80,220,155)},
+	-- x12
+	Tempestuous={mult=12,bg=Color3.fromRGB(26,26,50),tx=Color3.fromRGB(140,160,240)},
+	Arctic={mult=12,bg=Color3.fromRGB(8,34,52),tx=Color3.fromRGB(90,195,245)},
+	-- x15
+	Acidic={mult=12,bg=Color3.fromRGB(20,50,8),tx=Color3.fromRGB(110,240,60)},
+	Aromatic={mult=15,bg=Color3.fromRGB(40,14,50),tx=Color3.fromRGB(220,130,255)},
+	Boil={mult=15,bg=Color3.fromRGB(50,18,8),tx=Color3.fromRGB(225,100,60)},
+	Gilded={mult=15,bg=Color3.fromRGB(58,46,6),tx=Color3.fromRGB(255,218,60)},
+	Oil={mult=15,bg=Color3.fromRGB(20,20,24),tx=Color3.fromRGB(150,150,175)},
+	Gnomed={mult=15,bg=Color3.fromRGB(14,44,14),tx=Color3.fromRGB(90,215,90)},
+	Chakra={mult=15,bg=Color3.fromRGB(8,46,46),tx=Color3.fromRGB(80,230,230)},
+	CorruptedChakra={mult=15,bg=Color3.fromRGB(28,8,44),tx=Color3.fromRGB(175,60,245)},
+	Spaghetti={mult=15,bg=Color3.fromRGB(54,30,8),tx=Color3.fromRGB(240,160,70)},
+	Jackpot={mult=15,bg=Color3.fromRGB(8,50,20),tx=Color3.fromRGB(60,220,130)},
+	Toxic={mult=15,bg=Color3.fromRGB(20,46,8),tx=Color3.fromRGB(120,230,60)},
+	-- x20
+	Eclipsed={mult=20,bg=Color3.fromRGB(18,6,36),tx=Color3.fromRGB(155,80,235)},
+	Rainbow={mult=50,bg=Color3.fromRGB(60,14,72),tx=Color3.fromRGB(230,130,255)},
+	Tranquil={mult=20,bg=Color3.fromRGB(8,40,40),tx=Color3.fromRGB(80,215,215)},
+	OldAmber={mult=20,bg=Color3.fromRGB(56,36,6),tx=Color3.fromRGB(240,170,55)},
+	Corrupt={mult=20,bg=Color3.fromRGB(22,6,40),tx=Color3.fromRGB(175,60,255)},
+	Cute={mult=20,bg=Color3.fromRGB(50,10,28),tx=Color3.fromRGB(245,90,165)},
+	-- x24
+	Festive={mult=24,bg=Color3.fromRGB(10,42,14),tx=Color3.fromRGB(80,230,110)},
+	-- x25
+	Zombified={mult=25,bg=Color3.fromRGB(14,42,8),tx=Color3.fromRGB(105,225,70)},
+	Molten={mult=25,bg=Color3.fromRGB(56,14,6),tx=Color3.fromRGB(245,95,50)},
+	Flaming={mult=25,bg=Color3.fromRGB(54,16,6),tx=Color3.fromRGB(255,105,40)},
+	Glacial={mult=25,bg=Color3.fromRGB(6,34,52),tx=Color3.fromRGB(80,195,250)},
+	Moonbled={mult=25,bg=Color3.fromRGB(20,6,36),tx=Color3.fromRGB(160,80,235)},
+	Withered={mult=25,bg=Color3.fromRGB(34,28,8),tx=Color3.fromRGB(180,160,70)},
+	Volcanic={mult=25,bg=Color3.fromRGB(54,12,4),tx=Color3.fromRGB(255,80,40)},
+	Mirage={mult=25,bg=Color3.fromRGB(50,34,6),tx=Color3.fromRGB(240,200,80)},
+	Crystalized={mult=25,bg=Color3.fromRGB(10,34,52),tx=Color3.fromRGB(80,190,240)},
+	Alienated={mult=25,bg=Color3.fromRGB(10,44,16),tx=Color3.fromRGB(70,225,110)},
+	Ghostly={mult=25,bg=Color3.fromRGB(24,24,36),tx=Color3.fromRGB(155,155,210)},
+	-- x26
+	Firework={mult=26,bg=Color3.fromRGB(52,14,8),tx=Color3.fromRGB(245,100,60)},
+	-- x30
+	Gloom={mult=30,bg=Color3.fromRGB(18,10,28),tx=Color3.fromRGB(160,100,220)},
+	OilBoil={mult=30,bg=Color3.fromRGB(22,18,8),tx=Color3.fromRGB(180,150,60)},
+	Umbral={mult=30,bg=Color3.fromRGB(14,20,10),tx=Color3.fromRGB(100,175,70)},
+	Glossy={mult=30,bg=Color3.fromRGB(8,36,50),tx=Color3.fromRGB(80,205,240)},
+	Typhoon={mult=30,bg=Color3.fromRGB(22,26,50),tx=Color3.fromRGB(130,155,240)},
+	Fierywork={mult=30,bg=Color3.fromRGB(54,18,6),tx=Color3.fromRGB(250,115,50)},
+	-- x32
+	Ceramic={mult=32,bg=Color3.fromRGB(42,34,24),tx=Color3.fromRGB(210,190,155)},
+	-- x35
+	Enlightened={mult=35,bg=Color3.fromRGB(50,44,6),tx=Color3.fromRGB(255,242,80)},
+	HarmonisedChakra={mult=35,bg=Color3.fromRGB(6,44,44),tx=Color3.fromRGB(60,230,230)},
+	-- x37
+	Supernatural={mult=37,bg=Color3.fromRGB(26,8,40),tx=Color3.fromRGB(175,70,240)},
+	-- x40
+	Corrosive={mult=40,bg=Color3.fromRGB(14,48,8),tx=Color3.fromRGB(90,235,60)},
+	Severed={mult=40,bg=Color3.fromRGB(38,10,10),tx=Color3.fromRGB(215,70,70)},
+	Subzero={mult=40,bg=Color3.fromRGB(6,36,54),tx=Color3.fromRGB(80,200,255)},
+	-- x45
+	Junkshock={mult=45,bg=Color3.fromRGB(30,26,6),tx=Color3.fromRGB(220,195,60)},
+	Batty={mult=45,bg=Color3.fromRGB(22,8,32),tx=Color3.fromRGB(165,70,220)},
+	-- x50
+	Diamond={mult=50,bg=Color3.fromRGB(8,36,52),tx=Color3.fromRGB(140,220,255)},
+	AncientAmber={mult=50,bg=Color3.fromRGB(54,34,4),tx=Color3.fromRGB(255,185,40)},
+	Enchanted={mult=50,bg=Color3.fromRGB(34,8,50),tx=Color3.fromRGB(200,80,255)},
+	Fortune={mult=50,bg=Color3.fromRGB(8,50,20),tx=Color3.fromRGB(60,230,130)},
+	Cyclonic={mult=50,bg=Color3.fromRGB(24,24,50),tx=Color3.fromRGB(130,150,245)},
+	Luminous={mult=50,bg=Color3.fromRGB(48,46,6),tx=Color3.fromRGB(255,252,120)},
+	Lightcycle={mult=50,bg=Color3.fromRGB(54,44,6),tx=Color3.fromRGB(255,220,60)},
+	Sliced={mult=50,bg=Color3.fromRGB(50,10,10),tx=Color3.fromRGB(240,80,80)},
+	Blitzshock={mult=50,bg=Color3.fromRGB(40,42,6),tx=Color3.fromRGB(230,248,60)},
+	Desolate={mult=50,bg=Color3.fromRGB(28,24,36),tx=Color3.fromRGB(155,140,200)},
+	Stampede={mult=50,bg=Color3.fromRGB(46,28,6),tx=Color3.fromRGB(230,155,60)},
+	Monsoon={mult=50,bg=Color3.fromRGB(8,34,52),tx=Color3.fromRGB(70,185,240)},
+	-- x52
+	Blazing={mult=52,bg=Color3.fromRGB(56,12,4),tx=Color3.fromRGB(255,90,40)},
+	-- x55
+	Radioactive={mult=55,bg=Color3.fromRGB(18,50,6),tx=Color3.fromRGB(120,250,50)},
+	-- x70
+	Friendbound={mult=70,bg=Color3.fromRGB(50,8,36),tx=Color3.fromRGB(240,80,190)},
+	Shadowbound={mult=70,bg=Color3.fromRGB(14,8,24),tx=Color3.fromRGB(130,70,210)},
+	Leeched={mult=70,bg=Color3.fromRGB(30,8,8),tx=Color3.fromRGB(200,60,80)},
+	-- x75
+	Azure={mult=75,bg=Color3.fromRGB(6,30,52),tx=Color3.fromRGB(60,175,250)},
+	Warped={mult=75,bg=Color3.fromRGB(20,8,44),tx=Color3.fromRGB(165,80,245)},
+	Graceful={mult=75,bg=Color3.fromRGB(52,8,30),tx=Color3.fromRGB(245,80,175)},
+	Infected={mult=75,bg=Color3.fromRGB(14,40,8),tx=Color3.fromRGB(90,215,65)},
+	Terran={mult=75,bg=Color3.fromRGB(22,40,10),tx=Color3.fromRGB(120,210,70)},
+	-- x85
+	Sundried={mult=85,bg=Color3.fromRGB(58,38,6),tx=Color3.fromRGB(255,195,55)},
+	Glitched={mult=85,bg=Color3.fromRGB(6,40,50),tx=Color3.fromRGB(60,210,240)},
+	-- x90
+	FoxfireChakra={mult=90,bg=Color3.fromRGB(52,20,6),tx=Color3.fromRGB(245,130,50)},
+	CorruptFoxfireChakra={mult=90,bg=Color3.fromRGB(30,8,44),tx=Color3.fromRGB(195,60,245)},
+	Aurora={mult=90,bg=Color3.fromRGB(8,40,50),tx=Color3.fromRGB(60,220,225)},
+	-- x92
+	Fractured={mult=92,bg=Color3.fromRGB(32,8,48),tx=Color3.fromRGB(190,70,245)},
+	-- x95
+	Blackout={mult=95,bg=Color3.fromRGB(8,6,14),tx=Color3.fromRGB(120,100,200)},
+	Slashbound={mult=95,bg=Color3.fromRGB(40,8,8),tx=Color3.fromRGB(220,70,80)},
+	-- x100
+	Shocked={mult=100,bg=Color3.fromRGB(44,44,6),tx=Color3.fromRGB(255,252,60)},
+	Paradisal={mult=100,bg=Color3.fromRGB(10,48,20),tx=Color3.fromRGB(80,235,135)},
+	Brainrot={mult=100,bg=Color3.fromRGB(22,8,44),tx=Color3.fromRGB(180,60,250)},
+	Maelstrom={mult=100,bg=Color3.fromRGB(14,24,52),tx=Color3.fromRGB(80,145,255)},
+	Alienlike={mult=100,bg=Color3.fromRGB(10,48,18),tx=Color3.fromRGB(80,240,125)},
+	Heartbound={mult=100,bg=Color3.fromRGB(50,8,24),tx=Color3.fromRGB(245,70,145)},
+	Beanbound={mult=100,bg=Color3.fromRGB(20,44,8),tx=Color3.fromRGB(120,230,70)},
+	-- x105
+	Touchdown={mult=105,bg=Color3.fromRGB(8,44,22),tx=Color3.fromRGB(60,220,130)},
+	-- x120
+	Celestial={mult=120,bg=Color3.fromRGB(8,28,52),tx=Color3.fromRGB(80,175,255)},
+	Galactic={mult=120,bg=Color3.fromRGB(6,18,48),tx=Color3.fromRGB(60,155,250)},
+	-- x125
+	Disco={mult=125,bg=Color3.fromRGB(52,6,44),tx=Color3.fromRGB(250,80,220)},
+	Meteoric={mult=125,bg=Color3.fromRGB(42,18,6),tx=Color3.fromRGB(230,130,55)},
+	-- x135
+	Voidtouched={mult=135,bg=Color3.fromRGB(10,6,36),tx=Color3.fromRGB(140,80,245)},
+	-- x150
+	Dawnbound={mult=150,bg=Color3.fromRGB(48,36,6),tx=Color3.fromRGB(255,210,80)},
+	-- x157
+	Biohazard={mult=157,bg=Color3.fromRGB(16,44,6),tx=Color3.fromRGB(100,235,50)},
+	-- x180
+	Infernal={mult=180,bg=Color3.fromRGB(52,8,4),tx=Color3.fromRGB(255,70,40)},
+	Stormcharged={mult=180,bg=Color3.fromRGB(20,22,52),tx=Color3.fromRGB(110,130,255)},
+	-- x190
+	HarmonisedFoxfireChakra={mult=190,bg=Color3.fromRGB(48,14,4),tx=Color3.fromRGB(250,120,45)},
+	-- x205
+	Contagion={mult=205,bg=Color3.fromRGB(14,40,6),tx=Color3.fromRGB(90,230,55)},
+	-- x230
+	AscendedChakra={mult=230,bg=Color3.fromRGB(6,42,42),tx=Color3.fromRGB(60,240,230)},
+	Starized={mult=230,bg=Color3.fromRGB(6,18,46),tx=Color3.fromRGB(70,165,255)},
+	-- x240
+	Cosmic={mult=240,bg=Color3.fromRGB(6,22,50),tx=Color3.fromRGB(60,180,255)},
+	Abyssal={mult=240,bg=Color3.fromRGB(8,6,36),tx=Color3.fromRGB(120,80,250)},
+	-- x365
+	Astral={mult=365,bg=Color3.fromRGB(6,14,48),tx=Color3.fromRGB(80,155,255)},
+	-- x500
+	Goldsparkle={mult=500,bg=Color3.fromRGB(62,48,4),tx=Color3.fromRGB(255,225,60)},
 }
 
 local VARIANT_CFG = {
-	Gold    = {label="✦ GOLD",   bg=Color3.fromRGB(65,48,6),  tx=Color3.fromRGB(255,218,55), glow=true},
-	Silver  = {label="✦ SILVER", bg=Color3.fromRGB(50,54,66), tx=Color3.fromRGB(200,220,240), glow=false},
-	Rainbow = {label="✦ RAINBOW",bg=Color3.fromRGB(55,10,68), tx=Color3.fromRGB(225,120,255), glow=true},
+	Gold    = {label="✦ GOLD",   bg=Color3.fromRGB(65,48,6),  tx=Color3.fromRGB(255,218,55)},
+	Silver  = {label="✦ SILVER", bg=Color3.fromRGB(50,54,66), tx=Color3.fromRGB(200,220,240)},
+	Rainbow = {label="✦ RAINBOW",bg=Color3.fromRGB(55,10,68), tx=Color3.fromRGB(225,120,255)},
 }
+
 local function getMutInfo(name)
 	return MUT_DB[name] or {mult=0, bg=Color3.fromRGB(40,30,65), tx=Color3.fromRGB(175,148,255)}
 end
@@ -133,35 +250,39 @@ local function getMutBadgeColors(name) local d=getMutInfo(name); return d.bg, d.
 --  PALETTE
 -- ════════════════════════════════════════════════════
 local C = {
-	bg        = Color3.fromRGB(7,   7,  13),
-	panel     = Color3.fromRGB(11,  11,  19),
-	card      = Color3.fromRGB(16,  16,  27),
-	cardGreen = Color3.fromRGB(10,  26,  18),
-	hover     = Color3.fromRGB(20,  18,  36),
-	hoverG    = Color3.fromRGB(12,  32,  22),
-	header    = Color3.fromRGB(9,   9,  16),
-	stroke    = Color3.fromRGB(40,  38,  66),
-	strokeHi  = Color3.fromRGB(88,  78, 158),
-	strokeG   = Color3.fromRGB(30,  68,  48),
-	strokeGHi = Color3.fromRGB(48, 135,  86),
-	text      = Color3.fromRGB(218, 212, 255),
-	textSub   = Color3.fromRGB(88,  83, 138),
-	textDim   = Color3.fromRGB(55,  52,  88),
-	textGreen = Color3.fromRGB(135, 210, 165),
-	textAmber = Color3.fromRGB(255, 200, 95),
-	textPurp  = Color3.fromRGB(180, 148, 255),
-	accent    = Color3.fromRGB(96,  82, 185),
-	accentB   = Color3.fromRGB(126, 112, 215),
-	scroll    = Color3.fromRGB(55,  52,  96),
-	togOn     = Color3.fromRGB(42,  182, 112),
-	togOff    = Color3.fromRGB(40,  38,  66),
-	sortSel   = Color3.fromRGB(40,  36,  80),
-	miscCard  = Color3.fromRGB(13,  12,  22),
-	blockBg   = Color3.fromRGB(48,  14,  14),
-	blockStr  = Color3.fromRGB(95,  30,  30),
+	bg        = Color3.fromRGB(5,   5,  10),
+	panel     = Color3.fromRGB(9,   9,  17),
+	card      = Color3.fromRGB(13,  13,  23),
+	hover     = Color3.fromRGB(18,  16,  32),
+	hoverG    = Color3.fromRGB(10,  28,  20),
+	header    = Color3.fromRGB(7,   7,  13),
+	stroke    = Color3.fromRGB(36,  34,  60),
+	strokeHi  = Color3.fromRGB(86,  76, 155),
+	strokeG   = Color3.fromRGB(28,  62,  44),
+	strokeGHi = Color3.fromRGB(44, 130,  82),
+	text      = Color3.fromRGB(215, 208, 255),
+	textSub   = Color3.fromRGB(82,  77, 132),
+	textDim   = Color3.fromRGB(48,  46,  80),
+	textGreen = Color3.fromRGB(125, 205, 160),
+	textAmber = Color3.fromRGB(255, 198, 90),
+	textPurp  = Color3.fromRGB(175, 145, 255),
+	textBlue  = Color3.fromRGB(110, 185, 255),
+	textRed   = Color3.fromRGB(255, 110, 110),
+	accent    = Color3.fromRGB(88,  74, 178),
+	accentB   = Color3.fromRGB(120, 108, 210),
+	scroll    = Color3.fromRGB(50,  48,  90),
+	togOn     = Color3.fromRGB(40,  178, 108),
+	togOff    = Color3.fromRGB(36,  34,  62),
+	sortSel   = Color3.fromRGB(36,  32,  76),
+	miscCard  = Color3.fromRGB(11,  10,  20),
+	blockBg   = Color3.fromRGB(44,  12,  12),
+	blockStr  = Color3.fromRGB(90,  26,  26),
+	collectBg = Color3.fromRGB(10,  36,  20),
+	collectTx = Color3.fromRGB(70,  215, 130),
+	stealBg   = Color3.fromRGB(36,  10,  10),
+	stealTx   = Color3.fromRGB(230, 80,  80),
 }
-local TW  = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local TWM = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TW = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local EXCL = {DoneGrowTime=true,IsOutlined=true,MaxAge=true,MasteryGrowthMulti=true,MasterySizeMulti=true,GrowRateMulti=true}
 
@@ -172,12 +293,19 @@ local ESP = {
 }
 
 -- ════════════════════════════════════════════════════
---  UTILS
+--  UTILITIES
 -- ════════════════════════════════════════════════════
 local function tw(o,p,i) TweenService:Create(o,i or TW,p):Play() end
 local function clamp(v,a,b) return math.max(a,math.min(b,v)) end
 local function corner(p,r) local c=Instance.new("UICorner",p);c.CornerRadius=UDim.new(0,r or 10);return c end
 local function mkStroke(p,col,th) local s=Instance.new("UIStroke",p);s.Color=col or C.stroke;s.Thickness=th or 1;return s end
+local function pad(p,l,r,t,b)
+	local u=Instance.new("UIPadding",p)
+	u.PaddingLeft=UDim.new(0,l or 0);u.PaddingRight=UDim.new(0,r or 0)
+	u.PaddingTop=UDim.new(0,t or 0);u.PaddingBottom=UDim.new(0,b or 0)
+end
+local function hlist(p,gap) local l=Instance.new("UIListLayout",p);l.FillDirection=Enum.FillDirection.Horizontal;l.Padding=UDim.new(0,gap or 4);return l end
+local function vlist(p,gap) local l=Instance.new("UIListLayout",p);l.Padding=UDim.new(0,gap or 4);return l end
 local function lbl(par,t)
 	local L=Instance.new("TextLabel",par)
 	L.BackgroundTransparency=1;L.BorderSizePixel=0
@@ -189,83 +317,6 @@ local function lbl(par,t)
 	L.TextTruncate=t.trunc or Enum.TextTruncate.None
 	L.RichText=t.rich or false;L.ZIndex=t.zi or 1;return L
 end
-local function pad(p,l,r,t,b)
-	local u=Instance.new("UIPadding",p)
-	u.PaddingLeft=UDim.new(0,l or 0);u.PaddingRight=UDim.new(0,r or 0)
-	u.PaddingTop=UDim.new(0,t or 0);u.PaddingBottom=UDim.new(0,b or 0)
-end
-local function hlist(p,gap)
-	local l=Instance.new("UIListLayout",p)
-	l.FillDirection=Enum.FillDirection.Horizontal;l.Padding=UDim.new(0,gap or 4);return l
-end
-local function vlist(p,gap)
-	local l=Instance.new("UIListLayout",p);l.Padding=UDim.new(0,gap or 4);return l
-end
-
--- ── Data helpers ──────────────────────────────────
-local function getMutations(model)
-	local out={}
-	local ok,attrs=pcall(function() return model:GetAttributes() end)
-	if not ok then return out end
-	for n,v in pairs(attrs) do
-		if type(v)=="boolean" and not EXCL[n] then table.insert(out,n) end
-	end
-	table.sort(out,function(a,b)
-		local ma=getMutInfo(a).mult; local mb=getMutInfo(b).mult
-		return ma>mb
-	end)
-	return out
-end
-local function getW(m) local w=m:FindFirstChild("Weight"); return w and w.Value or 0 end
-local function getVariant(m) local v=m:FindFirstChild("Variant"); return v and tostring(v.Value) or nil end
-local function getFruits(m) local f=m:FindFirstChild("Fruits"); return f end
-local function getFruitCount(m) local f=getFruits(m); return f and #f:GetChildren() or 0 end
-local function getAge(m) local a=m:FindFirstChild("Age") or m:FindFirstChild("GrowTime"); return a and a.Value or 0 end
-local function initials(n) return string.upper(string.sub(n,1,2)) end
-
-local function isValidPlant(inst)
-	if not inst:IsA("Model") then return false end
-	return inst.Parent and inst.Parent.Name=="Plants_Physical"
-end
-local function isValidFruit(inst)
-	if not inst:IsA("Model") then return false end
-	local fruitsFolder=inst.Parent
-	if not (fruitsFolder and fruitsFolder.Name=="Fruits") then return false end
-	return isValidPlant(fruitsFolder.Parent)
-end
-
-local function mutTotalMult(muts)
-	local s=0; for _,m in ipairs(muts) do s=s+getMutInfo(m).mult end; return s
-end
-
--- ── Farm finders ──────────────────────────────────
-local function getAllFarms()
-	local F=workspace:FindFirstChild("Farm"); if not F then return {} end
-	local out={}
-	for _,farm in pairs(F:GetChildren()) do
-		local imp=farm:FindFirstChild("Important")
-		local data=imp and imp:FindFirstChild("Data")
-		local own=data and data:FindFirstChild("Owner")
-		if own then
-			local uid=tonumber(own.Value)
-			local plr=nil
-			for _,p in ipairs(Players:GetPlayers()) do
-				if p.UserId==uid or p.Name==tostring(own.Value) then plr=p;break end
-			end
-			table.insert(out,{imp=imp, owner=own.Value, player=plr})
-		end
-	end
-	return out
-end
-local function getFarmFor(plr)
-	local F=workspace:FindFirstChild("Farm"); if not F then return nil end
-	for _,farm in pairs(F:GetChildren()) do
-		local imp=farm:FindFirstChild("Important")
-		local data=imp and imp:FindFirstChild("Data")
-		local own=data and data:FindFirstChild("Owner")
-		if own and (own.Value==plr.UserId or own.Value==plr.Name) then return imp end
-	end
-end
 
 local function debounce(fn,d)
 	local t
@@ -276,34 +327,92 @@ local function debounce(fn,d)
 end
 
 -- ════════════════════════════════════════════════════
+--  DATA HELPERS
+-- ════════════════════════════════════════════════════
+local function getMutations(model)
+	local out={}
+	local ok,attrs=pcall(function() return model:GetAttributes() end)
+	if not ok then return out end
+	for n,v in pairs(attrs) do
+		if type(v)=="boolean" and not EXCL[n] then table.insert(out,n) end
+	end
+	table.sort(out,function(a,b) return getMutInfo(a).mult > getMutInfo(b).mult end)
+	return out
+end
+local function getW(m) local w=m:FindFirstChild("Weight"); return w and w.Value or 0 end
+local function getVariant(m) local v=m:FindFirstChild("Variant"); return v and tostring(v.Value) or nil end
+local function getFruitCount(m) local f=m:FindFirstChild("Fruits"); return f and #f:GetChildren() or 0 end
+local function getAge(m) local a=m:FindFirstChild("Age") or m:FindFirstChild("GrowTime"); return a and a.Value or 0 end
+local function initials(n) return string.upper(string.sub(n,1,2)) end
+local function mutTotalMult(muts) local s=0; for _,m in ipairs(muts) do s=s+getMutInfo(m).mult end; return s end
+
+-- ════════════════════════════════════════════════════
+--  FARM FINDERS
+-- ════════════════════════════════════════════════════
+local function getAllFarms()
+	local F=workspace:FindFirstChild("Farm"); if not F then return {} end
+	local out={}
+	for _,farm in pairs(F:GetChildren()) do
+		local imp=farm:FindFirstChild("Important")
+		local data=imp and imp:FindFirstChild("Data")
+		local own=data and data:FindFirstChild("Owner")
+		if own then
+			local plr=nil
+			for _,p in ipairs(Players:GetPlayers()) do
+				if p.UserId==tonumber(own.Value) or p.Name==tostring(own.Value) then plr=p;break end
+			end
+			table.insert(out,{imp=imp, owner=own.Value, player=plr})
+		end
+	end
+	return out
+end
+local function getFarmFor(plr)
+	if not plr or not plr.Parent then return nil end
+	local F=workspace:FindFirstChild("Farm"); if not F then return nil end
+	for _,farm in pairs(F:GetChildren()) do
+		local imp=farm:FindFirstChild("Important")
+		local data=imp and imp:FindFirstChild("Data")
+		local own=data and data:FindFirstChild("Owner")
+		if own and (own.Value==plr.UserId or own.Value==plr.Name) then return imp end
+	end
+end
+
+-- ════════════════════════════════════════════════════
+--  CLEANUP OLD INSTANCES
+-- ════════════════════════════════════════════════════
+local oldGui = player.PlayerGui:FindFirstChild("FVP6")
+if oldGui then oldGui:Destroy() end
+local oldEsp = workspace:FindFirstChild("FVP6_ESP")
+if oldEsp then oldEsp:Destroy() end
+
+-- ════════════════════════════════════════════════════
 --  SCREEN GUI
 -- ════════════════════════════════════════════════════
--- Clean up any previous instance
-local oldGui = player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild("FVP5")
-if oldGui then oldGui:Destroy() end
-
 local gui=Instance.new("ScreenGui")
-gui.Name="FVP5"; gui.ResetOnSpawn=false
-gui.DisplayOrder=10; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-gui.IgnoreGuiInset=true; gui.Parent=player:WaitForChild("PlayerGui")
+gui.Name="FVP6"; gui.ResetOnSpawn=false; gui.DisplayOrder=10
+gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; gui.IgnoreGuiInset=true
+gui.Parent=player:WaitForChild("PlayerGui")
 
 local reopenBtn=Instance.new("TextButton",gui)
-reopenBtn.Size=UDim2.new(0,150,0,36); reopenBtn.Position=UDim2.new(0,14,0,68)
-reopenBtn.BackgroundColor3=Color3.fromRGB(14,13,26); reopenBtn.TextColor3=C.text
-reopenBtn.Font=Enum.Font.GothamBold; reopenBtn.TextSize=13
+reopenBtn.Size=UDim2.new(0,158,0,36); reopenBtn.Position=UDim2.new(0,14,0,68)
+reopenBtn.BackgroundColor3=Color3.fromRGB(12,11,22); reopenBtn.TextColor3=C.text
+reopenBtn.Font=Enum.Font.GothamBold; reopenBtn.TextSize=12
 reopenBtn.Text="⊞  Farm Viewer Pro"; reopenBtn.BorderSizePixel=0; reopenBtn.Visible=false
 corner(reopenBtn,9); mkStroke(reopenBtn,C.stroke,1.2)
 
+-- ── Main frame ────────────────────────────────────
 local main=Instance.new("Frame",gui)
-main.Size=UDim2.new(0,760,0,640)
+main.Size=UDim2.new(0,780,0,650)
 main.Position=UDim2.new(0,14,0,68)
 main.BackgroundColor3=C.bg; main.BorderSizePixel=0; main.ClipsDescendants=true
 corner(main,16); mkStroke(main,C.stroke,1.5)
 
+-- Top accent glow
 local glowLine=Instance.new("Frame",main)
-glowLine.Size=UDim2.new(1,-40,0,1); glowLine.Position=UDim2.new(0,20,0,0)
-glowLine.BackgroundColor3=C.accent; glowLine.BorderSizePixel=0; glowLine.BackgroundTransparency=0.4
+glowLine.Size=UDim2.new(1,-36,0,1); glowLine.Position=UDim2.new(0,18,0,0)
+glowLine.BackgroundColor3=C.accent; glowLine.BorderSizePixel=0; glowLine.BackgroundTransparency=0.3
 
+-- UI Scale
 local uiScale=Instance.new("UIScale",main)
 local function updateScale()
 	local vp=camera.ViewportSize; uiScale.Scale=clamp(vp.X/1080,0.5,1)
@@ -332,68 +441,65 @@ end)
 --  HEADER
 -- ════════════════════════════════════════════════════
 local header=Instance.new("Frame",main)
-header.Size=UDim2.new(1,0,0,58); header.BackgroundColor3=C.header; header.BorderSizePixel=0; corner(header,16)
-local hBot=Instance.new("Frame",header)
-hBot.Size=UDim2.new(1,0,0.5,0); hBot.Position=UDim2.new(0,0,0.5,0)
+header.Size=UDim2.new(1,0,0,60); header.BackgroundColor3=C.header; header.BorderSizePixel=0; corner(header,16)
+local hBot=Instance.new("Frame",header); hBot.Size=UDim2.new(1,0,0.5,0); hBot.Position=UDim2.new(0,0,0.5,0)
 hBot.BackgroundColor3=C.header; hBot.BorderSizePixel=0
 
 local espPill=Instance.new("TextLabel",header)
 espPill.Size=UDim2.new(0,0,0,20); espPill.AutomaticSize=Enum.AutomaticSize.X
-espPill.Position=UDim2.new(0,14,0,12); espPill.BackgroundColor3=Color3.fromRGB(26,22,48)
+espPill.Position=UDim2.new(0,14,0,13); espPill.BackgroundColor3=Color3.fromRGB(24,20,44)
 espPill.TextColor3=C.textDim; espPill.Font=Enum.Font.GothamBold; espPill.TextSize=9
 espPill.Text=" ● ESP OFF "; espPill.BorderSizePixel=0; corner(espPill,10)
 
 lbl(header,{text="Farm Viewer Pro",font=Enum.Font.GothamBold,size=16,color=C.text,
-	sz=UDim2.new(0,200,0,22),pos=UDim2.new(0.5,-100,0,9)})
+	sz=UDim2.new(0,200,0,22),pos=UDim2.new(0.5,-100,0,10)})
 local hSub=lbl(header,{text="Select a player",size=11,color=C.textSub,
-	sz=UDim2.new(0,260,0,14),pos=UDim2.new(0.5,-130,0,32)})
+	sz=UDim2.new(0,260,0,14),pos=UDim2.new(0.5,-130,0,33)})
 
 local miscOpenBtn=Instance.new("TextButton",header)
-miscOpenBtn.Size=UDim2.new(0,72,0,28); miscOpenBtn.Position=UDim2.new(1,-114,0.5,-14)
-miscOpenBtn.BackgroundColor3=Color3.fromRGB(22,18,44); miscOpenBtn.TextColor3=C.accentB
+miscOpenBtn.Size=UDim2.new(0,72,0,28); miscOpenBtn.Position=UDim2.new(1,-116,0.5,-14)
+miscOpenBtn.BackgroundColor3=Color3.fromRGB(20,16,40); miscOpenBtn.TextColor3=C.accentB
 miscOpenBtn.Font=Enum.Font.GothamBold; miscOpenBtn.TextSize=12; miscOpenBtn.Text="⚙  MISC"
 miscOpenBtn.BorderSizePixel=0; corner(miscOpenBtn,7); mkStroke(miscOpenBtn,C.stroke)
-miscOpenBtn.MouseEnter:Connect(function() tw(miscOpenBtn,{BackgroundColor3=Color3.fromRGB(34,28,66)}) end)
-miscOpenBtn.MouseLeave:Connect(function() tw(miscOpenBtn,{BackgroundColor3=Color3.fromRGB(22,18,44)}) end)
+miscOpenBtn.MouseEnter:Connect(function() tw(miscOpenBtn,{BackgroundColor3=Color3.fromRGB(32,26,62)}) end)
+miscOpenBtn.MouseLeave:Connect(function() tw(miscOpenBtn,{BackgroundColor3=Color3.fromRGB(20,16,40)}) end)
 
 local closeBtn=Instance.new("TextButton",header)
-closeBtn.Size=UDim2.new(0,28,0,28); closeBtn.Position=UDim2.new(1,-40,0.5,-14)
-closeBtn.BackgroundColor3=Color3.fromRGB(52,22,22); closeBtn.TextColor3=Color3.fromRGB(225,108,108)
+closeBtn.Size=UDim2.new(0,28,0,28); closeBtn.Position=UDim2.new(1,-42,0.5,-14)
+closeBtn.BackgroundColor3=Color3.fromRGB(48,20,20); closeBtn.TextColor3=Color3.fromRGB(220,105,105)
 closeBtn.Font=Enum.Font.GothamBold; closeBtn.TextSize=14; closeBtn.Text="✕"; closeBtn.BorderSizePixel=0
-corner(closeBtn,7); mkStroke(closeBtn,Color3.fromRGB(88,32,32))
-closeBtn.MouseEnter:Connect(function() tw(closeBtn,{BackgroundColor3=Color3.fromRGB(80,26,26)}) end)
-closeBtn.MouseLeave:Connect(function() tw(closeBtn,{BackgroundColor3=Color3.fromRGB(52,22,22)}) end)
+corner(closeBtn,7); mkStroke(closeBtn,Color3.fromRGB(84,28,28))
+closeBtn.MouseEnter:Connect(function() tw(closeBtn,{BackgroundColor3=Color3.fromRGB(76,22,22)}) end)
+closeBtn.MouseLeave:Connect(function() tw(closeBtn,{BackgroundColor3=Color3.fromRGB(48,20,20)}) end)
 closeBtn.MouseButton1Click:Connect(function() main.Visible=false; reopenBtn.Visible=true end)
 reopenBtn.MouseButton1Click:Connect(function() main.Visible=true; reopenBtn.Visible=false end)
 UIS.InputBegan:Connect(function(i,gp)
 	if gp then return end
-	if i.KeyCode==Enum.KeyCode.R and not main.Visible then main.Visible=true; reopenBtn.Visible=false end
+	if i.KeyCode==Enum.KeyCode.RightBracket and not main.Visible then main.Visible=true; reopenBtn.Visible=false end
 end)
 
 local hLine=Instance.new("Frame",main)
-hLine.Size=UDim2.new(1,-24,0,1); hLine.Position=UDim2.new(0,12,0,58)
+hLine.Size=UDim2.new(1,-24,0,1); hLine.Position=UDim2.new(0,12,0,60)
 hLine.BackgroundColor3=C.stroke; hLine.BorderSizePixel=0
 
 local statLbl=lbl(main,{text="",size=10,color=C.textDim,font=Enum.Font.GothamBold,
-	sz=UDim2.new(1,-200,0,20),pos=UDim2.new(0,186,0,60),xa=Enum.TextXAlignment.Right})
+	sz=UDim2.new(1,-204,0,20),pos=UDim2.new(0,190,0,62),xa=Enum.TextXAlignment.Right})
 
 -- ════════════════════════════════════════════════════
---  LEFT PANEL
+--  LEFT PANEL — Players
 -- ════════════════════════════════════════════════════
 local LP=Instance.new("Frame",main)
-LP.Size=UDim2.new(0,164,1,-64); LP.Position=UDim2.new(0,8,0,62)
+LP.Size=UDim2.new(0,166,1,-66); LP.Position=UDim2.new(0,8,0,64)
 LP.BackgroundColor3=C.panel; LP.BorderSizePixel=0; corner(LP,12); mkStroke(LP,C.stroke)
 
 local lpHead=Instance.new("Frame",LP)
-lpHead.Size=UDim2.new(1,0,0,28); lpHead.BackgroundColor3=Color3.fromRGB(9,9,16); lpHead.BorderSizePixel=0; corner(lpHead,12)
+lpHead.Size=UDim2.new(1,0,0,28); lpHead.BackgroundColor3=Color3.fromRGB(8,8,14); lpHead.BorderSizePixel=0; corner(lpHead,12)
 local lpHBot=Instance.new("Frame",lpHead); lpHBot.Size=UDim2.new(1,0,0.5,0); lpHBot.Position=UDim2.new(0,0,0.5,0)
-lpHBot.BackgroundColor3=Color3.fromRGB(9,9,16); lpHBot.BorderSizePixel=0
+lpHBot.BackgroundColor3=Color3.fromRGB(8,8,14); lpHBot.BorderSizePixel=0
 lbl(lpHead,{text="PLAYERS",font=Enum.Font.GothamBold,size=9,color=C.textSub,sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
-local lpDiv=Instance.new("Frame",LP); lpDiv.Size=UDim2.new(1,-14,0,1); lpDiv.Position=UDim2.new(0,7,0,28)
-lpDiv.BackgroundColor3=C.stroke; lpDiv.BorderSizePixel=0
 
 local plrScroll=Instance.new("ScrollingFrame",LP)
-plrScroll.Position=UDim2.new(0,4,0,34); plrScroll.Size=UDim2.new(1,-8,1,-40)
+plrScroll.Position=UDim2.new(0,4,0,32); plrScroll.Size=UDim2.new(1,-8,1,-38)
 plrScroll.BackgroundTransparency=1; plrScroll.ScrollBarThickness=3
 plrScroll.ScrollBarImageColor3=C.scroll; plrScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
 plrScroll.BorderSizePixel=0; vlist(plrScroll,4)
@@ -402,7 +508,7 @@ plrScroll.BorderSizePixel=0; vlist(plrScroll,4)
 --  RIGHT PANEL
 -- ════════════════════════════════════════════════════
 local RP=Instance.new("Frame",main)
-RP.Size=UDim2.new(1,-182,1,-64); RP.Position=UDim2.new(0,178,0,62)
+RP.Size=UDim2.new(1,-184,1,-66); RP.Position=UDim2.new(0,180,0,64)
 RP.BackgroundColor3=C.panel; RP.BorderSizePixel=0; corner(RP,12); mkStroke(RP,C.stroke)
 
 local rpTop=Instance.new("Frame",RP)
@@ -410,22 +516,18 @@ rpTop.Size=UDim2.new(1,0,0,38); rpTop.BackgroundTransparency=1
 
 local backBtn=Instance.new("TextButton",rpTop)
 backBtn.Size=UDim2.new(0,60,0,24); backBtn.Position=UDim2.new(0,10,0.5,-12)
-backBtn.BackgroundColor3=Color3.fromRGB(22,20,42); backBtn.TextColor3=Color3.fromRGB(135,126,205)
+backBtn.BackgroundColor3=Color3.fromRGB(20,18,40); backBtn.TextColor3=Color3.fromRGB(130,122,200)
 backBtn.Font=Enum.Font.GothamBold; backBtn.TextSize=12; backBtn.Text="← Back"
-backBtn.BorderSizePixel=0; backBtn.Visible=false; corner(backBtn,6); mkStroke(backBtn,Color3.fromRGB(48,44,88))
-backBtn.MouseEnter:Connect(function() tw(backBtn,{BackgroundColor3=Color3.fromRGB(34,30,62)}) end)
-backBtn.MouseLeave:Connect(function() tw(backBtn,{BackgroundColor3=Color3.fromRGB(22,20,42)}) end)
+backBtn.BorderSizePixel=0; backBtn.Visible=false; corner(backBtn,6); mkStroke(backBtn,Color3.fromRGB(44,40,84))
+backBtn.MouseEnter:Connect(function() tw(backBtn,{BackgroundColor3=Color3.fromRGB(30,28,58)}) end)
+backBtn.MouseLeave:Connect(function() tw(backBtn,{BackgroundColor3=Color3.fromRGB(20,18,40)}) end)
 
 local breadcrumb=lbl(rpTop,{text="Select a player",font=Enum.Font.GothamBold,size=13,color=C.text,
 	sz=UDim2.new(1,-84,1,0),pos=UDim2.new(0,78,0,0),trunc=Enum.TextTruncate.AtEnd})
 
-local rpDiv=Instance.new("Frame",RP)
-rpDiv.Size=UDim2.new(1,-14,0,1); rpDiv.Position=UDim2.new(0,7,0,38)
-rpDiv.BackgroundColor3=C.stroke; rpDiv.BorderSizePixel=0
-
 local searchBox=Instance.new("TextBox",RP)
 searchBox.Size=UDim2.new(1,-14,0,26); searchBox.Position=UDim2.new(0,7,0,44)
-searchBox.BackgroundColor3=Color3.fromRGB(14,14,24); searchBox.TextColor3=Color3.fromRGB(190,185,230)
+searchBox.BackgroundColor3=Color3.fromRGB(12,12,22); searchBox.TextColor3=Color3.fromRGB(188,182,228)
 searchBox.PlaceholderText="Search plants or fruits…"; searchBox.PlaceholderColor3=C.textDim
 searchBox.Font=Enum.Font.Gotham; searchBox.TextSize=12; searchBox.Text=""
 searchBox.ClearTextOnFocus=false; searchBox.BorderSizePixel=0
@@ -449,13 +551,13 @@ local sortMode="name_az"; local mutOnly=false; local sortBtns={}
 local function mkSmall(par,text,mode,isFilter)
 	local b=Instance.new("TextButton",par)
 	b.AutomaticSize=Enum.AutomaticSize.X; b.Size=UDim2.new(0,0,1,0)
-	b.BackgroundColor3=Color3.fromRGB(18,16,34)
-	b.TextColor3=isFilter and Color3.fromRGB(140,112,230) or Color3.fromRGB(120,114,190)
+	b.BackgroundColor3=Color3.fromRGB(16,14,30)
+	b.TextColor3=isFilter and Color3.fromRGB(136,108,225) or Color3.fromRGB(116,110,185)
 	b.Font=Enum.Font.GothamBold; b.TextSize=10; b.Text=" "..text.." "; b.BorderSizePixel=0; corner(b,5)
 	local s=mkStroke(b,C.stroke,0.8); if mode then sortBtns[mode]={btn=b,s=s} end
 	return b,s
 end
-local mutOnlyBtn,mutOnlyS=mkSmall(filterBar,"⬥ Mutations",nil,true)
+local mutOnlyBtn,mutOnlyS=mkSmall(filterBar,"⬥ Mutations Only",nil,true)
 mkSmall(sortBar,"Name A→Z","name_az"); mkSmall(sortBar,"Name Z→A","name_za")
 mkSmall(sortBar,"Weight ↓","weight_desc"); mkSmall(sortBar,"Weight ↑","weight_asc")
 mkSmall(sortBar,"Mutations ↓","mutations_desc"); mkSmall(sortBar,"Fruits ↓","fruit_desc")
@@ -464,64 +566,55 @@ mkSmall(sortBar,"Age ↓","age_desc")
 local function refreshSortColors()
 	for m,d in pairs(sortBtns) do
 		local on=m==sortMode
-		tw(d.btn,{BackgroundColor3=on and C.sortSel or Color3.fromRGB(18,16,34),TextColor3=on and C.text or Color3.fromRGB(120,114,190)})
+		tw(d.btn,{BackgroundColor3=on and C.sortSel or Color3.fromRGB(16,14,30),TextColor3=on and C.text or Color3.fromRGB(116,110,185)})
 		d.s.Color=on and C.accent or C.stroke
 	end
-	tw(mutOnlyBtn,{BackgroundColor3=mutOnly and Color3.fromRGB(36,22,62) or Color3.fromRGB(18,16,34),
-		TextColor3=mutOnly and C.textPurp or Color3.fromRGB(140,112,230)})
-	mutOnlyS.Color=mutOnly and Color3.fromRGB(82,56,160) or C.stroke
+	tw(mutOnlyBtn,{BackgroundColor3=mutOnly and Color3.fromRGB(34,20,58) or Color3.fromRGB(16,14,30),
+		TextColor3=mutOnly and C.textPurp or Color3.fromRGB(136,108,225)})
+	mutOnlyS.Color=mutOnly and Color3.fromRGB(78,52,155) or C.stroke
 end; refreshSortColors()
 
 local mainScroll=Instance.new("ScrollingFrame",RP)
 mainScroll.Position=UDim2.new(0,5,0,42); mainScroll.Size=UDim2.new(1,-10,1,-48)
 mainScroll.BackgroundTransparency=1; mainScroll.ScrollBarThickness=3
 mainScroll.ScrollBarImageColor3=C.scroll; mainScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
-mainScroll.BorderSizePixel=0
-local msLayout=vlist(mainScroll,6)
-pad(mainScroll,2,2,0,8)
+mainScroll.BorderSizePixel=0; vlist(mainScroll,6); pad(mainScroll,2,2,0,8)
 
 -- ════════════════════════════════════════════════════
---  ESP WORLD OBJECTS (forward declarations needed)
+--  ESP — forward declared so MISC callbacks are safe
 -- ════════════════════════════════════════════════════
-local espFolder=Instance.new("Folder",workspace); espFolder.Name="FVP5_ESP"
-local espObjects={}
-
--- refreshESP is forward-declared here so MISC toggles can reference it safely
-local refreshESP  -- will be defined after all helpers are ready
+local espFolder=Instance.new("Folder",workspace); espFolder.Name="FVP6_ESP"
+local espObjects={}   -- [model] = {hl, bb}
+local refreshESP      -- defined later
 
 -- ════════════════════════════════════════════════════
 --  MISC OVERLAY
 -- ════════════════════════════════════════════════════
 local miscOverlay=Instance.new("Frame",main)
-miscOverlay.Size=UDim2.new(1,-182,1,-64); miscOverlay.Position=UDim2.new(0,178,0,62)
-miscOverlay.BackgroundColor3=Color3.fromRGB(7,7,13); miscOverlay.BorderSizePixel=0
+miscOverlay.Size=UDim2.new(1,-184,1,-66); miscOverlay.Position=UDim2.new(0,180,0,64)
+miscOverlay.BackgroundColor3=Color3.fromRGB(5,5,10); miscOverlay.BorderSizePixel=0
 miscOverlay.Visible=false; miscOverlay.ZIndex=8; corner(miscOverlay,12); mkStroke(miscOverlay,C.stroke)
 
 local moGlow=Instance.new("Frame",miscOverlay)
-moGlow.Size=UDim2.new(1,-30,0,1); moGlow.Position=UDim2.new(0,15,0,0)
-moGlow.BackgroundColor3=C.accent; moGlow.BorderSizePixel=0; moGlow.BackgroundTransparency=0.5
+moGlow.Size=UDim2.new(1,-28,0,1); moGlow.Position=UDim2.new(0,14,0,0)
+moGlow.BackgroundColor3=C.accent; moGlow.BorderSizePixel=0; moGlow.BackgroundTransparency=0.45
 
 local moHead=Instance.new("Frame",miscOverlay)
-moHead.Size=UDim2.new(1,0,0,48); moHead.BackgroundColor3=Color3.fromRGB(9,9,16)
-moHead.BorderSizePixel=0; corner(moHead,12)
+moHead.Size=UDim2.new(1,0,0,50); moHead.BackgroundColor3=Color3.fromRGB(7,7,13); moHead.BorderSizePixel=0; corner(moHead,12)
 local moHB=Instance.new("Frame",moHead); moHB.Size=UDim2.new(1,0,0.5,0); moHB.Position=UDim2.new(0,0,0.5,0)
-moHB.BackgroundColor3=Color3.fromRGB(9,9,16); moHB.BorderSizePixel=0
-lbl(moHead,{text="⚙  ESP & Settings",font=Enum.Font.GothamBold,size=15,color=C.text,sz=UDim2.new(1,-80,0,22),pos=UDim2.new(0,16,0,6)})
-lbl(moHead,{text="Configure highlights, labels & player filters",size=10,color=C.textSub,sz=UDim2.new(1,-80,0,14),pos=UDim2.new(0,16,0,28)})
+moHB.BackgroundColor3=Color3.fromRGB(7,7,13); moHB.BorderSizePixel=0
+lbl(moHead,{text="⚙  ESP & Settings",font=Enum.Font.GothamBold,size=15,color=C.text,sz=UDim2.new(1,-80,0,22),pos=UDim2.new(0,16,0,7)})
+lbl(moHead,{text="Highlights, labels & player filters",size=10,color=C.textSub,sz=UDim2.new(1,-80,0,14),pos=UDim2.new(0,16,0,30)})
 local moClose=Instance.new("TextButton",moHead)
 moClose.Size=UDim2.new(0,62,0,26); moClose.Position=UDim2.new(1,-72,0.5,-13)
-moClose.BackgroundColor3=Color3.fromRGB(18,16,34); moClose.TextColor3=C.textSub
+moClose.BackgroundColor3=Color3.fromRGB(16,14,32); moClose.TextColor3=C.textSub
 moClose.Font=Enum.Font.GothamBold; moClose.TextSize=11; moClose.Text="← Back"; moClose.BorderSizePixel=0
 corner(moClose,6); mkStroke(moClose,C.stroke)
 moClose.MouseButton1Click:Connect(function() miscOverlay.Visible=false end)
 miscOpenBtn.MouseButton1Click:Connect(function() miscOverlay.Visible=true end)
 
-local moDivL=Instance.new("Frame",miscOverlay)
-moDivL.Size=UDim2.new(1,-18,0,1); moDivL.Position=UDim2.new(0,9,0,48)
-moDivL.BackgroundColor3=C.stroke; moDivL.BorderSizePixel=0
-
 local miscScroll=Instance.new("ScrollingFrame",miscOverlay)
-miscScroll.Position=UDim2.new(0,7,0,54); miscScroll.Size=UDim2.new(1,-14,1,-62)
+miscScroll.Position=UDim2.new(0,7,0,56); miscScroll.Size=UDim2.new(1,-14,1,-64)
 miscScroll.BackgroundTransparency=1; miscScroll.ScrollBarThickness=3
 miscScroll.ScrollBarImageColor3=C.scroll; miscScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
 miscScroll.BorderSizePixel=0; vlist(miscScroll,7)
@@ -538,8 +631,7 @@ local function mDiv()
 end
 local function mToggle(label,desc,init,onChange)
 	local row=Instance.new("Frame",miscScroll)
-	row.Size=UDim2.new(1,0,0,58); row.BackgroundColor3=C.miscCard
-	row.BorderSizePixel=0; corner(row,10); mkStroke(row,C.stroke,0.6)
+	row.Size=UDim2.new(1,0,0,58); row.BackgroundColor3=C.miscCard; row.BorderSizePixel=0; corner(row,10); mkStroke(row,C.stroke,0.6)
 	pad(row,10,10,9,9)
 	lbl(row,{text=label,font=Enum.Font.GothamBold,size=12,color=C.text,sz=UDim2.new(1,-46,0,16)})
 	lbl(row,{text=desc,size=9,color=C.textDim,sz=UDim2.new(1,-46,0,13),pos=UDim2.new(0,0,0,20)})
@@ -547,54 +639,51 @@ local function mToggle(label,desc,init,onChange)
 	tBg.BackgroundColor3=init and C.togOn or C.togOff; tBg.BorderSizePixel=0; corner(tBg,10)
 	local tDot=Instance.new("Frame",tBg); tDot.Size=UDim2.new(0,16,0,16); tDot.Position=UDim2.new(0,init and 20 or 2,0.5,-8)
 	tDot.BackgroundColor3=Color3.fromRGB(255,255,255); tDot.BorderSizePixel=0; corner(tDot,8)
-	local state=init
+	local st=init
 	local function setState(v)
-		state=v; tw(tBg,{BackgroundColor3=v and C.togOn or C.togOff})
+		st=v; tw(tBg,{BackgroundColor3=v and C.togOn or C.togOff})
 		tw(tDot,{Position=UDim2.new(0,v and 20 or 2,0.5,-8)}); if onChange then onChange(v) end
 	end
-	local cb=Instance.new("TextButton",row); cb.Size=UDim2.new(1,0,1,0); cb.BackgroundTransparency=1
-	cb.Text=""; cb.BorderSizePixel=0; cb.MouseButton1Click:Connect(function() setState(not state) end)
-	return setState, function() return state end
+	local cb=Instance.new("TextButton",row); cb.Size=UDim2.new(1,0,1,0); cb.BackgroundTransparency=1; cb.Text=""; cb.BorderSizePixel=0
+	cb.MouseButton1Click:Connect(function() setState(not st) end)
+	return setState, function() return st end
 end
 local function mOptions(label,opts,cur,onChange)
 	local w=Instance.new("Frame",miscScroll); w.Size=UDim2.new(1,0,0,0); w.AutomaticSize=Enum.AutomaticSize.Y
 	w.BackgroundColor3=C.miscCard; w.BorderSizePixel=0; corner(w,10); mkStroke(w,C.stroke,0.6)
 	pad(w,10,10,8,8); vlist(w,6)
 	lbl(w,{text=label,font=Enum.Font.GothamBold,size=11,color=C.text,sz=UDim2.new(1,0,0,14)})
-	local bRow=Instance.new("Frame",w); bRow.Size=UDim2.new(1,0,0,24); bRow.BackgroundTransparency=1
-	bRow.BorderSizePixel=0; hlist(bRow,4)
+	local bRow=Instance.new("Frame",w); bRow.Size=UDim2.new(1,0,0,24); bRow.BackgroundTransparency=1; bRow.BorderSizePixel=0; hlist(bRow,4)
 	local sel=cur; local bs={}
 	for _,o in ipairs(opts) do
 		local b=Instance.new("TextButton",bRow); b.AutomaticSize=Enum.AutomaticSize.X; b.Size=UDim2.new(0,0,1,0)
-		b.BackgroundColor3=o==sel and C.sortSel or Color3.fromRGB(16,14,30)
+		b.BackgroundColor3=o==sel and C.sortSel or Color3.fromRGB(14,12,28)
 		b.TextColor3=o==sel and C.text or C.textSub; b.Font=Enum.Font.GothamBold; b.TextSize=9
 		b.Text=" "..o.." "; b.BorderSizePixel=0; corner(b,5)
 		local s=mkStroke(b,o==sel and C.accent or C.stroke,0.8); bs[o]={btn=b,s=s}
 		b.MouseButton1Click:Connect(function()
 			sel=o
 			for k,v in pairs(bs) do
-				tw(v.btn,{BackgroundColor3=k==sel and C.sortSel or Color3.fromRGB(16,14,30),TextColor3=k==sel and C.text or C.textSub})
+				tw(v.btn,{BackgroundColor3=k==sel and C.sortSel or Color3.fromRGB(14,12,28),TextColor3=k==sel and C.text or C.textSub})
 				v.s.Color=k==sel and C.accent or C.stroke
 			end; onChange(o)
 		end)
 	end
 end
 
--- BUILD MISC — callbacks use refreshESP via upvalue (safe after definition below)
+-- BUILD MISC
 mSection("ESP  ·  HIGHLIGHTS & LABELS")
-local setESP,_=mToggle("ESP Highlights","Roblox Highlight + SelectionBox on all plants & fruits",false,function(v)
+mToggle("ESP Highlights","Highlight instances on all plants & fruits",false,function(v)
 	ESP.enabled=v
 	if refreshESP then refreshESP() end
 	espPill.Text=v and " ● ESP ON " or " ● ESP OFF "
-	tw(espPill,{TextColor3=v and C.togOn or C.textDim,BackgroundColor3=v and Color3.fromRGB(12,38,24) or Color3.fromRGB(26,22,48)})
+	tw(espPill,{TextColor3=v and C.togOn or C.textDim,BackgroundColor3=v and Color3.fromRGB(10,34,22) or Color3.fromRGB(24,20,44)})
 end)
-local setBB,_ =mToggle("Billboard Labels","Floating info cards above every object",true,function(v)
+mToggle("Billboard Labels","Floating info cards above objects",true,function(v)
 	ESP.billboards=v; if ESP.enabled and refreshESP then refreshESP() end
 end)
-local setHov,_=mToggle("Hover Details","Rich popup when mouse is over any plant/fruit",true,function(v)
-	ESP.hover=v
-end)
-local setCh,_ =mToggle("See-Through (Chams)","Show plants/fruits through walls",false,function(v)
+mToggle("Hover Details","Rich popup on mouse-over",true,function(v) ESP.hover=v end)
+mToggle("See-Through (Chams)","Show through walls",false,function(v)
 	ESP.chams=v; if ESP.enabled and refreshESP then refreshESP() end
 end)
 mDiv(); mSection("ESP  ·  STYLE")
@@ -604,28 +693,25 @@ end)
 mOptions("Color Mode",{"Type","Mutation","Rarity"},"Type",function(v)
 	ESP.colorMode=string.lower(v); if ESP.enabled and refreshESP then refreshESP() end
 end)
-mDiv(); mSection("BILLBOARD  ·  DETAIL")
+mDiv(); mSection("BILLBOARD DETAIL")
 mOptions("Detail Level",{"Compact","Full"},"Full",function(v)
 	ESP.detail=string.lower(v); if ESP.enabled and ESP.billboards and refreshESP then refreshESP() end
 end)
-mDiv(); mSection("AUTO-REFRESH RATE")
-mOptions("Interval",{"2s","3s","5s","10s"},"3s",function(v)
-	ESP.rate=tonumber(string.match(v,"%d+")) or 3
-end)
+mDiv(); mSection("AUTO-REFRESH")
+mOptions("Interval",{"2s","3s","5s","10s"},"3s",function(v) ESP.rate=tonumber(string.match(v,"%d+")) or 3 end)
 mDiv(); mSection("PLAYER BLOCK LIST  ·  ESP")
 
 local blockNote=Instance.new("TextLabel",miscScroll)
-blockNote.Size=UDim2.new(1,0,0,22); blockNote.BackgroundColor3=Color3.fromRGB(10,9,20)
+blockNote.Size=UDim2.new(1,0,0,22); blockNote.BackgroundColor3=Color3.fromRGB(8,8,18)
 blockNote.TextColor3=C.textSub; blockNote.Font=Enum.Font.Gotham; blockNote.TextSize=9
-blockNote.Text="  Tap a player to hide their farm from ESP & hover"; blockNote.BorderSizePixel=0
-blockNote.TextXAlignment=Enum.TextXAlignment.Left; corner(blockNote,6)
+blockNote.Text="  Toggle a player to hide their farm from ESP & hover"
+blockNote.BorderSizePixel=0; blockNote.TextXAlignment=Enum.TextXAlignment.Left; corner(blockNote,6)
 
 local blockFrame=Instance.new("Frame",miscScroll)
 blockFrame.Size=UDim2.new(1,0,0,0); blockFrame.AutomaticSize=Enum.AutomaticSize.Y
 blockFrame.BackgroundTransparency=1; blockFrame.BorderSizePixel=0; vlist(blockFrame,4)
 
-local rebuildBlockList  -- forward declare for recursion
-
+local rebuildBlockList
 rebuildBlockList = function()
 	for _,v in ipairs(blockFrame:GetChildren()) do if not v:IsA("UIListLayout") then v:Destroy() end end
 	for _,plr in ipairs(Players:GetPlayers()) do
@@ -635,17 +721,16 @@ rebuildBlockList = function()
 		row.BackgroundColor3=blocked and C.blockBg or C.miscCard
 		corner(row,8); mkStroke(row,blocked and C.blockStr or C.stroke,0.7)
 		local av=Instance.new("Frame",row); av.Size=UDim2.new(0,22,0,22); av.Position=UDim2.new(0,7,0.5,-11)
-		av.BackgroundColor3=blocked and Color3.fromRGB(66,18,18) or Color3.fromRGB(36,32,68); av.BorderSizePixel=0; corner(av,11)
-		lbl(av,{text=initials(plr.Name),font=Enum.Font.GothamBold,size=9,color=blocked and Color3.fromRGB(215,85,85) or C.textPurp,sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
-		lbl(row,{text=plr.Name,font=Enum.Font.GothamBold,size=11,color=blocked and Color3.fromRGB(215,85,85) or C.text,sz=UDim2.new(1,-100,1,0),pos=UDim2.new(0,34,0,0),trunc=Enum.TextTruncate.AtEnd})
+		av.BackgroundColor3=blocked and Color3.fromRGB(62,14,14) or Color3.fromRGB(32,28,64); av.BorderSizePixel=0; corner(av,11)
+		lbl(av,{text=initials(plr.Name),font=Enum.Font.GothamBold,size=9,color=blocked and Color3.fromRGB(210,82,82) or C.textPurp,sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
+		lbl(row,{text=plr.Name,font=Enum.Font.GothamBold,size=11,color=blocked and Color3.fromRGB(210,82,82) or C.text,sz=UDim2.new(1,-100,1,0),pos=UDim2.new(0,34,0,0),trunc=Enum.TextTruncate.AtEnd})
 		local stBg=Instance.new("Frame",row); stBg.Size=UDim2.new(0,58,0,18); stBg.Position=UDim2.new(1,-64,0.5,-9)
-		stBg.BackgroundColor3=blocked and Color3.fromRGB(56,14,14) or Color3.fromRGB(12,38,22); stBg.BorderSizePixel=0; corner(stBg,9)
-		local stL=lbl(stBg,{text=blocked and "BLOCKED" or "VISIBLE",font=Enum.Font.GothamBold,size=9,color=blocked and Color3.fromRGB(215,80,80) or C.textGreen,sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
+		stBg.BackgroundColor3=blocked and Color3.fromRGB(52,12,12) or Color3.fromRGB(10,34,20); stBg.BorderSizePixel=0; corner(stBg,9)
+		lbl(stBg,{text=blocked and "BLOCKED" or "VISIBLE",font=Enum.Font.GothamBold,size=9,color=blocked and Color3.fromRGB(210,76,76) or C.textGreen,sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
 		local cb=Instance.new("TextButton",row); cb.Size=UDim2.new(1,0,1,0); cb.BackgroundTransparency=1; cb.Text=""; cb.BorderSizePixel=0
 		cb.MouseButton1Click:Connect(function()
 			ESP.blocked[plr.UserId]=not ESP.blocked[plr.UserId] or nil
-			if ESP.enabled and refreshESP then refreshESP() end
-			rebuildBlockList()
+			if ESP.enabled and refreshESP then refreshESP() end; rebuildBlockList()
 		end)
 	end
 end
@@ -655,13 +740,9 @@ rebuildBlockList()
 --  HOVER POPUP
 -- ════════════════════════════════════════════════════
 local hoverPopup=Instance.new("Frame",gui)
-hoverPopup.Size=UDim2.new(0,240,0,0); hoverPopup.AutomaticSize=Enum.AutomaticSize.Y
-hoverPopup.BackgroundColor3=Color3.fromRGB(9,9,18); hoverPopup.BorderSizePixel=0
+hoverPopup.Size=UDim2.new(0,248,0,0); hoverPopup.AutomaticSize=Enum.AutomaticSize.Y
+hoverPopup.BackgroundColor3=Color3.fromRGB(7,7,16); hoverPopup.BorderSizePixel=0
 hoverPopup.Visible=false; hoverPopup.ZIndex=60; corner(hoverPopup,13); mkStroke(hoverPopup,C.stroke,1.5)
-
-local hpGlow=Instance.new("Frame",hoverPopup)
-hpGlow.Size=UDim2.new(1,-20,0,1); hpGlow.Position=UDim2.new(0,10,0,0)
-hpGlow.BackgroundColor3=C.accent; hpGlow.BorderSizePixel=0; hpGlow.BackgroundTransparency=0.3
 pad(hoverPopup,11,11,11,11); vlist(hoverPopup,5)
 
 local hpAccent=Instance.new("Frame",hoverPopup)
@@ -675,12 +756,12 @@ hpBadgeRow.BackgroundTransparency=1; hpBadgeRow.BorderSizePixel=0; hlist(hpBadge
 
 local hpTypeBadge=Instance.new("TextLabel",hpBadgeRow)
 hpTypeBadge.AutomaticSize=Enum.AutomaticSize.X; hpTypeBadge.Size=UDim2.new(0,0,0,17)
-hpTypeBadge.BackgroundColor3=Color3.fromRGB(28,52,36); hpTypeBadge.TextColor3=Color3.fromRGB(68,200,128)
+hpTypeBadge.BackgroundColor3=Color3.fromRGB(26,50,34); hpTypeBadge.TextColor3=Color3.fromRGB(65,195,125)
 hpTypeBadge.Font=Enum.Font.GothamBold; hpTypeBadge.TextSize=9; hpTypeBadge.Text=""; hpTypeBadge.BorderSizePixel=0; corner(hpTypeBadge,9)
 
 local hpOwnerBadge=Instance.new("TextLabel",hpBadgeRow)
 hpOwnerBadge.AutomaticSize=Enum.AutomaticSize.X; hpOwnerBadge.Size=UDim2.new(0,0,0,17)
-hpOwnerBadge.BackgroundColor3=Color3.fromRGB(20,18,38); hpOwnerBadge.TextColor3=C.textSub
+hpOwnerBadge.BackgroundColor3=Color3.fromRGB(18,16,36); hpOwnerBadge.TextColor3=C.textSub
 hpOwnerBadge.Font=Enum.Font.GothamBold; hpOwnerBadge.TextSize=9; hpOwnerBadge.Text=""; hpOwnerBadge.BorderSizePixel=0; corner(hpOwnerBadge,9)
 
 local hpVariantSpecial=Instance.new("TextLabel",hoverPopup)
@@ -688,28 +769,22 @@ hpVariantSpecial.AutomaticSize=Enum.AutomaticSize.X; hpVariantSpecial.Size=UDim2
 hpVariantSpecial.Font=Enum.Font.GothamBold; hpVariantSpecial.TextSize=10; hpVariantSpecial.Text=""
 hpVariantSpecial.BorderSizePixel=0; hpVariantSpecial.Visible=false; corner(hpVariantSpecial,9)
 
-local hpDiv1=Instance.new("Frame",hoverPopup)
-hpDiv1.Size=UDim2.new(1,0,0,1); hpDiv1.BackgroundColor3=Color3.fromRGB(34,32,56); hpDiv1.BorderSizePixel=0
-
-local function makeHRow(icon, label, iconCol)
+local function makeHRow(icon,label,iconCol)
 	local row=Instance.new("Frame",hoverPopup)
-	row.Size=UDim2.new(1,0,0,26); row.BackgroundColor3=Color3.fromRGB(15,14,26); row.BorderSizePixel=0; corner(row,6)
+	row.Size=UDim2.new(1,0,0,26); row.BackgroundColor3=Color3.fromRGB(13,12,24); row.BorderSizePixel=0; corner(row,6)
 	lbl(row,{text=icon,size=11,color=iconCol or C.textAmber,sz=UDim2.new(0,22,1,0),xa=Enum.TextXAlignment.Center})
 	lbl(row,{text=label,size=10,color=C.textSub,sz=UDim2.new(0.38,0,1,0),pos=UDim2.new(0,22,0,0)})
 	local val=lbl(row,{text="—",font=Enum.Font.GothamBold,size=11,color=iconCol or C.textAmber,sz=UDim2.new(0.55,0,1,0),pos=UDim2.new(0.44,0,0,0)})
 	return val
 end
 local hpWVal=makeHRow("⚖","Weight",C.textAmber)
-local hpVVal=makeHRow("◈","Variant",Color3.fromRGB(145,205,255))
+local hpVVal=makeHRow("◈","Variant",C.textBlue)
 
 local hpMultRow=Instance.new("Frame",hoverPopup)
-hpMultRow.Size=UDim2.new(1,0,0,26); hpMultRow.BackgroundColor3=Color3.fromRGB(12,10,24); hpMultRow.BorderSizePixel=0; corner(hpMultRow,6)
+hpMultRow.Size=UDim2.new(1,0,0,26); hpMultRow.BackgroundColor3=Color3.fromRGB(10,8,22); hpMultRow.BorderSizePixel=0; corner(hpMultRow,6)
 lbl(hpMultRow,{text="✦",size=11,color=C.textPurp,sz=UDim2.new(0,22,1,0),xa=Enum.TextXAlignment.Center})
 lbl(hpMultRow,{text="Mut. Value",size=10,color=C.textSub,sz=UDim2.new(0.38,0,1,0),pos=UDim2.new(0,22,0,0)})
 local hpMultVal=lbl(hpMultRow,{text="—",font=Enum.Font.GothamBold,size=11,color=C.textPurp,sz=UDim2.new(0.55,0,1,0),pos=UDim2.new(0.44,0,0,0)})
-
-local hpDiv2=Instance.new("Frame",hoverPopup)
-hpDiv2.Size=UDim2.new(1,0,0,1); hpDiv2.BackgroundColor3=Color3.fromRGB(34,32,56); hpDiv2.BorderSizePixel=0
 
 local hpMutHdr=Instance.new("Frame",hoverPopup)
 hpMutHdr.Size=UDim2.new(1,0,0,16); hpMutHdr.BackgroundTransparency=1; hpMutHdr.BorderSizePixel=0; hlist(hpMutHdr,5)
@@ -721,8 +796,7 @@ hpMutCon.Size=UDim2.new(1,0,0,0); hpMutCon.AutomaticSize=Enum.AutomaticSize.Y
 hpMutCon.BackgroundTransparency=1; hpMutCon.BorderSizePixel=0
 
 local hpFruitRow=Instance.new("Frame",hoverPopup)
-hpFruitRow.Size=UDim2.new(1,0,0,22); hpFruitRow.BackgroundColor3=Color3.fromRGB(12,30,20)
-hpFruitRow.BorderSizePixel=0; corner(hpFruitRow,6)
+hpFruitRow.Size=UDim2.new(1,0,0,22); hpFruitRow.BackgroundColor3=Color3.fromRGB(10,28,18); hpFruitRow.BorderSizePixel=0; corner(hpFruitRow,6)
 local hpFLbl=lbl(hpFruitRow,{text="",size=10,color=C.textGreen,font=Enum.Font.GothamBold,sz=UDim2.new(1,-8,1,0),pos=UDim2.new(0,8,0,0)})
 
 local function clearHpMuts()
@@ -732,72 +806,68 @@ local function rebuildHpMuts(muts)
 	clearHpMuts()
 	local pl=hpMutCon:FindFirstChildOfClass("UIListLayout")
 	if not pl then pl=Instance.new("UIListLayout",hpMutCon); pl.FillDirection=Enum.FillDirection.Horizontal; pl.Wraps=true; pl.Padding=UDim.new(0,4) end
-	if #muts==0 then
-		lbl(hpMutCon,{text="None",size=10,color=C.textDim,sz=UDim2.new(1,0,0,14)}); return
-	end
+	if #muts==0 then lbl(hpMutCon,{text="None",size=10,color=C.textDim,sz=UDim2.new(1,0,0,14)}); return end
 	for _,m in ipairs(muts) do
 		local bg,tx=getMutBadgeColors(m)
 		local pill=Instance.new("TextLabel",hpMutCon)
 		pill.AutomaticSize=Enum.AutomaticSize.X; pill.Size=UDim2.new(0,0,0,18)
-		pill.BackgroundColor3=bg; pill.TextColor3=tx
-		pill.Font=Enum.Font.GothamBold; pill.TextSize=9
+		pill.BackgroundColor3=bg; pill.TextColor3=tx; pill.Font=Enum.Font.GothamBold; pill.TextSize=9
 		local info=getMutInfo(m)
 		pill.Text=" "..m..(info.mult>0 and " x"..info.mult or "").." "; pill.BorderSizePixel=0; corner(pill,9)
 	end
 end
 
 -- ════════════════════════════════════════════════════
---  ESP IMPLEMENTATION  (defined AFTER all UI exists)
+--  ESP IMPLEMENTATION
 -- ════════════════════════════════════════════════════
 local function getESPColor(model, muts)
 	if ESP.colorMode=="mutation" then
-		return #muts>0 and Color3.fromRGB(210,65,250) or Color3.fromRGB(96,88,185)
+		return #muts>0 and Color3.fromRGB(205,62,245) or Color3.fromRGB(90,80,180)
 	elseif ESP.colorMode=="rarity" then
 		local n=#muts
-		if n==0 then return Color3.fromRGB(110,110,155)
-		elseif n==1 then return Color3.fromRGB(65,165,255)
-		elseif n==2 then return Color3.fromRGB(165,65,255)
-		else return Color3.fromRGB(255,95,28) end
+		if n==0 then return Color3.fromRGB(105,105,150)
+		elseif n==1 then return Color3.fromRGB(62,160,255)
+		elseif n==2 then return Color3.fromRGB(160,62,250)
+		else return Color3.fromRGB(255,90,26) end
 	else
-		if model.Parent and model.Parent.Name=="Fruits" then return Color3.fromRGB(255,178,42) end
-		if model:FindFirstChild("Fruits") then return Color3.fromRGB(58,208,126) end
-		return Color3.fromRGB(96,88,200)
+		if model.Parent and model.Parent.Name=="Fruits" then return Color3.fromRGB(255,174,40) end
+		if model:FindFirstChild("Fruits") then return Color3.fromRGB(55,202,122) end
+		return Color3.fromRGB(90,80,195)
 	end
 end
 
-local function makePrimary(m)
-	if m:IsA("Model") then return m.PrimaryPart or m:FindFirstChildWhichIsA("BasePart")
-	elseif m:IsA("BasePart") then return m end
+-- Helper: get first BasePart inside a model
+local function getModelPart(m)
+	if m:IsA("BasePart") then return m end
+	return m:IsA("Model") and (m.PrimaryPart or m:FindFirstChildWhichIsA("BasePart")) or nil
 end
 
 local function makeBillboard(model, col, name, w, muts, isMulti, fc, variant)
-	local part=makePrimary(model); if not part then return nil end
+	local part=getModelPart(model); if not part then return nil end
 	local compact=ESP.detail=="compact"
 	local bb=Instance.new("BillboardGui",part)
 	bb.AlwaysOnTop=true
-	bb.Size=UDim2.new(0,compact and 148 or 200, 0, compact and 52 or 100)
+	bb.Size=UDim2.new(0,compact and 148 or 206, 0, compact and 52 or 100)
 	bb.StudsOffset=Vector3.new(0,5.5,0); bb.MaxDistance=175
 
 	local fr=Instance.new("Frame",bb); fr.Size=UDim2.new(1,0,1,0)
-	fr.BackgroundColor3=Color3.fromRGB(8,8,16); fr.BackgroundTransparency=0.08; fr.BorderSizePixel=0; corner(fr,10)
+	fr.BackgroundColor3=Color3.fromRGB(6,6,14); fr.BackgroundTransparency=0.06; fr.BorderSizePixel=0; corner(fr,10)
 	mkStroke(fr,col,1.8)
 	local ab=Instance.new("Frame",fr); ab.Size=UDim2.new(1,-12,0,2); ab.Position=UDim2.new(0,6,0,4)
 	ab.BackgroundColor3=col; ab.BorderSizePixel=0; corner(ab,1)
 	pad(fr,8,8,13,5); vlist(fr,3)
 
 	local nm=Instance.new("TextLabel",fr); nm.Size=UDim2.new(1,0,0,15); nm.BackgroundTransparency=1
-	nm.Font=Enum.Font.GothamBold; nm.TextSize=11
-	nm.TextColor3=isMulti and C.textGreen or C.text; nm.Text=name
-	nm.TextXAlignment=Enum.TextXAlignment.Left; nm.TextTruncate=Enum.TextTruncate.AtEnd
+	nm.Font=Enum.Font.GothamBold; nm.TextSize=11; nm.TextColor3=isMulti and C.textGreen or C.text
+	nm.Text=name; nm.TextXAlignment=Enum.TextXAlignment.Left; nm.TextTruncate=Enum.TextTruncate.AtEnd
 
 	if not compact then
 		if variant then
 			local vCfg=VARIANT_CFG[variant]
 			local vl=Instance.new("TextLabel",fr); vl.Size=UDim2.new(1,0,0,11); vl.BackgroundTransparency=1
 			vl.Font=Enum.Font.GothamBold; vl.TextSize=9
-			vl.TextColor3=vCfg and vCfg.tx or Color3.fromRGB(145,205,255)
-			vl.Text=vCfg and vCfg.label or ("◈ "..variant)
-			vl.TextXAlignment=Enum.TextXAlignment.Left
+			vl.TextColor3=vCfg and vCfg.tx or C.textBlue
+			vl.Text=vCfg and vCfg.label or ("◈ "..variant); vl.TextXAlignment=Enum.TextXAlignment.Left
 		end
 		local wl=Instance.new("TextLabel",fr); wl.Size=UDim2.new(1,0,0,11); wl.BackgroundTransparency=1
 		wl.Font=Enum.Font.Gotham; wl.TextSize=10; wl.TextColor3=C.textAmber
@@ -807,11 +877,9 @@ local function makeBillboard(model, col, name, w, muts, isMulti, fc, variant)
 			local tm=mutTotalMult(muts)
 			local ml=Instance.new("TextLabel",fr); ml.Size=UDim2.new(1,0,0,11); ml.BackgroundTransparency=1
 			ml.Font=Enum.Font.Gotham; ml.TextSize=10
-			local _,tx1=getMutBadgeColors(muts[1])
-			ml.TextColor3=tx1
-			local preview=(muts[1])..(muts[2] and " · "..(muts[2]) or "")..(#muts>2 and " +"..( #muts-2) or "")
-			ml.Text="✦ "..preview.." (×"..tm..")"
-			ml.TextXAlignment=Enum.TextXAlignment.Left; ml.TextTruncate=Enum.TextTruncate.AtEnd
+			local _,tx1=getMutBadgeColors(muts[1]); ml.TextColor3=tx1
+			local preview=muts[1]..(muts[2] and " · "..muts[2] or "")..(#muts>2 and " +"..( #muts-2) or "")
+			ml.Text="✦ "..preview.." (×"..tm..")"; ml.TextXAlignment=Enum.TextXAlignment.Left; ml.TextTruncate=Enum.TextTruncate.AtEnd
 		else
 			local nl=Instance.new("TextLabel",fr); nl.Size=UDim2.new(1,0,0,11); nl.BackgroundTransparency=1
 			nl.Font=Enum.Font.Gotham; nl.TextSize=10; nl.TextColor3=C.textDim
@@ -820,17 +888,16 @@ local function makeBillboard(model, col, name, w, muts, isMulti, fc, variant)
 	else
 		local cl=Instance.new("TextLabel",fr); cl.Size=UDim2.new(1,0,0,11); cl.BackgroundTransparency=1
 		cl.Font=Enum.Font.Gotham; cl.TextSize=10; cl.TextColor3=C.textSub
-		cl.Text="⚖"..string.format("%.2f",w).."  ✦"..(#muts).."  ×"..mutTotalMult(muts)
-		cl.TextXAlignment=Enum.TextXAlignment.Left
+		cl.Text="⚖"..string.format("%.2f",w).."  ✦"..#muts.."  ×"..mutTotalMult(muts); cl.TextXAlignment=Enum.TextXAlignment.Left
 	end
 	return bb
 end
 
 local function clearESP()
-	for _,d in pairs(espObjects) do
-		if d.hl  then pcall(function() d.hl:Destroy() end) end
-		if d.sel then pcall(function() d.sel:Destroy() end) end
-		if d.bb  then pcall(function() d.bb:Destroy() end) end
+	for model,d in pairs(espObjects) do
+		-- Remove Highlight from inside model
+		if d.hl and d.hl.Parent then pcall(function() d.hl:Destroy() end) end
+		if d.bb and d.bb.Parent then pcall(function() d.bb:Destroy() end) end
 	end
 	espObjects={}
 end
@@ -840,22 +907,28 @@ local function applyToModel(model, col, isMulti, variant)
 	local muts=getMutations(model); local w=getW(model); local fc=getFruitCount(model)
 	local d={}
 
-	if ESP.style=="fill" or ESP.style=="both" or ESP.chams then
-		local hl=Instance.new("Highlight",espFolder)
-		hl.Adornee=model
-		hl.FillColor=col
-		hl.FillTransparency=ESP.style=="outline" and 1 or (ESP.style=="both" and 0.75 or 0.6)
-		hl.OutlineColor=col
-		hl.OutlineTransparency=ESP.style=="fill" and 1 or 0.1
-		if ESP.chams then pcall(function() hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop end) end
-		d.hl=hl
-	end
-
-	if ESP.style=="outline" then
-		local sel=Instance.new("SelectionBox",espFolder)
-		sel.Adornee=model; sel.Color3=col; sel.LineThickness=0.06
-		sel.SurfaceTransparency=1; sel.SurfaceColor3=col; d.sel=sel
-	end
+	-- ── Roblox Highlight (inserted INTO the model/part)
+	local hlOk,hl=pcall(function()
+		local h=Instance.new("Highlight")
+		h.FillColor=col
+		h.OutlineColor=col
+		if ESP.style=="outline" then
+			h.FillTransparency=1
+			h.OutlineTransparency=0.15
+		elseif ESP.style=="fill" then
+			h.FillTransparency=0.55
+			h.OutlineTransparency=1
+		else -- both
+			h.FillTransparency=0.72
+			h.OutlineTransparency=0.15
+		end
+		if ESP.chams then
+			pcall(function() h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop end)
+		end
+		h.Parent=model   -- parented inside the model so it adorns itself
+		return h
+	end)
+	if hlOk then d.hl=hl end
 
 	if ESP.billboards then
 		d.bb=makeBillboard(model,col,model.Name,w,muts,isMulti,fc,variant)
@@ -863,32 +936,45 @@ local function applyToModel(model, col, isMulti, variant)
 	espObjects[model]=d
 end
 
--- NOW define refreshESP (the upvalue used in MISC toggles)
+-- Now assign refreshESP (upvalue is now live)
 refreshESP = function()
 	clearESP(); if not ESP.enabled then return end
 	for _,fd in ipairs(getAllFarms()) do
-		local ownPlr=fd.player
-		if ownPlr and ESP.blocked[ownPlr.UserId] then continue end
-		local pf=fd.imp and fd.imp:FindFirstChild("Plants_Physical")
-		if not pf then continue end
+		if fd.player and ESP.blocked[fd.player.UserId] then continue end
+		local pf=fd.imp and fd.imp:FindFirstChild("Plants_Physical"); if not pf then continue end
 		for _,model in ipairs(pf:GetChildren()) do
 			if not model:IsA("Model") then continue end
 			local muts=getMutations(model); local col=getESPColor(model,muts)
 			local isMulti=model:FindFirstChild("Fruits")~=nil
-			local variant=getVariant(model)
-			applyToModel(model,col,isMulti,variant)
+			applyToModel(model,col,isMulti,getVariant(model))
 			if isMulti then
 				local ff=model:FindFirstChild("Fruits")
 				if ff then
 					for _,fruit in ipairs(ff:GetChildren()) do
-						if not fruit:IsA("Model") then continue end
-						local fm=getMutations(fruit); local fc=getESPColor(fruit,fm)
-						applyToModel(fruit,fc,false,getVariant(fruit))
+						if fruit:IsA("Model") then
+							local fm=getMutations(fruit)
+							applyToModel(fruit,getESPColor(fruit,fm),false,getVariant(fruit))
+						end
 					end
 				end
 			end
 		end
 	end
+end
+
+-- ════════════════════════════════════════════════════
+--  ACTION HELPERS  (Collect / Steal stubs)
+-- ════════════════════════════════════════════════════
+local function doCollect(model)
+	-- TODO: Replace with your collect remote/script
+	-- Example: game:GetService("ReplicatedStorage").Remotes.Collect:FireServer(model)
+	warn("[FVP6] Collect triggered on:", model:GetFullName())
+end
+
+local function doSteal(model)
+	-- TODO: Replace with your steal remote/script
+	-- Example: game:GetService("ReplicatedStorage").Remotes.Steal:FireServer(model)
+	warn("[FVP6] Steal triggered on:", model:GetFullName())
 end
 
 -- ════════════════════════════════════════════════════
@@ -899,6 +985,7 @@ local state={
 	plantModel=nil, fruitModel=nil, plantsFolder=nil,
 }
 
+-- ── Layout helpers ────────────────────────────────
 local function setControls(v)
 	searchBox.Visible=v; filterBar.Visible=v; sortBar.Visible=v; sortDivF.Visible=v
 	if v then mainScroll.Position=UDim2.new(0,5,0,140); mainScroll.Size=UDim2.new(1,-10,1,-146)
@@ -930,8 +1017,7 @@ local function makePills(parent, muts, showMult)
 		local bg,tx=getMutBadgeColors(m); local info=getMutInfo(m)
 		local pill=Instance.new("TextLabel",fr)
 		pill.AutomaticSize=Enum.AutomaticSize.X; pill.Size=UDim2.new(0,0,0,18)
-		pill.BackgroundColor3=bg; pill.TextColor3=tx
-		pill.Font=Enum.Font.GothamBold; pill.TextSize=9
+		pill.BackgroundColor3=bg; pill.TextColor3=tx; pill.Font=Enum.Font.GothamBold; pill.TextSize=9
 		pill.Text=" "..m..(showMult and info.mult>0 and " ×"..info.mult or "").." "; pill.BorderSizePixel=0; corner(pill,9)
 	end
 	return fr
@@ -963,26 +1049,59 @@ local function makeCard(parent, greenTint)
 	return card,s
 end
 
+-- ── Action Button Row (Collect / Steal) ───────────
+local function makeActionRow(parent, model, isMine)
+	local row=Instance.new("Frame",parent)
+	row.Size=UDim2.new(1,0,0,28); row.BackgroundTransparency=1; row.BorderSizePixel=0; hlist(row,6)
+
+	if isMine then
+		-- Collect button
+		local btn=Instance.new("TextButton",row)
+		btn.AutomaticSize=Enum.AutomaticSize.X; btn.Size=UDim2.new(0,0,1,0)
+		btn.BackgroundColor3=C.collectBg; btn.TextColor3=C.collectTx
+		btn.Font=Enum.Font.GothamBold; btn.TextSize=10; btn.Text=" ⬡  Collect "; btn.BorderSizePixel=0; corner(btn,7)
+		mkStroke(btn,Color3.fromRGB(30,100,58),0.8)
+		btn.MouseEnter:Connect(function() tw(btn,{BackgroundColor3=Color3.fromRGB(14,48,28)}) end)
+		btn.MouseLeave:Connect(function() tw(btn,{BackgroundColor3=C.collectBg}) end)
+		local cm=model; btn.MouseButton1Click:Connect(function() doCollect(cm) end)
+	else
+		-- Steal button
+		local btn=Instance.new("TextButton",row)
+		btn.AutomaticSize=Enum.AutomaticSize.X; btn.Size=UDim2.new(0,0,1,0)
+		btn.BackgroundColor3=C.stealBg; btn.TextColor3=C.stealTx
+		btn.Font=Enum.Font.GothamBold; btn.TextSize=10; btn.Text=" ⚔  Steal "; btn.BorderSizePixel=0; corner(btn,7)
+		mkStroke(btn,Color3.fromRGB(100,28,28),0.8)
+		btn.MouseEnter:Connect(function() tw(btn,{BackgroundColor3=Color3.fromRGB(50,14,14)}) end)
+		btn.MouseLeave:Connect(function() tw(btn,{BackgroundColor3=C.stealBg}) end)
+		local cm=model; btn.MouseButton1Click:Connect(function() doSteal(cm) end)
+	end
+end
+
 -- ════════════════════════════════════════════════════
---  RENDER FUNCTIONS
+--  RENDER FUNCTIONS (forward declared)
 -- ════════════════════════════════════════════════════
 local renderPlants, renderFruits, renderDetail
 
 renderPlants = function()
 	clearScroll(); setControls(true); backBtn.Visible=false
-	local plr=state.selectedPlayer; breadcrumb.Text=plr.Name.."'s Farm"; hSub.Text="Viewing "..plr.Name
+	local plr=state.selectedPlayer
+	if not plr or not plr.Parent then emptyMsg("Player disconnected."); statLbl.Text=""; return end
+	local isMine=(plr==player)
+	breadcrumb.Text=plr.Name.."'s Farm"
+	hSub.Text=(isMine and "Your" or plr.Name.."'s").." farm"
 	local q=string.lower(searchBox.Text); local models={}
-	if state.plantsFolder then
+	if state.plantsFolder and state.plantsFolder.Parent then
 		for _,v in ipairs(state.plantsFolder:GetChildren()) do
 			if v:IsA("Model") and (q=="" or string.find(string.lower(v.Name),q,1,true)) then
 				if not mutOnly or #getMutations(v)>0 then table.insert(models,v) end
 			end
 		end
-	else emptyMsg("No Plants_Physical folder."); statLbl.Text=""; return end
+	else emptyMsg("No Plants_Physical folder found."); statLbl.Text=""; return end
 	sortModels(models)
-	local tm,tf=0,0; for _,m in ipairs(models) do tm=tm+#getMutations(m); tf=tf+getFruitCount(m) end
-	statLbl.Text=#models.." plants  ·  "..tm.." mutations  ·  "..tf.." fruits"
-	if #models==0 then emptyMsg(q~="" and 'No match for "'..q..'".' or "No plants."); return end
+	local tm,tf=0,0
+	for _,m in ipairs(models) do tm=tm+#getMutations(m); tf=tf+getFruitCount(m) end
+	statLbl.Text=#models.." plants  ·  "..tm.." muts  ·  "..tf.." fruits"
+	if #models==0 then emptyMsg(q~="" and 'No results for "'..q..'".' or "No plants found."); return end
 	lbl(mainScroll,{text="  "..#models.." PLANT"..(#models~=1 and "S" or ""),size=9,color=C.textDim,font=Enum.Font.GothamBold,sz=UDim2.new(1,0,0,14)})
 	for _,model in ipairs(models) do
 		local ff=model:FindFirstChild("Fruits"); local isMulti=ff~=nil
@@ -995,22 +1114,24 @@ renderPlants = function()
 		local typeBadge=Instance.new("TextLabel",row1)
 		typeBadge.Size=UDim2.new(0,96,0,17); typeBadge.Position=UDim2.new(1,-96,0.5,-8)
 		typeBadge.BorderSizePixel=0; typeBadge.Font=Enum.Font.GothamBold; typeBadge.TextSize=9; corner(typeBadge,9)
-		if isMulti then typeBadge.BackgroundColor3=Color3.fromRGB(14,50,34); typeBadge.TextColor3=C.textGreen; typeBadge.Text="⬥ Multi-Harvest"
-		else typeBadge.BackgroundColor3=Color3.fromRGB(34,30,62); typeBadge.TextColor3=Color3.fromRGB(145,136,228); typeBadge.Text="◆ Single" end
+		if isMulti then typeBadge.BackgroundColor3=Color3.fromRGB(12,48,32); typeBadge.TextColor3=C.textGreen; typeBadge.Text="⬥ Multi-Harvest"
+		else typeBadge.BackgroundColor3=Color3.fromRGB(32,28,60); typeBadge.TextColor3=Color3.fromRGB(140,132,222); typeBadge.Text="◆ Single" end
 		if not isMulti and variant then
 			local vRow=Instance.new("Frame",card); vRow.Size=UDim2.new(1,0,0,0); vRow.AutomaticSize=Enum.AutomaticSize.Y
 			vRow.BackgroundTransparency=1; vRow.BorderSizePixel=0; hlist(vRow,4)
 			makeVariantBadge(vRow,variant)
 		end
-		local infoL=lbl(card,{size=11,color=isMulti and Color3.fromRGB(78,145,106) or C.textSub,sz=UDim2.new(1,0,0,14)})
+		local infoL=lbl(card,{size=11,color=isMulti and Color3.fromRGB(75,140,103) or C.textSub,sz=UDim2.new(1,0,0,14)})
 		if isMulti then infoL.Text=fc.." fruit"..(fc~=1 and "s" or "").."  ·  tap to expand"
 		else
 			local parts={}
 			if weight then table.insert(parts,string.format("⚖ %.2f",weight.Value)) end
-			if #muts>0 then table.insert(parts,"✦ "..#muts.." mut"..( #muts>1 and "s" or "").." (×"..mutTotalMult(muts)..")") end
+			if #muts>0 then table.insert(parts,"✦ "..#muts.." mut"..(#muts>1 and "s" or "").." (×"..mutTotalMult(muts)..")") end
 			infoL.Text=table.concat(parts,"   ")
 		end
 		if not isMulti and #muts>0 then makePills(card,muts,true) end
+		-- Action row
+		makeActionRow(card,model,isMine)
 		local hBg=isMulti and C.hoverG or C.hover; local hS=isMulti and C.strokeGHi or C.strokeHi; local dS=isMulti and C.strokeG or C.stroke
 		card.MouseEnter:Connect(function() tw(card,{BackgroundColor3=hBg}); tw(s,{Color=hS}) end)
 		card.MouseLeave:Connect(function() tw(card,{BackgroundColor3=C.card}); tw(s,{Color=dS}) end)
@@ -1024,7 +1145,10 @@ end
 
 renderFruits = function()
 	clearScroll(); setControls(true); backBtn.Visible=true
-	local pm=state.plantModel; breadcrumb.Text=pm.Name.." / Fruits"
+	local pm=state.plantModel
+	if not pm or not pm.Parent then renderPlants(); return end
+	local isMine=(state.selectedPlayer==player)
+	breadcrumb.Text=pm.Name.." / Fruits"
 	local ff=pm:FindFirstChild("Fruits"); if not ff then emptyMsg("No Fruits."); statLbl.Text=""; return end
 	local q=string.lower(searchBox.Text); local fruits={}
 	for _,v in ipairs(ff:GetChildren()) do
@@ -1036,7 +1160,7 @@ renderFruits = function()
 	local tm=0; for _,f in ipairs(fruits) do tm=tm+#getMutations(f) end
 	statLbl.Text=#fruits.." fruits  ·  "..tm.." mutations"
 	lbl(mainScroll,{text="  "..#fruits.." FRUIT"..(#fruits~=1 and "S" or "").." — "..string.upper(pm.Name),size=9,color=C.textDim,font=Enum.Font.GothamBold,sz=UDim2.new(1,0,0,16)})
-	if #fruits==0 then emptyMsg(q~="" and 'No match for "'..q..'".' or "No fruits."); return end
+	if #fruits==0 then emptyMsg(q~="" and 'No results for "'..q..'".' or "No fruits."); return end
 	for _,fm in ipairs(fruits) do
 		local muts=getMutations(fm); local weight=fm:FindFirstChild("Weight"); local variant=getVariant(fm)
 		local card,s=makeCard(mainScroll,true)
@@ -1045,8 +1169,8 @@ renderFruits = function()
 		if #muts>0 then
 			local _,tx=getMutBadgeColors(muts[1])
 			local mb=Instance.new("TextLabel",row1); mb.Size=UDim2.new(0,90,0,17); mb.Position=UDim2.new(1,-90,0.5,-8)
-			mb.BackgroundColor3=Color3.fromRGB(36,22,62); mb.TextColor3=tx; mb.Font=Enum.Font.GothamBold; mb.TextSize=9
-			mb.Text="✦ "..(#muts).." mut × "..mutTotalMult(muts); mb.BorderSizePixel=0; corner(mb,9)
+			mb.BackgroundColor3=Color3.fromRGB(34,20,58); mb.TextColor3=tx; mb.Font=Enum.Font.GothamBold; mb.TextSize=9
+			mb.Text="✦ "..(#muts).." × "..mutTotalMult(muts); mb.BorderSizePixel=0; corner(mb,9)
 		end
 		if variant then
 			local vRow=Instance.new("Frame",card); vRow.Size=UDim2.new(1,0,0,0); vRow.AutomaticSize=Enum.AutomaticSize.Y
@@ -1055,8 +1179,10 @@ renderFruits = function()
 		end
 		local parts={}
 		if weight then table.insert(parts,string.format("⚖ %.2f",weight.Value)) end
-		if #parts>0 then lbl(card,{text=table.concat(parts,"  "),size=11,color=Color3.fromRGB(84,140,108),sz=UDim2.new(1,0,0,14)}) end
+		if #parts>0 then lbl(card,{text=table.concat(parts,"  "),size=11,color=Color3.fromRGB(80,135,105),sz=UDim2.new(1,0,0,14)}) end
 		if #muts>0 then makePills(card,muts,true) end
+		-- Action row
+		makeActionRow(card,fm,isMine)
 		card.MouseEnter:Connect(function() tw(card,{BackgroundColor3=C.hoverG}); tw(s,{Color=C.strokeGHi}) end)
 		card.MouseLeave:Connect(function() tw(card,{BackgroundColor3=C.card}); tw(s,{Color=C.strokeG}) end)
 		local cf=fm; card.MouseButton1Click:Connect(function() state.view="detail"; state.fruitModel=cf; renderDetail() end)
@@ -1065,7 +1191,10 @@ end
 
 renderDetail = function()
 	clearScroll(); setControls(false); backBtn.Visible=true; statLbl.Text=""
-	local fm=state.fruitModel; local pn=state.plantModel and state.plantModel.Name or "?"
+	local fm=state.fruitModel
+	if not fm or not fm.Parent then renderFruits(); return end
+	local isMine=(state.selectedPlayer==player)
+	local pn=state.plantModel and state.plantModel.Name or "?"
 	breadcrumb.Text=pn.." / "..fm.Name
 	local muts=getMutations(fm); local weight=fm:FindFirstChild("Weight"); local variant=getVariant(fm)
 	local ok,attrs=pcall(function() return fm:GetAttributes() end)
@@ -1078,16 +1207,18 @@ renderDetail = function()
 		vRow.BackgroundTransparency=1; vRow.BorderSizePixel=0; hlist(vRow,4)
 		makeVariantBadge(vRow,variant)
 	end
-	local function div() local d=Instance.new("Frame",card); d.Size=UDim2.new(1,0,0,1); d.BackgroundColor3=Color3.fromRGB(32,30,52); d.BorderSizePixel=0 end
+	-- Action row at top of detail
+	makeActionRow(card,fm,isMine)
+	local function div() local d=Instance.new("Frame",card); d.Size=UDim2.new(1,0,0,1); d.BackgroundColor3=Color3.fromRGB(30,28,50); d.BorderSizePixel=0 end
 	local function secH(t) lbl(card,{text=t,size=9,color=C.textSub,font=Enum.Font.GothamBold,sz=UDim2.new(1,0,0,14)}) end
 	local function fieldRow(lv,val,vc)
 		local row=Instance.new("Frame",card); row.Size=UDim2.new(1,0,0,28)
-		row.BackgroundColor3=Color3.fromRGB(20,19,34); row.BorderSizePixel=0; corner(row,6)
+		row.BackgroundColor3=Color3.fromRGB(18,17,32); row.BorderSizePixel=0; corner(row,6)
 		lbl(row,{text=lv,size=12,color=C.textSub,sz=UDim2.new(0.42,0,1,0),pos=UDim2.new(0,10,0,0)})
 		lbl(row,{text=tostring(val),font=Enum.Font.GothamBold,size=12,color=vc or C.text,sz=UDim2.new(0.54,0,1,0),pos=UDim2.new(0.44,0,0,0)})
 	end
 	div(); secH("PROPERTIES")
-	if variant then fieldRow("Variant",variant,Color3.fromRGB(145,205,255)) end
+	if variant then fieldRow("Variant",variant,C.textBlue) end
 	if weight then fieldRow("Weight",string.format("%.4f",weight.Value),C.textAmber) end
 	if ok then
 		local ex={}
@@ -1129,11 +1260,13 @@ local plrData={}
 
 local function refreshSub(plr)
 	local d=plrData[plr]; if not d then return end
+	if not plr or not plr.Parent then return end
 	local farm=getFarmFor(plr); local pf=farm and farm:FindFirstChild("Plants_Physical")
 	local c=pf and #pf:GetChildren() or 0; d.sub.Text=c.." plant"..(c~=1 and "s" or "")
 end
 
 local function selectPlayer(plr)
+	if not plr or not plr.Parent then return end
 	state.selectedPlayer=plr
 	for p,d in pairs(plrData) do tw(d.s,{Color=p==plr and C.strokeHi or C.stroke}) end
 	state.view="plants"; searchBox.Text=""
@@ -1146,29 +1279,29 @@ local function makePlrBtn(plr)
 	btn.Size=UDim2.new(1,0,0,50); btn.BackgroundColor3=C.card; btn.BorderSizePixel=0
 	btn.Text=""; btn.AutoButtonColor=false; corner(btn,10); local bs=mkStroke(btn,C.stroke)
 	local av=Instance.new("Frame",btn); av.Size=UDim2.new(0,28,0,28); av.Position=UDim2.new(0,8,0.5,-14)
-	av.BackgroundColor3=Color3.fromRGB(38,34,72); av.BorderSizePixel=0; corner(av,14)
+	av.BackgroundColor3=Color3.fromRGB(34,30,68); av.BorderSizePixel=0; corner(av,14)
 	lbl(av,{text=initials(plr.Name),font=Enum.Font.GothamBold,size=11,color=C.textPurp,sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
 	lbl(btn,{text=plr.Name,font=Enum.Font.GothamBold,size=12,color=C.text,sz=UDim2.new(1,-46,0,17),pos=UDim2.new(0,42,0,7),trunc=Enum.TextTruncate.AtEnd})
 	local sub=lbl(btn,{text="—",size=10,color=C.textDim,sz=UDim2.new(1,-46,0,14),pos=UDim2.new(0,42,0,26)})
 	plrData[plr]={btn=btn,sub=sub,s=bs}; refreshSub(plr)
-	btn.MouseEnter:Connect(function() if state.selectedPlayer~=plr then tw(bs,{Color=Color3.fromRGB(68,64,118)}) end end)
+	btn.MouseEnter:Connect(function() if state.selectedPlayer~=plr then tw(bs,{Color=Color3.fromRGB(64,60,115)}) end end)
 	btn.MouseLeave:Connect(function() if state.selectedPlayer~=plr then tw(bs,{Color=C.stroke}) end end)
 	btn.MouseButton1Click:Connect(function() selectPlayer(plr) end)
 end
 
 -- My Farm button
 local myBtn=Instance.new("TextButton",plrScroll)
-myBtn.Size=UDim2.new(1,0,0,50); myBtn.BackgroundColor3=Color3.fromRGB(14,12,28)
+myBtn.Size=UDim2.new(1,0,0,50); myBtn.BackgroundColor3=Color3.fromRGB(12,10,25)
 myBtn.BorderSizePixel=0; myBtn.Text=""; myBtn.AutoButtonColor=false; corner(myBtn,10)
-local myS=mkStroke(myBtn,Color3.fromRGB(62,54,112))
+local myS=mkStroke(myBtn,Color3.fromRGB(58,50,108))
 local myAv=Instance.new("Frame",myBtn); myAv.Size=UDim2.new(0,28,0,28); myAv.Position=UDim2.new(0,8,0.5,-14)
-myAv.BackgroundColor3=Color3.fromRGB(58,50,115); myAv.BorderSizePixel=0; corner(myAv,14)
-lbl(myAv,{text=initials(player.Name),font=Enum.Font.GothamBold,size=11,color=Color3.fromRGB(190,178,255),sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
-lbl(myBtn,{text=player.Name,font=Enum.Font.GothamBold,size=12,color=Color3.fromRGB(190,178,255),sz=UDim2.new(1,-46,0,17),pos=UDim2.new(0,42,0,7),trunc=Enum.TextTruncate.AtEnd})
-local mySub=lbl(myBtn,{text="My Farm",size=10,color=Color3.fromRGB(100,92,152),sz=UDim2.new(1,-46,0,14),pos=UDim2.new(0,42,0,26)})
+myAv.BackgroundColor3=Color3.fromRGB(54,46,112); myAv.BorderSizePixel=0; corner(myAv,14)
+lbl(myAv,{text=initials(player.Name),font=Enum.Font.GothamBold,size=11,color=Color3.fromRGB(185,175,255),sz=UDim2.new(1,0,1,0),xa=Enum.TextXAlignment.Center})
+lbl(myBtn,{text=player.Name,font=Enum.Font.GothamBold,size=12,color=Color3.fromRGB(185,175,255),sz=UDim2.new(1,-46,0,17),pos=UDim2.new(0,42,0,7),trunc=Enum.TextTruncate.AtEnd})
+local mySub=lbl(myBtn,{text="My Farm",size=10,color=Color3.fromRGB(96,88,148),sz=UDim2.new(1,-46,0,14),pos=UDim2.new(0,42,0,26)})
 plrData[player]={btn=myBtn,sub=mySub,s=myS}
-myBtn.MouseEnter:Connect(function() if state.selectedPlayer~=player then tw(myS,{Color=Color3.fromRGB(98,88,165)}) end end)
-myBtn.MouseLeave:Connect(function() if state.selectedPlayer~=player then tw(myS,{Color=Color3.fromRGB(62,54,112)}) end end)
+myBtn.MouseEnter:Connect(function() if state.selectedPlayer~=player then tw(myS,{Color=Color3.fromRGB(94,84,160)}) end end)
+myBtn.MouseLeave:Connect(function() if state.selectedPlayer~=player then tw(myS,{Color=Color3.fromRGB(58,50,108)}) end end)
 myBtn.MouseButton1Click:Connect(function() selectPlayer(player) end)
 
 local function refreshPlayers()
@@ -1177,34 +1310,57 @@ local function refreshPlayers()
 	for _,plr in ipairs(Players:GetPlayers()) do if plr~=player then makePlrBtn(plr) end end
 	rebuildBlockList()
 end
+
+-- ── Player leave safety ───────────────────────────
 Players.PlayerAdded:Connect(function() task.wait(1); refreshPlayers() end)
-Players.PlayerRemoving:Connect(function() task.wait(0.5); refreshPlayers() end)
+Players.PlayerRemoving:Connect(function(plr)
+	task.wait(0.3)
+	-- If the leaving player is selected, fall back to self
+	if state.selectedPlayer==plr then
+		state.selectedPlayer=player; state.view="plants"; state.plantModel=nil; state.fruitModel=nil
+		local farm=getFarmFor(player); state.plantsFolder=farm and farm:FindFirstChild("Plants_Physical") or nil
+		breadcrumb.Text=player.Name.."'s Farm"
+		hSub.Text="Your farm"
+		renderPlants()
+		tw(myS,{Color=C.strokeHi})
+	end
+	-- Remove from plrData
+	plrData[plr]=nil
+	-- Cleanup blocked entry
+	ESP.blocked[plr.UserId]=nil
+	-- Rebuild ESP & UI
+	if ESP.enabled then refreshESP() end
+	refreshPlayers()
+end)
+
 refreshPlayers()
 
+-- Initial load
 do
 	local farm=getFarmFor(player); state.plantsFolder=farm and farm:FindFirstChild("Plants_Physical") or nil
 	renderPlants(); tw(myS,{Color=C.strokeHi})
 end
 
 -- ════════════════════════════════════════════════════
---  WORLD HOVER (RenderStepped)
+--  WORLD HOVER  (RenderStepped — minimal allocs)
 -- ════════════════════════════════════════════════════
 local lastHoverModel=nil
 local ownerCache={}
 
 local function rebuildOwnerCache()
-	ownerCache={}
+	local newCache={}
 	for _,fd in ipairs(getAllFarms()) do
 		local pf=fd.imp and fd.imp:FindFirstChild("Plants_Physical"); if not pf then continue end
 		local ownerName=fd.player and fd.player.Name or tostring(fd.owner)
 		for _,m in ipairs(pf:GetChildren()) do
 			if m:IsA("Model") then
-				ownerCache[m]=ownerName
+				newCache[m]=ownerName
 				local ff=m:FindFirstChild("Fruits")
-				if ff then for _,fruit in ipairs(ff:GetChildren()) do if fruit:IsA("Model") then ownerCache[fruit]=ownerName end end end
+				if ff then for _,fruit in ipairs(ff:GetChildren()) do if fruit:IsA("Model") then newCache[fruit]=ownerName end end end
 			end
 		end
 	end
+	ownerCache=newCache
 end
 rebuildOwnerCache()
 
@@ -1230,7 +1386,7 @@ RunService.RenderStepped:Connect(function()
 		if hoverPopup.Visible then hoverPopup.Visible=false; lastHoverModel=nil end; return
 	end
 	local mp=UIS:GetMouseLocation(); local vp=camera.ViewportSize
-	hoverPopup.Position=UDim2.new(0,math.min(mp.X+22,vp.X-252),0,math.min(mp.Y+22,vp.Y-220))
+	hoverPopup.Position=UDim2.new(0,math.min(mp.X+22,vp.X-260),0,math.min(mp.Y+22,vp.Y-220))
 	if model==lastHoverModel then hoverPopup.Visible=true; return end
 	lastHoverModel=model
 	local muts=getMutations(model); local w=getW(model); local variant=getVariant(model)
@@ -1238,13 +1394,13 @@ RunService.RenderStepped:Connect(function()
 	local isMulti=not isFruit and model:FindFirstChild("Fruits")~=nil
 	local fc=isMulti and getFruitCount(model) or 0
 	local col=getESPColor(model,muts)
-	hpAccent.BackgroundColor3=col; hpGlow.BackgroundColor3=col
+	hpAccent.BackgroundColor3=col
 	hpTitle.Text=model.Name
 	hpTitle.TextColor3=isFruit and C.textAmber or (isMulti and C.textGreen or C.text)
-	if isFruit then hpTypeBadge.Text=" 🍎 Fruit "; hpTypeBadge.BackgroundColor3=Color3.fromRGB(48,28,12); hpTypeBadge.TextColor3=C.textAmber
-	elseif isMulti then hpTypeBadge.Text=" ⬥ Multi · "..fc.."f "; hpTypeBadge.BackgroundColor3=Color3.fromRGB(14,46,30); hpTypeBadge.TextColor3=C.textGreen
-	else hpTypeBadge.Text=" ◆ Single "; hpTypeBadge.BackgroundColor3=Color3.fromRGB(30,26,58); hpTypeBadge.TextColor3=Color3.fromRGB(145,136,225) end
-	hpOwnerBadge.Text=" 👤 "..ownerName.." "; hpOwnerBadge.Visible=true
+	if isFruit then hpTypeBadge.Text=" 🍎 Fruit "; hpTypeBadge.BackgroundColor3=Color3.fromRGB(46,26,10); hpTypeBadge.TextColor3=C.textAmber
+	elseif isMulti then hpTypeBadge.Text=" ⬥ Multi · "..fc.."f "; hpTypeBadge.BackgroundColor3=Color3.fromRGB(12,44,28); hpTypeBadge.TextColor3=C.textGreen
+	else hpTypeBadge.Text=" ◆ Single "; hpTypeBadge.BackgroundColor3=Color3.fromRGB(28,24,56); hpTypeBadge.TextColor3=Color3.fromRGB(140,132,220) end
+	hpOwnerBadge.Text=" 👤 "..ownerName.." "
 	local vCfg=variant and VARIANT_CFG[variant]
 	if vCfg then
 		hpVariantSpecial.Text=" "..vCfg.label.." "; hpVariantSpecial.BackgroundColor3=vCfg.bg; hpVariantSpecial.TextColor3=vCfg.tx
@@ -1261,14 +1417,18 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ════════════════════════════════════════════════════
---  MAIN LOOP  — task.spawn so it doesn't block init
+--  MAIN LOOP  (non-blocking via task.spawn)
 -- ════════════════════════════════════════════════════
 task.spawn(function()
 	local lastPlr=nil; local lastCount=-1
 	while task.wait(ESP.rate) do
+		if not gui or not gui.Parent then break end  -- bail if gui destroyed
 		rebuildOwnerCache()
-		for plr in pairs(plrData) do refreshSub(plr) end
-		local plr=state.selectedPlayer; if not plr then continue end
+		for plr in pairs(plrData) do
+			if plr and plr.Parent then refreshSub(plr) end
+		end
+		local plr=state.selectedPlayer
+		if not plr or not plr.Parent then continue end
 		local farm=getFarmFor(plr); local pf=farm and farm:FindFirstChild("Plants_Physical")
 		local c=pf and #pf:GetChildren() or 0
 		if plr~=lastPlr or c~=lastCount then
