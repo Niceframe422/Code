@@ -9,6 +9,9 @@
 ║  • Player-leave safety & state cleanup                   ║
 ║  • Zero-lag design: pooled, debounced, safe pcalls       ║
 ║  • Cinematic deep-space UI with glowing accents          ║
+║  • All plants grouped by name (single + multi)           ║
+║  • Nested sliding cards: group → plant → fruits          ║
+║  • Multi-harvest detection via Fruit_Spawn fallback      ║
 ╚══════════════════════════════════════════════════════════╝
 --]]
 
@@ -26,10 +29,8 @@ local mouse  = player:GetMouse()
 
 -- ════════════════════════════════════════════════════
 --  MUTATION DATABASE  (name → {mult, bg, tx})
---  Synced from official GaG wiki data
 -- ════════════════════════════════════════════════════
 local MUT_DB = {
-	-- x2
 	Silver={mult=5,bg=Color3.fromRGB(55,58,72),tx=Color3.fromRGB(200,215,235)},
 	Wet={mult=2,bg=Color3.fromRGB(10,38,62),tx=Color3.fromRGB(80,175,240)},
 	Windstruck={mult=2,bg=Color3.fromRGB(30,34,50),tx=Color3.fromRGB(160,190,240)},
@@ -39,7 +40,6 @@ local MUT_DB = {
 	Glimmering={mult=2,bg=Color3.fromRGB(52,48,8),tx=Color3.fromRGB(240,235,100)},
 	Snowy={mult=2,bg=Color3.fromRGB(210,225,245),tx=Color3.fromRGB(80,130,200)},
 	Fiery={mult=2,bg=Color3.fromRGB(58,20,8),tx=Color3.fromRGB(255,140,60)},
-	-- x3
 	Pollinated={mult=3,bg=Color3.fromRGB(40,50,8),tx=Color3.fromRGB(175,225,80)},
 	Sandy={mult=3,bg=Color3.fromRGB(50,40,10),tx=Color3.fromRGB(220,195,100)},
 	Lush={mult=3,bg=Color3.fromRGB(14,46,18),tx=Color3.fromRGB(90,215,120)},
@@ -49,7 +49,6 @@ local MUT_DB = {
 	Moist={mult=3,bg=Color3.fromRGB(8,34,52),tx=Color3.fromRGB(80,185,230)},
 	Heartstruck={mult=3,bg=Color3.fromRGB(50,10,28),tx=Color3.fromRGB(240,80,150)},
 	Luck={mult=3,bg=Color3.fromRGB(8,48,20),tx=Color3.fromRGB(60,230,110)},
-	-- x4
 	Cracked={mult=4,bg=Color3.fromRGB(42,34,18),tx=Color3.fromRGB(195,170,110)},
 	Verdant={mult=4,bg=Color3.fromRGB(10,46,18),tx=Color3.fromRGB(90,225,125)},
 	Bloodlit={mult=4,bg=Color3.fromRGB(56,8,8),tx=Color3.fromRGB(240,75,75)},
@@ -60,7 +59,6 @@ local MUT_DB = {
 	Wiltproof={mult=4,bg=Color3.fromRGB(18,42,18),tx=Color3.fromRGB(120,210,120)},
 	Nocturnal={mult=4,bg=Color3.fromRGB(14,12,32),tx=Color3.fromRGB(130,110,220)},
 	Peppermint={mult=4,bg=Color3.fromRGB(12,42,22),tx=Color3.fromRGB(80,220,140)},
-	-- x5
 	Gold={mult=20,bg=Color3.fromRGB(68,52,8),tx=Color3.fromRGB(255,218,60)},
 	Clay={mult=5,bg=Color3.fromRGB(46,32,20),tx=Color3.fromRGB(195,155,110)},
 	Twisted={mult=5,bg=Color3.fromRGB(40,10,52),tx=Color3.fromRGB(190,90,255)},
@@ -72,13 +70,10 @@ local MUT_DB = {
 	Wildfast={mult=5,bg=Color3.fromRGB(46,30,6),tx=Color3.fromRGB(240,175,60)},
 	Snowtouched={mult=5,bg=Color3.fromRGB(180,210,240),tx=Color3.fromRGB(40,100,200)},
 	Geode={mult=5,bg=Color3.fromRGB(28,28,44),tx=Color3.fromRGB(160,150,240)},
-	-- x6
 	Arid={mult=6,bg=Color3.fromRGB(52,38,10),tx=Color3.fromRGB(230,185,80)},
 	Tempered={mult=6,bg=Color3.fromRGB(46,22,8),tx=Color3.fromRGB(215,130,60)},
 	Whimsical={mult=6,bg=Color3.fromRGB(44,14,48),tx=Color3.fromRGB(220,110,240)},
-	-- x7
 	Brewed={mult=7,bg=Color3.fromRGB(24,14,36),tx=Color3.fromRGB(165,100,220)},
-	-- x8
 	Static={mult=8,bg=Color3.fromRGB(44,44,8),tx=Color3.fromRGB(240,240,60)},
 	Fried={mult=8,bg=Color3.fromRGB(52,30,6),tx=Color3.fromRGB(225,158,60)},
 	Bloom={mult=8,bg=Color3.fromRGB(52,10,30),tx=Color3.fromRGB(240,100,175)},
@@ -90,16 +85,13 @@ local MUT_DB = {
 	Eggnog={mult=8,bg=Color3.fromRGB(52,44,14),tx=Color3.fromRGB(240,220,130)},
 	Necrotic={mult=8,bg=Color3.fromRGB(14,24,14),tx=Color3.fromRGB(90,175,80)},
 	Wilt={mult=8,bg=Color3.fromRGB(36,30,8),tx=Color3.fromRGB(175,162,80)},
-	-- x10
 	Frozen={mult=10,bg=Color3.fromRGB(8,38,56),tx=Color3.fromRGB(100,210,255)},
 	Amber={mult=10,bg=Color3.fromRGB(58,38,6),tx=Color3.fromRGB(255,185,60)},
 	Cooked={mult=10,bg=Color3.fromRGB(48,24,6),tx=Color3.fromRGB(210,120,55)},
 	Wilted={mult=10,bg=Color3.fromRGB(38,34,14),tx=Color3.fromRGB(190,175,90)},
 	Ornamented={mult=10,bg=Color3.fromRGB(12,42,28),tx=Color3.fromRGB(80,220,155)},
-	-- x12
 	Tempestuous={mult=12,bg=Color3.fromRGB(26,26,50),tx=Color3.fromRGB(140,160,240)},
 	Arctic={mult=12,bg=Color3.fromRGB(8,34,52),tx=Color3.fromRGB(90,195,245)},
-	-- x15
 	Acidic={mult=12,bg=Color3.fromRGB(20,50,8),tx=Color3.fromRGB(110,240,60)},
 	Aromatic={mult=15,bg=Color3.fromRGB(40,14,50),tx=Color3.fromRGB(220,130,255)},
 	Boil={mult=15,bg=Color3.fromRGB(50,18,8),tx=Color3.fromRGB(225,100,60)},
@@ -111,16 +103,13 @@ local MUT_DB = {
 	Spaghetti={mult=15,bg=Color3.fromRGB(54,30,8),tx=Color3.fromRGB(240,160,70)},
 	Jackpot={mult=15,bg=Color3.fromRGB(8,50,20),tx=Color3.fromRGB(60,220,130)},
 	Toxic={mult=15,bg=Color3.fromRGB(20,46,8),tx=Color3.fromRGB(120,230,60)},
-	-- x20
 	Eclipsed={mult=20,bg=Color3.fromRGB(18,6,36),tx=Color3.fromRGB(155,80,235)},
 	Rainbow={mult=50,bg=Color3.fromRGB(60,14,72),tx=Color3.fromRGB(230,130,255)},
 	Tranquil={mult=20,bg=Color3.fromRGB(8,40,40),tx=Color3.fromRGB(80,215,215)},
 	OldAmber={mult=20,bg=Color3.fromRGB(56,36,6),tx=Color3.fromRGB(240,170,55)},
 	Corrupt={mult=20,bg=Color3.fromRGB(22,6,40),tx=Color3.fromRGB(175,60,255)},
 	Cute={mult=20,bg=Color3.fromRGB(50,10,28),tx=Color3.fromRGB(245,90,165)},
-	-- x24
 	Festive={mult=24,bg=Color3.fromRGB(10,42,14),tx=Color3.fromRGB(80,230,110)},
-	-- x25
 	Zombified={mult=25,bg=Color3.fromRGB(14,42,8),tx=Color3.fromRGB(105,225,70)},
 	Molten={mult=25,bg=Color3.fromRGB(56,14,6),tx=Color3.fromRGB(245,95,50)},
 	Flaming={mult=25,bg=Color3.fromRGB(54,16,6),tx=Color3.fromRGB(255,105,40)},
@@ -132,30 +121,22 @@ local MUT_DB = {
 	Crystalized={mult=25,bg=Color3.fromRGB(10,34,52),tx=Color3.fromRGB(80,190,240)},
 	Alienated={mult=25,bg=Color3.fromRGB(10,44,16),tx=Color3.fromRGB(70,225,110)},
 	Ghostly={mult=25,bg=Color3.fromRGB(24,24,36),tx=Color3.fromRGB(155,155,210)},
-	-- x26
 	Firework={mult=26,bg=Color3.fromRGB(52,14,8),tx=Color3.fromRGB(245,100,60)},
-	-- x30
 	Gloom={mult=30,bg=Color3.fromRGB(18,10,28),tx=Color3.fromRGB(160,100,220)},
 	OilBoil={mult=30,bg=Color3.fromRGB(22,18,8),tx=Color3.fromRGB(180,150,60)},
 	Umbral={mult=30,bg=Color3.fromRGB(14,20,10),tx=Color3.fromRGB(100,175,70)},
 	Glossy={mult=30,bg=Color3.fromRGB(8,36,50),tx=Color3.fromRGB(80,205,240)},
 	Typhoon={mult=30,bg=Color3.fromRGB(22,26,50),tx=Color3.fromRGB(130,155,240)},
 	Fierywork={mult=30,bg=Color3.fromRGB(54,18,6),tx=Color3.fromRGB(250,115,50)},
-	-- x32
 	Ceramic={mult=32,bg=Color3.fromRGB(42,34,24),tx=Color3.fromRGB(210,190,155)},
-	-- x35
 	Enlightened={mult=35,bg=Color3.fromRGB(50,44,6),tx=Color3.fromRGB(255,242,80)},
 	HarmonisedChakra={mult=35,bg=Color3.fromRGB(6,44,44),tx=Color3.fromRGB(60,230,230)},
-	-- x37
 	Supernatural={mult=37,bg=Color3.fromRGB(26,8,40),tx=Color3.fromRGB(175,70,240)},
-	-- x40
 	Corrosive={mult=40,bg=Color3.fromRGB(14,48,8),tx=Color3.fromRGB(90,235,60)},
 	Severed={mult=40,bg=Color3.fromRGB(38,10,10),tx=Color3.fromRGB(215,70,70)},
 	Subzero={mult=40,bg=Color3.fromRGB(6,36,54),tx=Color3.fromRGB(80,200,255)},
-	-- x45
 	Junkshock={mult=45,bg=Color3.fromRGB(30,26,6),tx=Color3.fromRGB(220,195,60)},
 	Batty={mult=45,bg=Color3.fromRGB(22,8,32),tx=Color3.fromRGB(165,70,220)},
-	-- x50
 	Diamond={mult=50,bg=Color3.fromRGB(8,36,52),tx=Color3.fromRGB(140,220,255)},
 	AncientAmber={mult=50,bg=Color3.fromRGB(54,34,4),tx=Color3.fromRGB(255,185,40)},
 	Enchanted={mult=50,bg=Color3.fromRGB(34,8,50),tx=Color3.fromRGB(200,80,255)},
@@ -168,33 +149,24 @@ local MUT_DB = {
 	Desolate={mult=50,bg=Color3.fromRGB(28,24,36),tx=Color3.fromRGB(155,140,200)},
 	Stampede={mult=50,bg=Color3.fromRGB(46,28,6),tx=Color3.fromRGB(230,155,60)},
 	Monsoon={mult=50,bg=Color3.fromRGB(8,34,52),tx=Color3.fromRGB(70,185,240)},
-	-- x52
 	Blazing={mult=52,bg=Color3.fromRGB(56,12,4),tx=Color3.fromRGB(255,90,40)},
-	-- x55
 	Radioactive={mult=55,bg=Color3.fromRGB(18,50,6),tx=Color3.fromRGB(120,250,50)},
-	-- x70
 	Friendbound={mult=70,bg=Color3.fromRGB(50,8,36),tx=Color3.fromRGB(240,80,190)},
 	Shadowbound={mult=70,bg=Color3.fromRGB(14,8,24),tx=Color3.fromRGB(130,70,210)},
 	Leeched={mult=70,bg=Color3.fromRGB(30,8,8),tx=Color3.fromRGB(200,60,80)},
-	-- x75
 	Azure={mult=75,bg=Color3.fromRGB(6,30,52),tx=Color3.fromRGB(60,175,250)},
 	Warped={mult=75,bg=Color3.fromRGB(20,8,44),tx=Color3.fromRGB(165,80,245)},
 	Graceful={mult=75,bg=Color3.fromRGB(52,8,30),tx=Color3.fromRGB(245,80,175)},
 	Infected={mult=75,bg=Color3.fromRGB(14,40,8),tx=Color3.fromRGB(90,215,65)},
 	Terran={mult=75,bg=Color3.fromRGB(22,40,10),tx=Color3.fromRGB(120,210,70)},
-	-- x85
 	Sundried={mult=85,bg=Color3.fromRGB(58,38,6),tx=Color3.fromRGB(255,195,55)},
 	Glitched={mult=85,bg=Color3.fromRGB(6,40,50),tx=Color3.fromRGB(60,210,240)},
-	-- x90
 	FoxfireChakra={mult=90,bg=Color3.fromRGB(52,20,6),tx=Color3.fromRGB(245,130,50)},
 	CorruptFoxfireChakra={mult=90,bg=Color3.fromRGB(30,8,44),tx=Color3.fromRGB(195,60,245)},
 	Aurora={mult=90,bg=Color3.fromRGB(8,40,50),tx=Color3.fromRGB(60,220,225)},
-	-- x92
 	Fractured={mult=92,bg=Color3.fromRGB(32,8,48),tx=Color3.fromRGB(190,70,245)},
-	-- x95
 	Blackout={mult=95,bg=Color3.fromRGB(8,6,14),tx=Color3.fromRGB(120,100,200)},
 	Slashbound={mult=95,bg=Color3.fromRGB(40,8,8),tx=Color3.fromRGB(220,70,80)},
-	-- x100
 	Shocked={mult=100,bg=Color3.fromRGB(44,44,6),tx=Color3.fromRGB(255,252,60)},
 	Paradisal={mult=100,bg=Color3.fromRGB(10,48,20),tx=Color3.fromRGB(80,235,135)},
 	Brainrot={mult=100,bg=Color3.fromRGB(22,8,44),tx=Color3.fromRGB(180,60,250)},
@@ -202,36 +174,23 @@ local MUT_DB = {
 	Alienlike={mult=100,bg=Color3.fromRGB(10,48,18),tx=Color3.fromRGB(80,240,125)},
 	Heartbound={mult=100,bg=Color3.fromRGB(50,8,24),tx=Color3.fromRGB(245,70,145)},
 	Beanbound={mult=100,bg=Color3.fromRGB(20,44,8),tx=Color3.fromRGB(120,230,70)},
-	-- x105
 	Touchdown={mult=105,bg=Color3.fromRGB(8,44,22),tx=Color3.fromRGB(60,220,130)},
-	-- x120
 	Celestial={mult=120,bg=Color3.fromRGB(8,28,52),tx=Color3.fromRGB(80,175,255)},
 	Galactic={mult=120,bg=Color3.fromRGB(6,18,48),tx=Color3.fromRGB(60,155,250)},
-	-- x125
 	Disco={mult=125,bg=Color3.fromRGB(52,6,44),tx=Color3.fromRGB(250,80,220)},
 	Meteoric={mult=125,bg=Color3.fromRGB(42,18,6),tx=Color3.fromRGB(230,130,55)},
-	-- x135
 	Voidtouched={mult=135,bg=Color3.fromRGB(10,6,36),tx=Color3.fromRGB(140,80,245)},
-	-- x150
 	Dawnbound={mult=150,bg=Color3.fromRGB(48,36,6),tx=Color3.fromRGB(255,210,80)},
-	-- x157
 	Biohazard={mult=157,bg=Color3.fromRGB(16,44,6),tx=Color3.fromRGB(100,235,50)},
-	-- x180
 	Infernal={mult=180,bg=Color3.fromRGB(52,8,4),tx=Color3.fromRGB(255,70,40)},
 	Stormcharged={mult=180,bg=Color3.fromRGB(20,22,52),tx=Color3.fromRGB(110,130,255)},
-	-- x190
 	HarmonisedFoxfireChakra={mult=190,bg=Color3.fromRGB(48,14,4),tx=Color3.fromRGB(250,120,45)},
-	-- x205
 	Contagion={mult=205,bg=Color3.fromRGB(14,40,6),tx=Color3.fromRGB(90,230,55)},
-	-- x230
 	AscendedChakra={mult=230,bg=Color3.fromRGB(6,42,42),tx=Color3.fromRGB(60,240,230)},
 	Starized={mult=230,bg=Color3.fromRGB(6,18,46),tx=Color3.fromRGB(70,165,255)},
-	-- x240
 	Cosmic={mult=240,bg=Color3.fromRGB(6,22,50),tx=Color3.fromRGB(60,180,255)},
 	Abyssal={mult=240,bg=Color3.fromRGB(8,6,36),tx=Color3.fromRGB(120,80,250)},
-	-- x365
 	Astral={mult=365,bg=Color3.fromRGB(6,14,48),tx=Color3.fromRGB(80,155,255)},
-	-- x500
 	Goldsparkle={mult=500,bg=Color3.fromRGB(62,48,4),tx=Color3.fromRGB(255,225,60)},
 }
 
@@ -346,6 +305,18 @@ local function getAge(m) local a=m:FindFirstChild("Age") or m:FindFirstChild("Gr
 local function initials(n) return string.upper(string.sub(n,1,2)) end
 local function mutTotalMult(muts) local s=0; for _,m in ipairs(muts) do s=s+getMutInfo(m).mult end; return s end
 
+-- ── Multi-harvest detection ───────────────────────
+-- A plant is multi-harvest if:
+--   • Its Fruits folder has children (actual fruits present), OR
+--   • Its Fruits folder is empty but it has a Fruit_Spawn descendant
+local function isMultiHarvest(model)
+	local ff = model:FindFirstChild("Fruits")
+	if not ff then return false end
+	if #ff:GetChildren() > 0 then return true end
+	-- Fruits folder exists but empty — check for Fruit_Spawn to confirm multi
+	return model:FindFirstChild("Fruit_Spawn") ~= nil
+end
+
 -- ════════════════════════════════════════════════════
 --  FARM FINDERS
 -- ════════════════════════════════════════════════════
@@ -407,12 +378,10 @@ main.Position=UDim2.new(0,14,0,68)
 main.BackgroundColor3=C.bg; main.BorderSizePixel=0; main.ClipsDescendants=true
 corner(main,16); mkStroke(main,C.stroke,1.5)
 
--- Top accent glow
 local glowLine=Instance.new("Frame",main)
 glowLine.Size=UDim2.new(1,-36,0,1); glowLine.Position=UDim2.new(0,18,0,0)
 glowLine.BackgroundColor3=C.accent; glowLine.BorderSizePixel=0; glowLine.BackgroundTransparency=0.3
 
--- UI Scale
 local uiScale=Instance.new("UIScale",main)
 local function updateScale()
 	local vp=camera.ViewportSize; uiScale.Scale=clamp(vp.X/1080,0.5,1)
@@ -528,7 +497,7 @@ local breadcrumb=lbl(rpTop,{text="Select a player",font=Enum.Font.GothamBold,siz
 local searchBox=Instance.new("TextBox",RP)
 searchBox.Size=UDim2.new(1,-14,0,26); searchBox.Position=UDim2.new(0,7,0,44)
 searchBox.BackgroundColor3=Color3.fromRGB(12,12,22); searchBox.TextColor3=Color3.fromRGB(188,182,228)
-searchBox.PlaceholderText="Search plants or fruits…"; searchBox.PlaceholderColor3=C.textDim
+searchBox.PlaceholderText="Search plant types…"; searchBox.PlaceholderColor3=C.textDim
 searchBox.Font=Enum.Font.Gotham; searchBox.TextSize=12; searchBox.Text=""
 searchBox.ClearTextOnFocus=false; searchBox.BorderSizePixel=0
 searchBox.TextXAlignment=Enum.TextXAlignment.Left; searchBox.Visible=false
@@ -584,8 +553,8 @@ mainScroll.BorderSizePixel=0; vlist(mainScroll,6); pad(mainScroll,2,2,0,8)
 --  ESP — forward declared so MISC callbacks are safe
 -- ════════════════════════════════════════════════════
 local espFolder=Instance.new("Folder",workspace); espFolder.Name="FVP6_ESP"
-local espObjects={}   -- [model] = {hl, bb}
-local refreshESP      -- defined later
+local espObjects={}
+local refreshESP
 
 -- ════════════════════════════════════════════════════
 --  MISC OVERLAY
@@ -831,12 +800,11 @@ local function getESPColor(model, muts)
 		else return Color3.fromRGB(255,90,26) end
 	else
 		if model.Parent and model.Parent.Name=="Fruits" then return Color3.fromRGB(255,174,40) end
-		if model:FindFirstChild("Fruits") then return Color3.fromRGB(55,202,122) end
+		if isMultiHarvest(model) then return Color3.fromRGB(55,202,122) end
 		return Color3.fromRGB(90,80,195)
 	end
 end
 
--- Helper: get first BasePart inside a model
 local function getModelPart(m)
 	if m:IsA("BasePart") then return m end
 	return m:IsA("Model") and (m.PrimaryPart or m:FindFirstChildWhichIsA("BasePart")) or nil
@@ -895,7 +863,6 @@ end
 
 local function clearESP()
 	for model,d in pairs(espObjects) do
-		-- Remove Highlight from inside model
 		if d.hl and d.hl.Parent then pcall(function() d.hl:Destroy() end) end
 		if d.bb and d.bb.Parent then pcall(function() d.bb:Destroy() end) end
 	end
@@ -907,26 +874,14 @@ local function applyToModel(model, col, isMulti, variant)
 	local muts=getMutations(model); local w=getW(model); local fc=getFruitCount(model)
 	local d={}
 
-	-- ── Roblox Highlight (inserted INTO the model/part)
 	local hlOk,hl=pcall(function()
 		local h=Instance.new("Highlight")
-		h.FillColor=col
-		h.OutlineColor=col
-		if ESP.style=="outline" then
-			h.FillTransparency=1
-			h.OutlineTransparency=0.15
-		elseif ESP.style=="fill" then
-			h.FillTransparency=0.55
-			h.OutlineTransparency=1
-		else -- both
-			h.FillTransparency=0.72
-			h.OutlineTransparency=0.15
-		end
-		if ESP.chams then
-			pcall(function() h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop end)
-		end
-		h.Parent=model   -- parented inside the model so it adorns itself
-		return h
+		h.FillColor=col; h.OutlineColor=col
+		if ESP.style=="outline" then h.FillTransparency=1; h.OutlineTransparency=0.15
+		elseif ESP.style=="fill" then h.FillTransparency=0.55; h.OutlineTransparency=1
+		else h.FillTransparency=0.72; h.OutlineTransparency=0.15 end
+		if ESP.chams then pcall(function() h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop end) end
+		h.Parent=model; return h
 	end)
 	if hlOk then d.hl=hl end
 
@@ -936,7 +891,6 @@ local function applyToModel(model, col, isMulti, variant)
 	espObjects[model]=d
 end
 
--- Now assign refreshESP (upvalue is now live)
 refreshESP = function()
 	clearESP(); if not ESP.enabled then return end
 	for _,fd in ipairs(getAllFarms()) do
@@ -945,7 +899,7 @@ refreshESP = function()
 		for _,model in ipairs(pf:GetChildren()) do
 			if not model:IsA("Model") then continue end
 			local muts=getMutations(model); local col=getESPColor(model,muts)
-			local isMulti=model:FindFirstChild("Fruits")~=nil
+			local isMulti=isMultiHarvest(model)
 			applyToModel(model,col,isMulti,getVariant(model))
 			if isMulti then
 				local ff=model:FindFirstChild("Fruits")
@@ -966,14 +920,10 @@ end
 --  ACTION HELPERS  (Collect / Steal stubs)
 -- ════════════════════════════════════════════════════
 local function doCollect(model)
-	-- TODO: Replace with your collect remote/script
-	-- Example: game:GetService("ReplicatedStorage").Remotes.Collect:FireServer(model)
 	warn("[FVP6] Collect triggered on:", model:GetFullName())
 end
 
 local function doSteal(model)
-	-- TODO: Replace with your steal remote/script
-	-- Example: game:GetService("ReplicatedStorage").Remotes.Steal:FireServer(model)
 	warn("[FVP6] Steal triggered on:", model:GetFullName())
 end
 
@@ -1039,23 +989,11 @@ local function emptyMsg(text)
 	L.TextYAlignment=Enum.TextYAlignment.Center
 end
 
-local function makeCard(parent, greenTint)
-	local card=Instance.new("TextButton",parent)
-	card.Size=UDim2.new(1,-2,0,0); card.AutomaticSize=Enum.AutomaticSize.Y
-	card.BackgroundColor3=C.card; card.BorderSizePixel=0; card.Text=""; card.AutoButtonColor=false
-	corner(card,10)
-	local s=mkStroke(card,greenTint and C.strokeG or C.stroke)
-	pad(card,12,10,10,10); vlist(card,5)
-	return card,s
-end
-
--- ── Action Button Row (Collect / Steal) ───────────
 local function makeActionRow(parent, model, isMine)
 	local row=Instance.new("Frame",parent)
 	row.Size=UDim2.new(1,0,0,28); row.BackgroundTransparency=1; row.BorderSizePixel=0; hlist(row,6)
 
 	if isMine then
-		-- Collect button
 		local btn=Instance.new("TextButton",row)
 		btn.AutomaticSize=Enum.AutomaticSize.X; btn.Size=UDim2.new(0,0,1,0)
 		btn.BackgroundColor3=C.collectBg; btn.TextColor3=C.collectTx
@@ -1065,7 +1003,6 @@ local function makeActionRow(parent, model, isMine)
 		btn.MouseLeave:Connect(function() tw(btn,{BackgroundColor3=C.collectBg}) end)
 		local cm=model; btn.MouseButton1Click:Connect(function() doCollect(cm) end)
 	else
-		-- Steal button
 		local btn=Instance.new("TextButton",row)
 		btn.AutomaticSize=Enum.AutomaticSize.X; btn.Size=UDim2.new(0,0,1,0)
 		btn.BackgroundColor3=C.stealBg; btn.TextColor3=C.stealTx
@@ -1078,9 +1015,287 @@ local function makeActionRow(parent, model, isMine)
 end
 
 -- ════════════════════════════════════════════════════
---  RENDER FUNCTIONS (forward declared)
+--  GROUPED CARD BUILDERS
+--  Level 1: makeGroupedCard   (plant-type category)
+--  Level 2: makePlantSubCard  (individual plant, with
+--           expandable fruit list for multi-harvest)
 -- ════════════════════════════════════════════════════
-local renderPlants, renderFruits, renderDetail
+local GCLOSED = 84   -- collapsed height of a group card
+
+-- ── Level 2: individual plant row inside a group ──
+local function makePlantSubCard(parent, model, isMine, isMulti)
+	local muts    = getMutations(model)
+	local w       = getW(model)
+	local variant = getVariant(model)
+
+	-- ── Single-harvest: auto-size, no expansion needed
+	if not isMulti then
+		local pF = Instance.new("Frame", parent)
+		pF.Size = UDim2.new(1, 0, 0, 0)
+		pF.AutomaticSize = Enum.AutomaticSize.Y
+		pF.BackgroundColor3 = Color3.fromRGB(16, 15, 30)
+		pF.BorderSizePixel = 0; corner(pF, 7)
+		mkStroke(pF, C.stroke, 0.6)
+		pad(pF, 8, 8, 7, 7); vlist(pF, 3)
+
+		local ir = Instance.new("Frame", pF)
+		ir.Size = UDim2.new(1, 0, 0, 16); ir.BackgroundTransparency = 1
+		lbl(ir, {text=model.Name, font=Enum.Font.GothamBold, size=11, color=C.text,
+			sz=UDim2.new(0.62, 0, 1, 0), trunc=Enum.TextTruncate.AtEnd})
+		lbl(ir, {text=string.format("⚖ %.3f", w), size=10, color=C.textAmber,
+			sz=UDim2.new(0.37, 0, 1, 0), pos=UDim2.new(0.63, 0, 0, 0), xa=Enum.TextXAlignment.Right})
+
+		if variant then
+			local vR = Instance.new("Frame", pF)
+			vR.Size = UDim2.new(1, 0, 0, 0); vR.AutomaticSize = Enum.AutomaticSize.Y
+			vR.BackgroundTransparency = 1; vR.BorderSizePixel = 0; hlist(vR, 4)
+			makeVariantBadge(vR, variant)
+		end
+		if #muts > 0 then makePills(pF, muts, true) end
+		makeActionRow(pF, model, isMine)
+		return pF
+	end
+
+	-- ── Multi-harvest: collapsible fruit list
+	local ff     = model:FindFirstChild("Fruits")
+	local fruits = {}
+	if ff then
+		for _, f in ipairs(ff:GetChildren()) do
+			if f:IsA("Model") then table.insert(fruits, f) end
+		end
+	end
+	-- Sort fruits the same way
+	sortModels(fruits)
+
+	local PCLOSED     = 62
+	local fruitItemH  = 72   -- estimated per-fruit card height
+	local fruitScrollH = math.min(math.max(#fruits, 1) * fruitItemH, 260)
+	local POPEN       = PCLOSED + 8 + fruitScrollH
+
+	local pOuter = Instance.new("Frame", parent)
+	pOuter.Size = UDim2.new(1, 0, 0, PCLOSED)
+	pOuter.BackgroundColor3 = Color3.fromRGB(12, 20, 14)
+	pOuter.BorderSizePixel = 0; pOuter.ClipsDescendants = true; corner(pOuter, 7)
+	local pS = mkStroke(pOuter, C.strokeG, 0.7)
+
+	-- Header content (always visible)
+	local hdr = Instance.new("Frame", pOuter)
+	hdr.Size = UDim2.new(1, 0, 0, PCLOSED)
+	hdr.BackgroundTransparency = 1; hdr.BorderSizePixel = 0
+	pad(hdr, 8, 8, 7, 7); vlist(hdr, 3)
+
+	-- Row 1: name + weight
+	local ir = Instance.new("Frame", hdr)
+	ir.Size = UDim2.new(1, 0, 0, 16); ir.BackgroundTransparency = 1
+	lbl(ir, {text=model.Name, font=Enum.Font.GothamBold, size=11, color=C.textGreen,
+		sz=UDim2.new(0.55, 0, 1, 0), trunc=Enum.TextTruncate.AtEnd})
+
+	-- Fruit count badge
+	local fcBadge = Instance.new("TextLabel", ir)
+	fcBadge.Size = UDim2.new(0, 46, 0, 14); fcBadge.Position = UDim2.new(0.56, 0, 0.5, -7)
+	fcBadge.BackgroundColor3 = Color3.fromRGB(12, 44, 28); fcBadge.TextColor3 = C.textGreen
+	fcBadge.Font = Enum.Font.GothamBold; fcBadge.TextSize = 9
+	fcBadge.Text = "🍃 "..#fruits; fcBadge.BorderSizePixel = 0; corner(fcBadge, 7)
+
+	lbl(ir, {text=string.format("⚖ %.2f", w), size=10, color=C.textAmber,
+		sz=UDim2.new(0.26, 0, 1, 0), pos=UDim2.new(0.74, 0, 0, 0), xa=Enum.TextXAlignment.Right})
+
+	-- Row 2: expand hint (+ first mutation preview if any)
+	local hintStr = "▾  show "..#fruits.." fruit"..(#fruits ~= 1 and "s" or "")
+	if #muts > 0 then
+		local _,tx1 = getMutBadgeColors(muts[1])
+		local tm = mutTotalMult(muts)
+		local mutPrev = lbl(hdr, {text="✦ "..muts[1]..(#muts>1 and " +"..( #muts-1) or "").." (×"..tm..")",
+			size=9, color=tx1, sz=UDim2.new(1, 0, 0, 13)})
+	end
+	local pHint = lbl(hdr, {text=hintStr, size=10, color=C.textDim,
+		font=Enum.Font.GothamBold, sz=UDim2.new(1, 0, 0, 13)})
+
+	-- Divider below header
+	local pdiv = Instance.new("Frame", pOuter)
+	pdiv.Size = UDim2.new(1, -16, 0, 1); pdiv.Position = UDim2.new(0, 8, 0, PCLOSED + 1)
+	pdiv.BackgroundColor3 = C.strokeG; pdiv.BorderSizePixel = 0
+
+	-- Fruit scroll
+	local fScroll = Instance.new("ScrollingFrame", pOuter)
+	fScroll.Position = UDim2.new(0, 4, 0, PCLOSED + 6)
+	fScroll.Size = UDim2.new(1, -8, 0, fruitScrollH)
+	fScroll.BackgroundTransparency = 1; fScroll.ScrollBarThickness = 3
+	fScroll.ScrollBarImageColor3 = C.scroll; fScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	fScroll.BorderSizePixel = 0; vlist(fScroll, 3); pad(fScroll, 2, 2, 0, 4)
+
+	for _, fm in ipairs(fruits) do
+		local fmuts = getMutations(fm); local fw = getW(fm); local fvariant = getVariant(fm)
+		local fCard = Instance.new("Frame", fScroll)
+		fCard.Size = UDim2.new(1, -4, 0, 0); fCard.AutomaticSize = Enum.AutomaticSize.Y
+		fCard.BackgroundColor3 = Color3.fromRGB(8, 22, 14); fCard.BorderSizePixel = 0; corner(fCard, 6)
+		mkStroke(fCard, Color3.fromRGB(26, 60, 40), 0.6)
+		pad(fCard, 7, 7, 6, 6); vlist(fCard, 3)
+
+		local fr2 = Instance.new("Frame", fCard); fr2.Size = UDim2.new(1, 0, 0, 15); fr2.BackgroundTransparency = 1
+		lbl(fr2, {text=fm.Name, font=Enum.Font.GothamBold, size=11, color=C.textGreen,
+			sz=UDim2.new(0.62, 0, 1, 0), trunc=Enum.TextTruncate.AtEnd})
+		lbl(fr2, {text=string.format("⚖ %.3f", fw), size=10, color=C.textAmber,
+			sz=UDim2.new(0.37, 0, 1, 0), pos=UDim2.new(0.63, 0, 0, 0), xa=Enum.TextXAlignment.Right})
+
+		if fvariant then
+			local fvR = Instance.new("Frame", fCard)
+			fvR.Size = UDim2.new(1, 0, 0, 0); fvR.AutomaticSize = Enum.AutomaticSize.Y
+			fvR.BackgroundTransparency = 1; fvR.BorderSizePixel = 0; hlist(fvR, 4)
+			makeVariantBadge(fvR, fvariant)
+		end
+		if #fmuts > 0 then makePills(fCard, fmuts, true) end
+		makeActionRow(fCard, fm, isMine)
+	end
+
+	-- Toggle expand/collapse
+	local pOpen = false
+	local twExp = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local function ptoggle()
+		pOpen = not pOpen
+		pHint.Text = pOpen and "▴  hide fruits" or ("▾  show "..#fruits.." fruit"..(#fruits ~= 1 and "s" or ""))
+		TweenService:Create(pOuter, twExp, {Size=UDim2.new(1, 0, 0, pOpen and POPEN or PCLOSED)}):Play()
+		tw(pS, {Color=pOpen and C.strokeGHi or C.strokeG})
+	end
+
+	local pcb = Instance.new("TextButton", pOuter)
+	pcb.Size = UDim2.new(1, 0, 0, PCLOSED); pcb.BackgroundTransparency = 1
+	pcb.Text = ""; pcb.BorderSizePixel = 0; pcb.ZIndex = 5
+	pcb.MouseButton1Click:Connect(ptoggle)
+	pcb.MouseEnter:Connect(function()
+		if not pOpen then tw(pOuter, {BackgroundColor3=Color3.fromRGB(16, 28, 18)}) end
+	end)
+	pcb.MouseLeave:Connect(function()
+		if not pOpen then tw(pOuter, {BackgroundColor3=Color3.fromRGB(12, 20, 14)}) end
+	end)
+
+	return pOuter
+end
+
+-- ── Level 1: plant-type category card ─────────────
+local function makeGroupedCard(parent, name, models, isMine, isMultiType)
+	local isOpen = false
+
+	-- Compute summary stats
+	local totalW, totalMuts, totalFruits = 0, 0, 0
+	local mutSet = {}
+	for _, m in ipairs(models) do
+		totalW = totalW + getW(m)
+		for _, mut in ipairs(getMutations(m)) do
+			totalMuts = totalMuts + 1; mutSet[mut] = true
+		end
+		if isMultiType then totalFruits = totalFruits + getFruitCount(m) end
+	end
+	local avgW = totalW / math.max(#models, 1)
+	local uMuts = 0; for _ in pairs(mutSet) do uMuts = uMuts + 1 end
+
+	-- Estimate scroll height (generous so content isn't clipped)
+	local itemEstH = isMultiType and 66 or 90
+	local scrollH  = math.min(#models * itemEstH, 360)
+	local GOPEN    = GCLOSED + 8 + scrollH
+
+	local outer = Instance.new("Frame", parent)
+	outer.Size = UDim2.new(1, -2, 0, GCLOSED)
+	outer.BackgroundColor3 = C.card; outer.BorderSizePixel = 0
+	outer.ClipsDescendants = true; corner(outer, 10)
+	local s = mkStroke(outer, isMultiType and C.strokeG or C.stroke)
+
+	-- ── Header (always visible) ──────────────────────
+	local hdr = Instance.new("Frame", outer)
+	hdr.Size = UDim2.new(1, 0, 0, GCLOSED)
+	hdr.BackgroundTransparency = 1; hdr.BorderSizePixel = 0
+	pad(hdr, 12, 10, 9, 9); vlist(hdr, 4)
+
+	-- Row 1: name + badges
+	local row1 = Instance.new("Frame", hdr)
+	row1.Size = UDim2.new(1, 0, 0, 20); row1.BackgroundTransparency = 1
+
+	lbl(row1, {text=name, font=Enum.Font.GothamBold, size=14,
+		color=isMultiType and C.text or C.text,
+		sz=UDim2.new(1, -148, 1, 0), trunc=Enum.TextTruncate.AtEnd})
+
+	-- Count badge (×N)
+	local cntBadge = Instance.new("TextLabel", row1)
+	cntBadge.Size = UDim2.new(0, 50, 0, 17); cntBadge.Position = UDim2.new(1, -140, 0.5, -8)
+	cntBadge.BackgroundColor3 = Color3.fromRGB(28, 22, 58); cntBadge.TextColor3 = C.textPurp
+	cntBadge.Font = Enum.Font.GothamBold; cntBadge.TextSize = 9
+	cntBadge.Text = " × "..#models; cntBadge.BorderSizePixel = 0; corner(cntBadge, 9)
+
+	-- Type badge
+	local typeBadge = Instance.new("TextLabel", row1)
+	typeBadge.Size = UDim2.new(0, 74, 0, 17); typeBadge.Position = UDim2.new(1, -78, 0.5, -8)
+	typeBadge.BorderSizePixel = 0; typeBadge.Font = Enum.Font.GothamBold
+	typeBadge.TextSize = 9; corner(typeBadge, 9)
+	if isMultiType then
+		typeBadge.BackgroundColor3 = Color3.fromRGB(12, 48, 32)
+		typeBadge.TextColor3 = C.textGreen; typeBadge.Text = "⬥ Multi"
+	else
+		typeBadge.BackgroundColor3 = Color3.fromRGB(32, 28, 60)
+		typeBadge.TextColor3 = Color3.fromRGB(140, 132, 222); typeBadge.Text = "◆ Single"
+	end
+
+	-- Row 2: stats summary
+	local infoStr = string.format("⚖ avg %.2f", avgW)
+	if totalMuts > 0 then infoStr = infoStr.."  ✦ "..totalMuts.." muts ("..uMuts.." types)" end
+	if isMultiType and totalFruits > 0 then infoStr = infoStr.."  🍃 "..totalFruits.."f" end
+	lbl(hdr, {text=infoStr, size=10, color=C.textSub, sz=UDim2.new(1, 0, 0, 13)})
+
+	-- Row 3: expand hint
+	local hint = lbl(hdr, {text="▾  expand "..#models.." plant"..(#models ~= 1 and "s" or ""),
+		size=10, color=C.textDim, font=Enum.Font.GothamBold, sz=UDim2.new(1, 0, 0, 13)})
+
+	-- Divider
+	local divL = Instance.new("Frame", outer)
+	divL.Size = UDim2.new(1, -24, 0, 1); divL.Position = UDim2.new(0, 12, 0, GCLOSED + 2)
+	divL.BackgroundColor3 = C.stroke; divL.BorderSizePixel = 0
+
+	-- Plant scroll
+	local pScroll = Instance.new("ScrollingFrame", outer)
+	pScroll.Position = UDim2.new(0, 6, 0, GCLOSED + 8)
+	pScroll.Size = UDim2.new(1, -12, 0, scrollH)
+	pScroll.BackgroundTransparency = 1; pScroll.ScrollBarThickness = 3
+	pScroll.ScrollBarImageColor3 = C.scroll; pScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	pScroll.BorderSizePixel = 0; vlist(pScroll, 4); pad(pScroll, 2, 2, 0, 6)
+
+	for _, m in ipairs(models) do
+		makePlantSubCard(pScroll, m, isMine, isMultiType)
+	end
+
+	-- Toggle slide
+	local twExp = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local function toggle()
+		isOpen = not isOpen
+		hint.Text = isOpen and "▴  collapse" or ("▾  expand "..#models.." plant"..(#models ~= 1 and "s" or ""))
+		TweenService:Create(outer, twExp, {Size=UDim2.new(1, -2, 0, isOpen and GOPEN or GCLOSED)}):Play()
+		local sCol = isOpen
+			and (isMultiType and C.strokeGHi or C.strokeHi)
+			or  (isMultiType and C.strokeG   or C.stroke)
+		tw(s, {Color=sCol})
+		if not isOpen then tw(outer, {BackgroundColor3=C.card}) end
+	end
+
+	local clickBtn = Instance.new("TextButton", outer)
+	clickBtn.Size = UDim2.new(1, 0, 0, GCLOSED); clickBtn.BackgroundTransparency = 1
+	clickBtn.Text = ""; clickBtn.BorderSizePixel = 0; clickBtn.ZIndex = 10
+	clickBtn.MouseButton1Click:Connect(toggle)
+	clickBtn.MouseEnter:Connect(function()
+		tw(s, {Color=isMultiType and C.strokeGHi or C.strokeHi})
+		if not isOpen then
+			tw(outer, {BackgroundColor3=isMultiType and C.hoverG or C.hover})
+		end
+	end)
+	clickBtn.MouseLeave:Connect(function()
+		if not isOpen then
+			tw(outer, {BackgroundColor3=C.card})
+			tw(s, {Color=isMultiType and C.strokeG or C.stroke})
+		end
+	end)
+end
+
+-- ════════════════════════════════════════════════════
+--  RENDER FUNCTIONS
+-- ════════════════════════════════════════════════════
+local renderPlants, renderDetail
 
 renderPlants = function()
 	clearScroll(); setControls(true); backBtn.Visible=false
@@ -1089,110 +1304,96 @@ renderPlants = function()
 	local isMine=(plr==player)
 	breadcrumb.Text=plr.Name.."'s Farm"
 	hSub.Text=(isMine and "Your" or plr.Name.."'s").." farm"
-	local q=string.lower(searchBox.Text); local models={}
+	local q=string.lower(searchBox.Text)
+
+	-- Collect all plant models
+	local allModels={}
 	if state.plantsFolder and state.plantsFolder.Parent then
 		for _,v in ipairs(state.plantsFolder:GetChildren()) do
 			if v:IsA("Model") and (q=="" or string.find(string.lower(v.Name),q,1,true)) then
-				if not mutOnly or #getMutations(v)>0 then table.insert(models,v) end
+				if not mutOnly or #getMutations(v)>0 then table.insert(allModels,v) end
 			end
 		end
 	else emptyMsg("No Plants_Physical folder found."); statLbl.Text=""; return end
-	sortModels(models)
-	local tm,tf=0,0
-	for _,m in ipairs(models) do tm=tm+#getMutations(m); tf=tf+getFruitCount(m) end
-	statLbl.Text=#models.." plants  ·  "..tm.." muts  ·  "..tf.." fruits"
-	if #models==0 then emptyMsg(q~="" and 'No results for "'..q..'".' or "No plants found."); return end
-	lbl(mainScroll,{text="  "..#models.." PLANT"..(#models~=1 and "S" or ""),size=9,color=C.textDim,font=Enum.Font.GothamBold,sz=UDim2.new(1,0,0,14)})
-	for _,model in ipairs(models) do
-		local ff=model:FindFirstChild("Fruits"); local isMulti=ff~=nil
-		local muts=isMulti and {} or getMutations(model)
-		local weight=model:FindFirstChild("Weight"); local variant=getVariant(model)
-		local fc=isMulti and #ff:GetChildren() or 0
-		local card,s=makeCard(mainScroll,isMulti)
-		local row1=Instance.new("Frame",card); row1.Size=UDim2.new(1,0,0,20); row1.BackgroundTransparency=1
-		lbl(row1,{text=model.Name,font=Enum.Font.GothamBold,size=14,color=C.text,sz=UDim2.new(1,-106,1,0),trunc=Enum.TextTruncate.AtEnd})
-		local typeBadge=Instance.new("TextLabel",row1)
-		typeBadge.Size=UDim2.new(0,96,0,17); typeBadge.Position=UDim2.new(1,-96,0.5,-8)
-		typeBadge.BorderSizePixel=0; typeBadge.Font=Enum.Font.GothamBold; typeBadge.TextSize=9; corner(typeBadge,9)
-		if isMulti then typeBadge.BackgroundColor3=Color3.fromRGB(12,48,32); typeBadge.TextColor3=C.textGreen; typeBadge.Text="⬥ Multi-Harvest"
-		else typeBadge.BackgroundColor3=Color3.fromRGB(32,28,60); typeBadge.TextColor3=Color3.fromRGB(140,132,222); typeBadge.Text="◆ Single" end
-		if not isMulti and variant then
-			local vRow=Instance.new("Frame",card); vRow.Size=UDim2.new(1,0,0,0); vRow.AutomaticSize=Enum.AutomaticSize.Y
-			vRow.BackgroundTransparency=1; vRow.BorderSizePixel=0; hlist(vRow,4)
-			makeVariantBadge(vRow,variant)
-		end
-		local infoL=lbl(card,{size=11,color=isMulti and Color3.fromRGB(75,140,103) or C.textSub,sz=UDim2.new(1,0,0,14)})
-		if isMulti then infoL.Text=fc.." fruit"..(fc~=1 and "s" or "").."  ·  tap to expand"
-		else
-			local parts={}
-			if weight then table.insert(parts,string.format("⚖ %.2f",weight.Value)) end
-			if #muts>0 then table.insert(parts,"✦ "..#muts.." mut"..(#muts>1 and "s" or "").." (×"..mutTotalMult(muts)..")") end
-			infoL.Text=table.concat(parts,"   ")
-		end
-		if not isMulti and #muts>0 then makePills(card,muts,true) end
-		-- Action row
-		makeActionRow(card,model,isMine)
-		local hBg=isMulti and C.hoverG or C.hover; local hS=isMulti and C.strokeGHi or C.strokeHi; local dS=isMulti and C.strokeG or C.stroke
-		card.MouseEnter:Connect(function() tw(card,{BackgroundColor3=hBg}); tw(s,{Color=hS}) end)
-		card.MouseLeave:Connect(function() tw(card,{BackgroundColor3=C.card}); tw(s,{Color=dS}) end)
-		if isMulti then
-			local cm=model; card.MouseButton1Click:Connect(function()
-				state.view="fruits"; state.plantModel=cm; searchBox.Text=""; renderFruits()
-			end)
-		end
-	end
-end
 
-renderFruits = function()
-	clearScroll(); setControls(true); backBtn.Visible=true
-	local pm=state.plantModel
-	if not pm or not pm.Parent then renderPlants(); return end
-	local isMine=(state.selectedPlayer==player)
-	breadcrumb.Text=pm.Name.." / Fruits"
-	local ff=pm:FindFirstChild("Fruits"); if not ff then emptyMsg("No Fruits."); statLbl.Text=""; return end
-	local q=string.lower(searchBox.Text); local fruits={}
-	for _,v in ipairs(ff:GetChildren()) do
-		if v:IsA("Model") and (q=="" or string.find(string.lower(v.Name),q,1,true)) then
-			if not mutOnly or #getMutations(v)>0 then table.insert(fruits,v) end
+	-- Group ALL plants by name (both single & multi share the same grouping)
+	local groups    = {}   -- name → {models={}, isMulti=bool}
+	local groupNames = {}  -- ordered unique names
+	for _, m in ipairs(allModels) do
+		local n = m.Name
+		if not groups[n] then
+			groups[n] = {models={}, isMulti=isMultiHarvest(m)}
+			table.insert(groupNames, n)
 		end
+		table.insert(groups[n].models, m)
 	end
-	sortModels(fruits)
-	local tm=0; for _,f in ipairs(fruits) do tm=tm+#getMutations(f) end
-	statLbl.Text=#fruits.." fruits  ·  "..tm.." mutations"
-	lbl(mainScroll,{text="  "..#fruits.." FRUIT"..(#fruits~=1 and "S" or "").." — "..string.upper(pm.Name),size=9,color=C.textDim,font=Enum.Font.GothamBold,sz=UDim2.new(1,0,0,16)})
-	if #fruits==0 then emptyMsg(q~="" and 'No results for "'..q..'".' or "No fruits."); return end
-	for _,fm in ipairs(fruits) do
-		local muts=getMutations(fm); local weight=fm:FindFirstChild("Weight"); local variant=getVariant(fm)
-		local card,s=makeCard(mainScroll,true)
-		local row1=Instance.new("Frame",card); row1.Size=UDim2.new(1,0,0,20); row1.BackgroundTransparency=1
-		lbl(row1,{text=fm.Name,font=Enum.Font.GothamBold,size=14,color=C.textGreen,sz=UDim2.new(0.6,0,1,0),trunc=Enum.TextTruncate.AtEnd})
-		if #muts>0 then
-			local _,tx=getMutBadgeColors(muts[1])
-			local mb=Instance.new("TextLabel",row1); mb.Size=UDim2.new(0,90,0,17); mb.Position=UDim2.new(1,-90,0.5,-8)
-			mb.BackgroundColor3=Color3.fromRGB(34,20,58); mb.TextColor3=tx; mb.Font=Enum.Font.GothamBold; mb.TextSize=9
-			mb.Text="✦ "..(#muts).." × "..mutTotalMult(muts); mb.BorderSizePixel=0; corner(mb,9)
+
+	-- Sort group names by current sort mode
+	table.sort(groupNames, function(a, b)
+		local ga, gb = groups[a], groups[b]
+		if sortMode == "name_za" then
+			return a > b
+		elseif sortMode == "weight_desc" then
+			local wa, wb = 0, 0
+			for _, m in ipairs(ga.models) do wa=wa+getW(m) end
+			for _, m in ipairs(gb.models) do wb=wb+getW(m) end
+			return (wa / #ga.models) > (wb / #gb.models)
+		elseif sortMode == "weight_asc" then
+			local wa, wb = 0, 0
+			for _, m in ipairs(ga.models) do wa=wa+getW(m) end
+			for _, m in ipairs(gb.models) do wb=wb+getW(m) end
+			return (wa / #ga.models) < (wb / #gb.models)
+		elseif sortMode == "mutations_desc" then
+			local ma, mb = 0, 0
+			for _, m in ipairs(ga.models) do ma=ma+#getMutations(m) end
+			for _, m in ipairs(gb.models) do mb=mb+#getMutations(m) end
+			return ma > mb
+		elseif sortMode == "fruit_desc" then
+			local fa, fb = 0, 0
+			for _, m in ipairs(ga.models) do fa=fa+getFruitCount(m) end
+			for _, m in ipairs(gb.models) do fb=fb+getFruitCount(m) end
+			return fa > fb
+		elseif sortMode == "age_desc" then
+			local aa, ab = 0, 0
+			for _, m in ipairs(ga.models) do aa=aa+getAge(m) end
+			for _, m in ipairs(gb.models) do ab=ab+getAge(m) end
+			return (aa / #ga.models) > (ab / #gb.models)
+		else -- name_az
+			return a < b
 		end
-		if variant then
-			local vRow=Instance.new("Frame",card); vRow.Size=UDim2.new(1,0,0,0); vRow.AutomaticSize=Enum.AutomaticSize.Y
-			vRow.BackgroundTransparency=1; vRow.BorderSizePixel=0; hlist(vRow,4)
-			makeVariantBadge(vRow,variant)
-		end
-		local parts={}
-		if weight then table.insert(parts,string.format("⚖ %.2f",weight.Value)) end
-		if #parts>0 then lbl(card,{text=table.concat(parts,"  "),size=11,color=Color3.fromRGB(80,135,105),sz=UDim2.new(1,0,0,14)}) end
-		if #muts>0 then makePills(card,muts,true) end
-		-- Action row
-		makeActionRow(card,fm,isMine)
-		card.MouseEnter:Connect(function() tw(card,{BackgroundColor3=C.hoverG}); tw(s,{Color=C.strokeGHi}) end)
-		card.MouseLeave:Connect(function() tw(card,{BackgroundColor3=C.card}); tw(s,{Color=C.strokeG}) end)
-		local cf=fm; card.MouseButton1Click:Connect(function() state.view="detail"; state.fruitModel=cf; renderDetail() end)
+	end)
+
+	-- Sort models within each group too
+	for _, n in ipairs(groupNames) do sortModels(groups[n].models) end
+
+	-- Stats
+	local totalMuts, totalFruits, totalPlants = 0, 0, #allModels
+	for _, m in ipairs(allModels) do
+		totalMuts   = totalMuts + #getMutations(m)
+		totalFruits = totalFruits + getFruitCount(m)
+	end
+	statLbl.Text = totalPlants.." plants  ·  "..totalMuts.." muts  ·  "..#groupNames.." types"
+
+	if #groupNames == 0 then
+		emptyMsg(q ~= "" and 'No results for "'..q..'".' or "No plants found.")
+		return
+	end
+
+	lbl(mainScroll, {
+		text = "  "..#groupNames.." TYPE"..(#groupNames ~= 1 and "S" or "").."  ·  "..totalPlants.." PLANTS",
+		size=9, color=C.textDim, font=Enum.Font.GothamBold, sz=UDim2.new(1,0,0,14)
+	})
+
+	for _, n in ipairs(groupNames) do
+		local g = groups[n]
+		makeGroupedCard(mainScroll, n, g.models, isMine, g.isMulti)
 	end
 end
 
 renderDetail = function()
 	clearScroll(); setControls(false); backBtn.Visible=true; statLbl.Text=""
 	local fm=state.fruitModel
-	if not fm or not fm.Parent then renderFruits(); return end
+	if not fm or not fm.Parent then renderPlants(); return end
 	local isMine=(state.selectedPlayer==player)
 	local pn=state.plantModel and state.plantModel.Name or "?"
 	breadcrumb.Text=pn.." / "..fm.Name
@@ -1207,7 +1408,6 @@ renderDetail = function()
 		vRow.BackgroundTransparency=1; vRow.BorderSizePixel=0; hlist(vRow,4)
 		makeVariantBadge(vRow,variant)
 	end
-	-- Action row at top of detail
 	makeActionRow(card,fm,isMine)
 	local function div() local d=Instance.new("Frame",card); d.Size=UDim2.new(1,0,0,1); d.BackgroundColor3=Color3.fromRGB(30,28,50); d.BorderSizePixel=0 end
 	local function secH(t) lbl(card,{text=t,size=9,color=C.textSub,font=Enum.Font.GothamBold,sz=UDim2.new(1,0,0,14)}) end
@@ -1234,23 +1434,23 @@ renderDetail = function()
 end
 
 backBtn.MouseButton1Click:Connect(function()
-	if state.view=="detail" then state.view="fruits"; searchBox.Text=""; renderFruits()
-	elseif state.view=="fruits" then state.view="plants"; searchBox.Text=""; renderPlants() end
+	if state.view=="detail" then
+		state.view="plants"; searchBox.Text=""; renderPlants()
+	elseif state.view=="plants" then
+		-- already at top, nothing to do
+	end
 end)
 
 local function onSort(m)
 	sortMode=m; refreshSortColors()
-	if state.view=="plants" then renderPlants() elseif state.view=="fruits" then renderFruits() end
+	renderPlants()
 end
 mutOnlyBtn.MouseButton1Click:Connect(function()
-	mutOnly=not mutOnly; refreshSortColors()
-	if state.view=="plants" then renderPlants() elseif state.view=="fruits" then renderFruits() end
+	mutOnly=not mutOnly; refreshSortColors(); renderPlants()
 end)
 for m,d in pairs(sortBtns) do local mm=m; d.btn.MouseButton1Click:Connect(function() onSort(mm) end) end
 
-local dSearch=debounce(function()
-	if state.view=="plants" then renderPlants() elseif state.view=="fruits" then renderFruits() end
-end,0.25)
+local dSearch=debounce(function() renderPlants() end, 0.25)
 searchBox:GetPropertyChangedSignal("Text"):Connect(dSearch)
 
 -- ════════════════════════════════════════════════════
@@ -1315,20 +1515,13 @@ end
 Players.PlayerAdded:Connect(function() task.wait(1); refreshPlayers() end)
 Players.PlayerRemoving:Connect(function(plr)
 	task.wait(0.3)
-	-- If the leaving player is selected, fall back to self
 	if state.selectedPlayer==plr then
 		state.selectedPlayer=player; state.view="plants"; state.plantModel=nil; state.fruitModel=nil
 		local farm=getFarmFor(player); state.plantsFolder=farm and farm:FindFirstChild("Plants_Physical") or nil
-		breadcrumb.Text=player.Name.."'s Farm"
-		hSub.Text="Your farm"
-		renderPlants()
-		tw(myS,{Color=C.strokeHi})
+		breadcrumb.Text=player.Name.."'s Farm"; hSub.Text="Your farm"
+		renderPlants(); tw(myS,{Color=C.strokeHi})
 	end
-	-- Remove from plrData
-	plrData[plr]=nil
-	-- Cleanup blocked entry
-	ESP.blocked[plr.UserId]=nil
-	-- Rebuild ESP & UI
+	plrData[plr]=nil; ESP.blocked[plr.UserId]=nil
 	if ESP.enabled then refreshESP() end
 	refreshPlayers()
 end)
@@ -1342,7 +1535,7 @@ do
 end
 
 -- ════════════════════════════════════════════════════
---  WORLD HOVER  (RenderStepped — minimal allocs)
+--  WORLD HOVER  (RenderStepped)
 -- ════════════════════════════════════════════════════
 local lastHoverModel=nil
 local ownerCache={}
@@ -1391,7 +1584,7 @@ RunService.RenderStepped:Connect(function()
 	lastHoverModel=model
 	local muts=getMutations(model); local w=getW(model); local variant=getVariant(model)
 	local isFruit=model.Parent and model.Parent.Name=="Fruits"
-	local isMulti=not isFruit and model:FindFirstChild("Fruits")~=nil
+	local isMulti=not isFruit and isMultiHarvest(model)
 	local fc=isMulti and getFruitCount(model) or 0
 	local col=getESPColor(model,muts)
 	hpAccent.BackgroundColor3=col
@@ -1417,12 +1610,12 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ════════════════════════════════════════════════════
---  MAIN LOOP  (non-blocking via task.spawn)
+--  MAIN LOOP
 -- ════════════════════════════════════════════════════
 task.spawn(function()
 	local lastPlr=nil; local lastCount=-1
 	while task.wait(ESP.rate) do
-		if not gui or not gui.Parent then break end  -- bail if gui destroyed
+		if not gui or not gui.Parent then break end
 		rebuildOwnerCache()
 		for plr in pairs(plrData) do
 			if plr and plr.Parent then refreshSub(plr) end
