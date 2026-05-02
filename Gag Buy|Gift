@@ -70,8 +70,10 @@ local Products = {
 	["+3 Exotic Safari Seed Packs"]    = { GiftId = 3449810470; NormalId = 3449810472; Display = "3 Exotic Safari Seed Packs";  Category = "Seed Pack";  Price = 200;  isGiftable = true  };
 	["+10 Exotic Safari Seed Packs"]   = { GiftId = 3449810473; NormalId = 3449810471; Display = "10 Exotic Safari Seed Packs"; Category = "Seed Pack";  Price = 600;  isGiftable = true  };
 	-- CHESTS
-	["+1 Exotic Culinarian Chests"]    = { GiftId = 3362680913; NormalId = 3362680911; Display = "1 Exotic Culinarian Chest";   Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Culinarian Chests"]    = { GiftId = 3362680919; NormalId = 3362680917; Display = "3 Exotic Culinarian Chests";  Category = "Chests";     Price = 275;  isGiftable = true  };
+	["+1 Exotic Culinarian Chests"]    = { GiftId = 3362680913; NormalId = 3362680911; Display = "1 Exotic Culinarian Chest";   Category = "Chests";     Price = 199;  isGiftable = true  };
+	["+3 Exotic Culinarian Chests"]    = { GiftId = 3362680919; NormalId = 3362680917; Display = "3 Exotic Culinarian Chests";  Category = "Chests";     Price = 575;  isGiftable = true  };
+		
+	["+10 Exotic Culinarian Chests"]    = { GiftId = 3362680914; NormalId = 3362680916; Display = "10 Exotic Culinarian Chests";  Category = "Chests";     Price = 1699;  isGiftable = true  };
 	["+1 Exotic Kitsune Chest"]        = { GiftId = 3345819471; NormalId = 3345819463; Display = "1 Exotic Kitsune Chest";      Category = "Chests";     Price = 100;  isGiftable = true  };
 	["+3 Exotic Kitsune Chests"]       = { GiftId = 3345819477; NormalId = 3345819470; Display = "3 Exotic Kitsune Chests";     Category = "Chests";     Price = 275;  isGiftable = true  };
 	["+10 Exotic Kitsune Chests"]      = { GiftId = 3345819473; NormalId = 3345819472; Display = "10 Exotic Kitsune Chests";    Category = "Chests";     Price = 800;  isGiftable = true  };
@@ -254,7 +256,7 @@ local function formatPrice(price)
 	-- Insert commas
 	local result = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
 	result = result:gsub("^,", "")
-	return "R$ " .. result
+	return "🟩 " .. result
 end
 
 ------------------------------------------------
