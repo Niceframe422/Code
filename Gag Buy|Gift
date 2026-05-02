@@ -3,6 +3,7 @@ local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService      = game:GetService("TweenService")
 local UserInputService  = game:GetService("UserInputService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -20,195 +21,588 @@ local GiftRemote = ReplicatedStorage
 
 ------------------------------------------------
 -- PRODUCT DATABASE
--- Price    = Robux cost shown on the card label
--- isGiftable = whether the Gift button appears at all
---              (Tokens are ForcedRobuxPurchase and cannot be gifted via
---               the gift remote, Pass/Currency items are also non-giftable)
+-- Each entry:
+--   Display     = base item name (no quantity prefix)
+--   Group       = groups items with same base under one card
+--   Quantities  = ordered list of { qty, NormalId, GiftId }
+--   Category    = for filtering
+--   isGiftable  = shows Gift button per variant
 ------------------------------------------------
-local Products = {
-	-- SEED PACKS
-	["Open 1 - Exotic Seed Pack"]      = { GiftId = 3269033223; NormalId = 3267528421; Display = "1 Exotic Seed Pack";        Category = "Seed Pack";    Price = 75;   isGiftable = true  };
-	["Open 3 - Exotic Seed Pack"]      = { GiftId = 3269033336; NormalId = 3267548052; Display = "3 Exotic Seed Packs";       Category = "Seed Pack";    Price = 200;  isGiftable = true  };
-	["Open 10 - Exotic Seed Pack"]     = { GiftId = 3269033529; NormalId = 3267548161; Display = "10 Exotic Seed Packs";      Category = "Seed Pack";    Price = 600;  isGiftable = true  };
-	["Open 1 - Bug Egg"]               = { GiftId = 3277815193; NormalId = 3278426597; Display = "1 Bug Egg";                 Category = "Regular Eggs"; Price = 50;   isGiftable = true  };
-	["Open 3 - Bug Egg"]               = { GiftId = 3277815350; NormalId = 3277814538; Display = "3 Bug Eggs";                Category = "Regular Eggs"; Price = 130;  isGiftable = true  };
-	["Open 10 - Bug Egg"]              = { GiftId = 3277815654; NormalId = 3277814625; Display = "10 Bug Eggs";               Category = "Regular Eggs"; Price = 400;  isGiftable = true  };
-	["10 Premium Seed Sacks"]          = { GiftId = 3273679009; NormalId = 3273679012; Display = "10 Premium Seed Sacks";     Category = "Premium Eggs"; Price = 450;  isGiftable = true  };
-	["10 Premium Night Seeds"]         = { GiftId = 3282733014; NormalId = 3282157462; Display = "10 Premium Night Seeds";    Category = "Premium Eggs"; Price = 450;  isGiftable = true  };
-	["10 Premium Night Eggs"]          = { GiftId = 3282661439; NormalId = 3282157312; Display = "10 Premium Night Eggs";     Category = "Premium Eggs"; Price = 450;  isGiftable = true  };
-	["+1 Exclusive Cosmetic Crate"]    = { GiftId = 3290672926; NormalId = 3290672626; Display = "1 Exclusive Cosmetic Crate";  Category = "Crates";     Price = 100;  isGiftable = true  };
-	["+3 Exclusive Cosmetic Crates"]   = { GiftId = 3290673007; NormalId = 3290672712; Display = "3 Exclusive Cosmetic Crates"; Category = "Crates";     Price = 275;  isGiftable = true  };
-	["+10 Exclusive Cosmetic Crates"]  = { GiftId = 3290673073; NormalId = 3290672848; Display = "10 Exclusive Cosmetic Crates";Category = "Crates";     Price = 850;  isGiftable = true  };
-	["+1 Exotic Flower Seed Pack"]     = { GiftId = 3295548788; NormalId = 3295548770; Display = "1 Exotic Flower Seed Pack";   Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Flower Seed Pack"]     = { GiftId = 3295548780; NormalId = 3295548782; Display = "3 Exotic Flower Seed Packs";  Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Flower Seed Pack"]    = { GiftId = 3295548784; NormalId = 3295548781; Display = "10 Exotic Flower Seed Packs"; Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Crafters Seed Pack"]   = { GiftId = 3306352285; NormalId = 3306352279; Display = "1 Exotic Crafters Seed Pack"; Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Crafters Seed Pack"]   = { GiftId = 3306352286; NormalId = 3306352283; Display = "3 Exotic Crafters Seed Packs";Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Crafters Seed Pack"]  = { GiftId = 3306352287; NormalId = 3306352284; Display = "10 Exotic Crafters Seed Packs";Category = "Seed Pack"; Price = 600;  isGiftable = true  };
-	["+1 Exotic Summer Seed Pack"]     = { GiftId = 3311388950; NormalId = 3311388942; Display = "1 Exotic Summer Seed Pack";   Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Summer Seed Pack"]     = { GiftId = 3311388953; NormalId = 3311388951; Display = "3 Exotic Summer Seed Packs";  Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Summer Seed Pack"]    = { GiftId = 3311388949; NormalId = 3311388948; Display = "10 Exotic Summer Seed Packs"; Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Ancient Seed Pack"]    = { GiftId = 3323657555; NormalId = 3323657553; Display = "1 Exotic Ancient Seed Pack";  Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Ancient Seed Pack"]    = { GiftId = 3323657556; NormalId = 3323657547; Display = "3 Exotic Ancient Seed Packs"; Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Ancient Seed Pack"]   = { GiftId = 3323657554; NormalId = 3323657552; Display = "10 Exotic Ancient Seed Packs";Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Zen Seed Pack"]        = { GiftId = 3338826788; NormalId = 3338826792; Display = "1 Exotic Zen Seed Pack";      Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Zen Seed Pack"]        = { GiftId = 3338826794; NormalId = 3338826791; Display = "3 Exotic Zen Seed Packs";     Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Zen Seed Pack"]       = { GiftId = 3338826793; NormalId = 3338826790; Display = "10 Exotic Zen Seed Packs";    Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Gourmet Seed Pack"]    = { GiftId = 3354839820; NormalId = 3354839803; Display = "1 Exotic Gourmet Seed Pack";  Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Gourmet Seed Packs"]   = { GiftId = 3354839819; NormalId = 3354839826; Display = "3 Exotic Gourmet Seed Packs"; Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Gourmet Seed Packs"]  = { GiftId = 3354839818; NormalId = 3354839817; Display = "10 Exotic Gourmet Seed Packs";Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Sprout Seed Pack"]     = { GiftId = 3371226361; NormalId = 3371226353; Display = "1 Exotic Sprout Seed Pack";   Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Sprout Seed Packs"]    = { GiftId = 3371226362; NormalId = 3371226360; Display = "3 Exotic Sprout Seed Packs";  Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Sprout Seed Packs"]   = { GiftId = 3371226364; NormalId = 3371226363; Display = "10 Exotic Sprout Seed Packs"; Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Enchanted Seed Pack"]  = { GiftId = 3387753639; NormalId = 3387753641; Display = "1 Exotic Enchanted Seed Pack"; Category = "Seed Pack"; Price = 75;   isGiftable = true  };
-	["+3 Exotic Enchanted Seed Packs"] = { GiftId = 3387753637; NormalId = 3387753634; Display = "3 Exotic Enchanted Seed Packs";Category = "Seed Pack"; Price = 200;  isGiftable = true  };
-	["+10 Exotic Enchanted Seed Packs"]= { GiftId = 3387753640; NormalId = 3387753638; Display = "10 Exotic Enchanted Seed Packs";Category = "Seed Pack";Price = 600;  isGiftable = true  };
-	["+1 Exotic Fall Seed Pack"]       = { GiftId = 3407391673; NormalId = 3407391662; Display = "1 Exotic Fall Seed Pack";     Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Fall Seed Packs"]      = { GiftId = 3407391664; NormalId = 3407391663; Display = "3 Exotic Fall Seed Packs";    Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Fall Seed Packs"]     = { GiftId = 3407391665; NormalId = 3407391666; Display = "10 Exotic Fall Seed Packs";   Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	["+1 Exotic Safari Seed Pack"]     = { GiftId = 3449810468; NormalId = 3449810469; Display = "1 Exotic Safari Seed Pack";   Category = "Seed Pack";  Price = 75;   isGiftable = true  };
-	["+3 Exotic Safari Seed Packs"]    = { GiftId = 3449810470; NormalId = 3449810472; Display = "3 Exotic Safari Seed Packs";  Category = "Seed Pack";  Price = 200;  isGiftable = true  };
-	["+10 Exotic Safari Seed Packs"]   = { GiftId = 3449810473; NormalId = 3449810471; Display = "10 Exotic Safari Seed Packs"; Category = "Seed Pack";  Price = 600;  isGiftable = true  };
-	-- CHESTS
-	["+1 Exotic Culinarian Chests"]    = { GiftId = 3362680913; NormalId = 3362680911; Display = "1 Exotic Culinarian Chest";   Category = "Chests";     Price = 199;  isGiftable = true  };
-	["+3 Exotic Culinarian Chests"]    = { GiftId = 3362680919; NormalId = 3362680917; Display = "3 Exotic Culinarian Chests";  Category = "Chests";     Price = 575;  isGiftable = true  };
-		
-	["+10 Exotic Culinarian Chests"]    = { GiftId = 3362680914; NormalId = 3362680916; Display = "10 Exotic Culinarian Chests";  Category = "Chests";     Price = 1699;  isGiftable = true  };
-	["+1 Exotic Kitsune Chest"]        = { GiftId = 3345819471; NormalId = 3345819463; Display = "1 Exotic Kitsune Chest";      Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Kitsune Chests"]       = { GiftId = 3345819477; NormalId = 3345819470; Display = "3 Exotic Kitsune Chests";     Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Kitsune Chests"]      = { GiftId = 3345819473; NormalId = 3345819472; Display = "10 Exotic Kitsune Chests";    Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Skyroot Chest"]        = { GiftId = 3379038160; NormalId = 3379038157; Display = "1 Exotic Skyroot Chest";      Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Skyroot Chests"]       = { GiftId = 3379038158; NormalId = 3379038152; Display = "3 Exotic Skyroot Chests";     Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Skyroot Chests"]      = { GiftId = 3379038166; NormalId = 3379038159; Display = "10 Exotic Skyroot Chests";    Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Enchanted Chest"]      = { GiftId = 3394224240; NormalId = 3394224231; Display = "1 Exotic Enchanted Chest";    Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Enchanted Chests"]     = { GiftId = 3394224238; NormalId = 3394224239; Display = "3 Exotic Enchanted Chests";   Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Enchanted Chests"]    = { GiftId = 3394224256; NormalId = 3394224237; Display = "10 Exotic Enchanted Chests";  Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Nutty Chest"]          = { GiftId = 3420021048; NormalId = 3420021045; Display = "1 Exotic Nutty Chest";        Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Nutty Chests"]         = { GiftId = 3420021049; NormalId = 3420021043; Display = "3 Exotic Nutty Chests";       Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Nutty Chests"]        = { GiftId = 3420021050; NormalId = 3420021044; Display = "10 Exotic Nutty Chests";      Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Spooky Chest"]         = { GiftId = 3438653515; NormalId = 3438653519; Display = "1 Exotic Spooky Chest";       Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Spooky Chests"]        = { GiftId = 3438653520; NormalId = 3438653518; Display = "3 Exotic Spooky Chests";      Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Spooky Chests"]       = { GiftId = 3438653521; NormalId = 3438653517; Display = "10 Exotic Spooky Chests";     Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Gem Chest"]            = { GiftId = 3460600738; NormalId = 3460600740; Display = "1 Exotic Gem Chest";          Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Gem Chests"]           = { GiftId = 3460600739; NormalId = 3460600737; Display = "3 Exotic Gem Chests";         Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Gem Chests"]          = { GiftId = 3460600741; NormalId = 3460600736; Display = "10 Exotic Gem Chests";        Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+1 Exotic Buttercup Chest"]      = { GiftId = 3520430333; NormalId = 3520430329; Display = "1 Exotic Buttercup Chest";    Category = "Chests";     Price = 100;  isGiftable = true  };
-	["+3 Exotic Buttercup Chests"]     = { GiftId = 3520430330; NormalId = 3520430327; Display = "3 Exotic Buttercup Chests";   Category = "Chests";     Price = 275;  isGiftable = true  };
-	["+10 Exotic Buttercup Chests"]    = { GiftId = 3520430332; NormalId = 3520430328; Display = "10 Exotic Buttercup Chests";  Category = "Chests";     Price = 800;  isGiftable = true  };
-	["+50 Exotic Buttercup Chests"]    = { GiftId = 3520430334; NormalId = 3520430331; Display = "50 Exotic Buttercup Chests";  Category = "Chests";     Price = 3500; isGiftable = true  };
-	-- CRATES
-	["+1 Iconic Gonme Crate"]          = { GiftId = 3300962951; NormalId = 3300962946; Display = "1 Iconic Gonme Crate";        Category = "Crates";     Price = 100;  isGiftable = true  };
-	["+3 Iconic Gonme Crate"]          = { GiftId = 3300962954; NormalId = 3300962950; Display = "3 Iconic Gonme Crates";       Category = "Crates";     Price = 275;  isGiftable = true  };
-	["+10 Iconic Gonme Crate"]         = { GiftId = 3300962960; NormalId = 3300962952; Display = "10 Iconic Gonme Crates";      Category = "Crates";     Price = 850;  isGiftable = true  };
-	-- PREMIUM EGGS
-	["+1 Premium Anti Bee Egg"]        = { GiftId = 3301567956; NormalId = 3301567958; Display = "1 Premium Anti Bee Egg";      Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Anti Bee Egg"]        = { GiftId = 3301567959; NormalId = 3301567955; Display = "3 Premium Anti Bee Eggs";     Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Anti Bee Egg"]       = { GiftId = 3301567957; NormalId = 3301567960; Display = "10 Premium Anti Bee Eggs";    Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Oasis Egg"]           = { GiftId = 3317459189; NormalId = 3317459182; Display = "1 Premium Oasis Egg";         Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Oasis Egg"]           = { GiftId = 3317459185; NormalId = 3317459186; Display = "3 Premium Oasis Eggs";        Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Oasis Egg"]          = { GiftId = 3317459187; NormalId = 3317459188; Display = "10 Premium Oasis Eggs";       Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Primal Egg"]          = { GiftId = 3330286152; NormalId = 3330286154; Display = "1 Premium Primal Egg";        Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Primal Egg"]          = { GiftId = 3330286153; NormalId = 3330286155; Display = "3 Premium Primal Eggs";       Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Primal Egg"]         = { GiftId = 3330286160; NormalId = 3330286148; Display = "10 Premium Primal Eggs";      Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Fall Egg"]            = { GiftId = 3401426986; NormalId = 3401426983; Display = "1 Premium Fall Egg";          Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Fall Eggs"]           = { GiftId = 3401426987; NormalId = 3401426985; Display = "3 Premium Fall Eggs";         Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Fall Eggs"]          = { GiftId = 3401426988; NormalId = 3401426984; Display = "10 Premium Fall Eggs";        Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Spooky Egg"]          = { GiftId = 3427163851; NormalId = 3427163857; Display = "1 Premium Spooky Egg";        Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Spooky Eggs"]         = { GiftId = 3427163855; NormalId = 3427163854; Display = "3 Premium Spooky Eggs";       Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Spooky Eggs"]        = { GiftId = 3427163856; NormalId = 3427163853; Display = "10 Premium Spooky Eggs";      Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Safari Egg"]          = { GiftId = 3444449490; NormalId = 3444449487; Display = "1 Premium Safari Egg";        Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Safari Eggs"]         = { GiftId = 3444449488; NormalId = 3444449485; Display = "3 Premium Safari Eggs";       Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Safari Eggs"]        = { GiftId = 3444449489; NormalId = 3444449486; Display = "10 Premium Safari Eggs";      Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+1 Premium Christmas Egg"]       = { GiftId = 3477922694; NormalId = 3477922698; Display = "1 Premium Christmas Egg";     Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Christmas Eggs"]      = { GiftId = 3477922696; NormalId = 3477922697; Display = "3 Premium Christmas Eggs";    Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Christmas Eggs"]     = { GiftId = 3477922699; NormalId = 3477922700; Display = "10 Premium Christmas Eggs";   Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+50 Premium Christmas Eggs"]     = { GiftId = 3478044311; NormalId = 3478043835; Display = "50 Premium Christmas Eggs";   Category = "Premium Eggs"; Price = 5500;isGiftable = true  };
-	["+1 Premium Winter Egg"]          = { GiftId = 3483801742; NormalId = 3483801741; Display = "1 Premium Winter Egg";        Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Winter Eggs"]         = { GiftId = 3483801746; NormalId = 3483801745; Display = "3 Premium Winter Eggs";       Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Winter Eggs"]        = { GiftId = 3483801749; NormalId = 3483801744; Display = "10 Premium Winter Eggs";      Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+50 Premium Winter Eggs"]        = { GiftId = 3483801747; NormalId = 3483801743; Display = "50 Premium Winter Eggs";      Category = "Premium Eggs"; Price = 5500;isGiftable = true  };
-	["+1 Premium New Year's Egg"]      = { GiftId = 3489363340; NormalId = 3489363343; Display = "1 Premium New Year's Egg";    Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium New Year's Eggs"]     = { GiftId = 3489363337; NormalId = 3489363338; Display = "3 Premium New Year's Eggs";   Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium New Year's Eggs"]    = { GiftId = 3489363341; NormalId = 3489363342; Display = "10 Premium New Year's Eggs";  Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+50 Premium New Year's Eggs"]    = { GiftId = 3489363345; NormalId = 3489363344; Display = "50 Premium New Year's Eggs";  Category = "Premium Eggs"; Price = 5500;isGiftable = true  };
-	["+1 Premium Carnival Egg"]        = { GiftId = 3497475841; NormalId = 3497475839; Display = "1 Premium Carnival Egg";      Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Carnival Eggs"]       = { GiftId = 3497475845; NormalId = 3497475846; Display = "3 Premium Carnival Eggs";     Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Carnival Eggs"]      = { GiftId = 3497475840; NormalId = 3497475844; Display = "10 Premium Carnival Eggs";    Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+50 Premium Carnival Eggs"]      = { GiftId = 3497475842; NormalId = 3497475843; Display = "50 Premium Carnival Eggs";    Category = "Premium Eggs"; Price = 5500;isGiftable = true  };
-	["+1 Premium Bird Egg"]            = { GiftId = 3512151974; NormalId = 3512151971; Display = "1 Premium Bird Egg";          Category = "Premium Eggs"; Price = 150; isGiftable = true  };
-	["+3 Premium Bird Eggs"]           = { GiftId = 3512151972; NormalId = 3512151973; Display = "3 Premium Bird Eggs";         Category = "Premium Eggs"; Price = 400; isGiftable = true  };
-	["+10 Premium Bird Eggs"]          = { GiftId = 3512151975; NormalId = 3512151976; Display = "10 Premium Bird Eggs";        Category = "Premium Eggs"; Price = 1200;isGiftable = true  };
-	["+50 Premium Bird Eggs"]          = { GiftId = 3512151981; NormalId = 3512151977; Display = "50 Premium Bird Eggs";        Category = "Premium Eggs"; Price = 5500;isGiftable = true  };
-	["+1 Premium Golden Egg"]          = { GiftId = 3568827750; NormalId = 3568827015; Display = "1 Premium Golden Egg";        Category = "Premium Eggs"; Price = 200; isGiftable = true  };
-	["+3 Premium Golden Eggs"]         = { GiftId = 3568828285; NormalId = 3568827227; Display = "3 Premium Golden Eggs";       Category = "Premium Eggs"; Price = 550; isGiftable = true  };
-	["+10 Premium Golden Eggs"]        = { GiftId = 3568828441; NormalId = 3568827595; Display = "10 Premium Golden Eggs";      Category = "Premium Eggs"; Price = 1700;isGiftable = true  };
-	["+50 Premium Golden Eggs"]        = { GiftId = 3570157336; NormalId = 3570157250; Display = "50 Premium Golden Eggs";      Category = "Premium Eggs"; Price = 7500;isGiftable = true  };
-	-- TOKENS  (ForcedRobuxPurchase — cannot be gifted via GiftRemote)
-	["Trade Token 50"]                 = { GiftId = 3425758808; NormalId = 3460376533; Display = "Trade Token 50";    Category = "Tokens"; Price = 50;   isGiftable = false; ForcedRobuxPurchase = true };
-	["Trade Token 250"]                = { GiftId = 3425758810; NormalId = 3460378135; Display = "Trade Token 250";   Category = "Tokens"; Price = 200;  isGiftable = false; ForcedRobuxPurchase = true };
-	["Trade Token 1000"]               = { GiftId = 3425758809; NormalId = 3460378800; Display = "Trade Token 1000";  Category = "Tokens"; Price = 700;  isGiftable = false; ForcedRobuxPurchase = true };
-	["Trade Token 5000"]               = { GiftId = 3425758811; NormalId = 3460379424; Display = "Trade Token 5000";  Category = "Tokens"; Price = 3000; isGiftable = false; ForcedRobuxPurchase = true };
-	["Trade Token 25000"]              = { GiftId = 3425758812; NormalId = 3460379831; Display = "Trade Token 25000"; Category = "Tokens"; Price = 12000;isGiftable = false; ForcedRobuxPurchase = true };
-	-- CURRENCY (not giftable — credits go to purchaser only)
-	["Sheckles 1"]                     = { GiftId = 3269363716; NormalId = 3250137172; Display = "100¢";    Category = "Currency"; Price = 25;   isGiftable = false };
-	["Sheckles 2"]                     = { GiftId = 3269364749; NormalId = 3250137261; Display = "250¢";    Category = "Currency"; Price = 60;   isGiftable = false };
-	["Sheckles 3"]                     = { GiftId = 3269364968; NormalId = 3250137355; Display = "1,000¢";  Category = "Currency"; Price = 200;  isGiftable = false };
-	["Sheckles 4"]                     = { GiftId = 3269365441; NormalId = 3250139018; Display = "5,000¢";  Category = "Currency"; Price = 800;  isGiftable = false };
-	-- CONTAINERS
-	["Artisan Container"]              = { GiftId = 3467103686; NormalId = 3460380041; Display = "1 Artisan Container";   Category = "Container"; Price = 120;  isGiftable = true  };
-	["3 Artisan Containers"]           = { GiftId = 3467103689; NormalId = 3467103688; Display = "3 Artisan Containers";  Category = "Container"; Price = 325;  isGiftable = true  };
-	["10 Artisan Containers"]          = { GiftId = 3467103690; NormalId = 3467103687; Display = "10 Artisan Containers"; Category = "Container"; Price = 1000; isGiftable = true  };
-	["Elemental Container"]            = { GiftId = 3467110139; NormalId = 3460380235; Display = "1 Elemental Container";   Category = "Container"; Price = 120;  isGiftable = true  };
-	["3 Elemental Containers"]         = { GiftId = 3467110144; NormalId = 3467110142; Display = "3 Elemental Containers";  Category = "Container"; Price = 325;  isGiftable = true  };
-	["10 Elemental Containers"]        = { GiftId = 3467110143; NormalId = 3467110145; Display = "10 Elemental Containers"; Category = "Container"; Price = 1000; isGiftable = true  };
-	["Festive Container"]              = { GiftId = 3478032198; NormalId = 3478031738; Display = "1 Festive Container";   Category = "Container"; Price = 120;  isGiftable = true  };
-	["3 Festive Containers"]           = { GiftId = 3478032318; NormalId = 3478031853; Display = "3 Festive Containers";  Category = "Container"; Price = 325;  isGiftable = true  };
-	["10 Festive Containers"]          = { GiftId = 3478032404; NormalId = 3478031941; Display = "10 Festive Containers"; Category = "Container"; Price = 1000; isGiftable = true  };
-	-- PRESENTS
-	["+1 Exotic Santa's Surprise Present"]  = { GiftId = 3472461581; NormalId = 3472461585; Display = "1 Santa's Surprise Present";   Category = "Present"; Price = 100;  isGiftable = true  };
-	["+3 Exotic Santa's Surprise Present"]  = { GiftId = 3472461582; NormalId = 3472461575; Display = "3 Santa's Surprise Presents";  Category = "Present"; Price = 275;  isGiftable = true  };
-	["+10 Exotic Santa's Surprise Present"] = { GiftId = 3472461580; NormalId = 3472461579; Display = "10 Santa's Surprise Presents"; Category = "Present"; Price = 850;  isGiftable = true  };
-	["+50 Exotic Santa's Surprise Present"] = { GiftId = 3472461583; NormalId = 3472461584; Display = "50 Santa's Surprise Presents"; Category = "Present"; Price = 3800; isGiftable = true  };
-	-- SUPER SEEDS
-	["+1 Super Seed"]                  = { GiftId = 3482199804; NormalId = 3482199602; Display = "+1 Super Seed";              Category = "Super Seed"; Price = 80;   isGiftable = true  };
-	["+3 Super Seed"]                  = { GiftId = 3482200078; NormalId = 3482199918; Display = "+3 Super Seeds";             Category = "Super Seed"; Price = 220;  isGiftable = true  };
-	["+10 Super Seed"]                 = { GiftId = 3482200423; NormalId = 3482200241; Display = "+10 Super Seeds";            Category = "Super Seed"; Price = 650;  isGiftable = true  };
-	["+9 Super Seed"]                  = { GiftId = 3482222113; NormalId = 3249981764; Display = "+9 Super Seeds";             Category = "Super Seed"; Price = 600;  isGiftable = true  };
-	["Rainbow Peppermint Vine Seed"]   = { GiftId = 3482271756; NormalId = 3482271454; Display = "Rainbow Peppermint Vine Seed"; Category = "Super Seed"; Price = 400; isGiftable = true  };
-	["Firework Fern"]                  = { GiftId = 3490207392; NormalId = 3490207231; Display = "Firework Fern";              Category = "Seeds";      Price = 300;  isGiftable = true  };
-	-- BUNDLE PACKS (no GiftId — purchase only)
-	["SaintPatricks Bundle"]           = { NormalId = 3555829934; Display = "Leaf Clover Pack";           Category = "Bundle Pack"; Price = 499;  isGiftable = false };
-	["Blacksmith Bundle"]              = { NormalId = 3456989527; Display = "Blacksmith Pack";             Category = "Bundle Pack"; Price = 799;  isGiftable = false };
-	["Twilight Pack"]                  = { NormalId = 3432380384; Display = "Twilight Pack";               Category = "Bundle Pack"; Price = 599;  isGiftable = false };
-	["Rainbow Shovel Pack"]            = { NormalId = 3560653460; Display = "Rainbow Shovel + Speed Coil"; Category = "Bundle Pack"; Price = 399;  isGiftable = false };
-	-- PASS STORE (GamePass items — not giftable via remote)
-	["Prime Crate"]                    = { Display = "Prime Crate";    Category = "Crate"; Price = 299;  isGiftable = false };
-	["Holiday Crate"]                  = { Display = "Holiday Crate";  Category = "Crate"; Price = 299;  isGiftable = false };
-	["Season 4 Crate"]                 = { Display = "Season 4 Crate"; Category = "Crate"; Price = 299;  isGiftable = false };
-	-- COSMETICS (Pass)
-	["Egg Yolk Mat"]                   = { Display = "Egg Yolk Mat";    Category = "Pass"; Price = 149;  isGiftable = false };
-	["Penguin Statue"]                 = { Display = "Penguin Statue";  Category = "Pass"; Price = 149;  isGiftable = false };
-	["Garden Basin"]                   = { Display = "Garden Basin";    Category = "Pass"; Price = 149;  isGiftable = false };
-	-- GEARS (Pass)
-	["Silver Fertilizer"]              = { Display = "Silver Fertilizer";    Category = "Pass"; Price = 199;  isGiftable = false };
-	["Levelup Lollipop"]               = { Display = "Levelup Lollipop";     Category = "Pass"; Price = 199;  isGiftable = false };
-	["Grow All"]                       = { Display = "Grow All";              Category = "Pass"; Price = 249;  isGiftable = false };
-	["Smith Hammer of Harvest"]        = { Display = "Hammer of Harvest";     Category = "Pass"; Price = 199;  isGiftable = false };
-	-- SEEDS (Pass)
-	["Naval Wort"]                     = { Display = "Naval Wort";        Category = "Seeds"; Price = 99;   isGiftable = false };
-	["Pollen Cone"]                    = { Display = "Pollen Cone";       Category = "Seeds"; Price = 99;   isGiftable = false };
-	["Purple Treeshroom"]              = { Display = "Purple Treeshroom"; Category = "Seeds"; Price = 99;   isGiftable = false };
-	-- SEED PACKS (Pass)
-	["Prime Seed Pack"]                = { Display = "Prime Seed Pack";    Category = "Seed Pack"; Price = 299;  isGiftable = false };
-	["Holiday Seed Pack"]              = { Display = "Holiday Seed Pack";  Category = "Seed Pack"; Price = 299;  isGiftable = false };
-	["Season 4 Seed Pack"]             = { Display = "Season 4 Seed Pack"; Category = "Seed Pack"; Price = 299;  isGiftable = false };
-	-- ufo shard
-	--////////////////////////////////////////////////////
-	["UFO Shard x1"] = {NormalId = 3546404036; Display = "UFO Shard x1"; Category = "Pet Shard"; Price = 199;  isGiftable = true },
-	["UFO Shard x3"] = {NormalId = 3546404197; Display = "UFO Shard x3"; Category = "Pet Shard"; Price = 399;  isGiftable = true },
-	["UFO Shard x10"] = {NormalId = 3546404927; Display = "UFO Shard x10"; Category = "Pet Shard"; Price = 1399;  isGiftable = true },
 
+-- Helper: builds variants table from old-style entries
+-- Usage: We define Products in a new grouped format below.
+
+local Products = {
+	------------------------------------------------
+	-- SEED PACKS
+	------------------------------------------------
+	{
+		Group       = "Exotic Seed Pack";
+		Display     = "Exotic Seed Pack";
+		Category    = "Seed Pack";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3267528421; GiftId = 3269033223 };
+			{ Qty = 3;  NormalId = 3267548052; GiftId = 3269033336 };
+			{ Qty = 10; NormalId = 3267548161; GiftId = 3269033529 };
+		};
+		Prices      = { [1]=75; [3]=200; [10]=600 };
+	},
+	{
+		Group       = "Bug Egg";
+		Display     = "Bug Egg";
+		Category    = "Regular Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3278426597; GiftId = 3277815193 };
+			{ Qty = 3;  NormalId = 3277814538; GiftId = 3277815350 };
+			{ Qty = 10; NormalId = 3277814625; GiftId = 3277815654 };
+		};
+		Prices      = { [1]=50; [3]=130; [10]=400 };
+	},
+	{
+		Group       = "Premium Seed Sacks";
+		Display     = "Premium Seed Sacks";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 10; NormalId = 3273679012; GiftId = 3273679009 };
+		};
+		Prices      = { [10]=450 };
+	},
+	{
+		Group       = "Premium Night Seeds";
+		Display     = "Premium Night Seeds";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 10; NormalId = 3282157462; GiftId = 3282733014 };
+		};
+		Prices      = { [10]=450 };
+	},
+	{
+		Group       = "Premium Night Eggs";
+		Display     = "Premium Night Eggs";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 10; NormalId = 3282157312; GiftId = 3282661439 };
+		};
+		Prices      = { [10]=450 };
+	},
+	{
+		Group       = "Exclusive Cosmetic Crate";
+		Display     = "Exclusive Cosmetic Crate";
+		Category    = "Crates";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3290672626; GiftId = 3290672926 };
+			{ Qty = 3;  NormalId = 3290672712; GiftId = 3290673007 };
+			{ Qty = 10; NormalId = 3290672848; GiftId = 3290673073 };
+		};
+		Prices      = { [1]=100; [3]=275; [10]=850 };
+	},
+	-- Exotic Flower / Crafters / Summer / Ancient / Zen / Gourmet / Sprout / Enchanted / Fall / Safari Seed Packs
+	-- All share the same 75/200/600 pricing pattern
+	(function()
+		local packs = {
+			{ name="Exotic Flower Seed Pack";    ids={ {1,3295548770,3295548788},{3,3295548782,3295548780},{10,3295548781,3295548784} } };
+			{ name="Exotic Crafters Seed Pack";  ids={ {1,3306352279,3306352285},{3,3306352283,3306352286},{10,3306352284,3306352287} } };
+			{ name="Exotic Summer Seed Pack";    ids={ {1,3311388942,3311388950},{3,3311388951,3311388953},{10,3311388948,3311388949} } };
+			{ name="Exotic Ancient Seed Pack";   ids={ {1,3323657553,3323657555},{3,3323657547,3323657556},{10,3323657552,3323657554} } };
+			{ name="Exotic Zen Seed Pack";       ids={ {1,3338826792,3338826788},{3,3338826791,3338826794},{10,3338826790,3338826793} } };
+			{ name="Exotic Gourmet Seed Pack";   ids={ {1,3354839803,3354839820},{3,3354839826,3354839819},{10,3354839817,3354839818} } };
+			{ name="Exotic Sprout Seed Pack";    ids={ {1,3371226353,3371226361},{3,3371226360,3371226362},{10,3371226363,3371226364} } };
+			{ name="Exotic Enchanted Seed Pack"; ids={ {1,3387753641,3387753639},{3,3387753634,3387753637},{10,3387753638,3387753640} } };
+			{ name="Exotic Fall Seed Pack";      ids={ {1,3407391662,3407391673},{3,3407391663,3407391664},{10,3407391666,3407391665} } };
+			{ name="Exotic Safari Seed Pack";    ids={ {1,3449810469,3449810468},{3,3449810472,3449810470},{10,3449810471,3449810473} } };
+		}
+		-- We return nil here; entries are added directly in the loop below
+		return nil
+	end)() or nil,
+	-- Chests
+	{
+		Group       = "Exotic Culinarian Chest";
+		Display     = "Exotic Culinarian Chest";
+		Category    = "Chests";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3362680911; GiftId = 3362680913 };
+			{ Qty = 3;  NormalId = 3362680917; GiftId = 3362680919 };
+			{ Qty = 10; NormalId = 3362680916; GiftId = 3362680914 };
+		};
+		Prices      = { [1]=199; [3]=575; [10]=1699 };
+	},
+	{
+		Group       = "Exotic Kitsune Chest";
+		Display     = "Exotic Kitsune Chest";
+		Category    = "Chests";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3345819463; GiftId = 3345819471 };
+			{ Qty = 3;  NormalId = 3345819470; GiftId = 3345819477 };
+			{ Qty = 10; NormalId = 3345819472; GiftId = 3345819473 };
+		};
+		Prices      = { [1]=100; [3]=275; [10]=800 };
+	},
+	{
+		Group       = "Exotic Skyroot Chest";
+		Display     = "Exotic Skyroot Chest";
+		Category    = "Chests";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3379038157; GiftId = 3379038160 };
+			{ Qty = 3;  NormalId = 3379038152; GiftId = 3379038158 };
+			{ Qty = 10; NormalId = 3379038159; GiftId = 3379038166 };
+		};
+		Prices      = { [1]=100; [3]=275; [10]=800 };
+	},
+	{
+		Group       = "Exotic Enchanted Chest";
+		Display     = "Exotic Enchanted Chest";
+		Category    = "Chests";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3394224231; GiftId = 3394224240 };
+			{ Qty = 3;  NormalId = 3394224239; GiftId = 3394224238 };
+			{ Qty = 10; NormalId = 3394224237; GiftId = 3394224256 };
+		};
+		Prices      = { [1]=100; [3]=275; [10]=800 };
+	},
+	{
+		Group       = "Exotic Nutty Chest";
+		Display     = "Exotic Nutty Chest";
+		Category    = "Chests";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3420021045; GiftId = 3420021048 };
+			{ Qty = 3;  NormalId = 3420021043; GiftId = 3420021049 };
+			{ Qty = 10; NormalId = 3420021044; GiftId = 3420021050 };
+		};
+		Prices      = { [1]=100; [3]=275; [10]=800 };
+	},
+	{
+		Group       = "Exotic Spooky Chest";
+		Display     = "Exotic Spooky Chest";
+		Category    = "Chests";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3438653519; GiftId = 3438653515 };
+			{ Qty = 3;  NormalId = 3438653518; GiftId = 3438653520 };
+			{ Qty = 10; NormalId = 3438653517; GiftId = 3438653521 };
+		};
+		Prices      = { [1]=100; [3]=275; [10]=800 };
+	},
+	{
+		Group       = "Exotic Gem Chest";
+		Display     = "Exotic Gem Chest";
+		Category    = "Chests";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3460600740; GiftId = 3460600738 };
+			{ Qty = 3;  NormalId = 3460600737; GiftId = 3460600739 };
+			{ Qty = 10; NormalId = 3460600736; GiftId = 3460600741 };
+		};
+		Prices      = { [1]=100; [3]=275; [10]=800 };
+	},
+	{
+		Group       = "Exotic Buttercup Chest";
+		Display     = "Exotic Buttercup Chest";
+		Category    = "Chests";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3520430329; GiftId = 3520430333 };
+			{ Qty = 3;  NormalId = 3520430327; GiftId = 3520430330 };
+			{ Qty = 10; NormalId = 3520430328; GiftId = 3520430332 };
+			{ Qty = 50; NormalId = 3520430331; GiftId = 3520430334 };
+		};
+		Prices      = { [1]=100; [3]=275; [10]=800; [50]=3500 };
+	},
+	-- CRATES
+	{
+		Group       = "Iconic Gonme Crate";
+		Display     = "Iconic Gonme Crate";
+		Category    = "Crates";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3300962946; GiftId = 3300962951 };
+			{ Qty = 3;  NormalId = 3300962950; GiftId = 3300962954 };
+			{ Qty = 10; NormalId = 3300962952; GiftId = 3300962960 };
+		};
+		Prices      = { [1]=100; [3]=275; [10]=850 };
+	},
+	-- PREMIUM EGGS
+	{
+		Group       = "Premium Anti Bee Egg";
+		Display     = "Premium Anti Bee Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3301567958; GiftId = 3301567956 };
+			{ Qty = 3;  NormalId = 3301567955; GiftId = 3301567959 };
+			{ Qty = 10; NormalId = 3301567960; GiftId = 3301567957 };
+		};
+		Prices      = { [1]=150; [3]=400; [10]=1200 };
+	},
+	{
+		Group       = "Premium Oasis Egg";
+		Display     = "Premium Oasis Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3317459182; GiftId = 3317459189 };
+			{ Qty = 3;  NormalId = 3317459186; GiftId = 3317459185 };
+			{ Qty = 10; NormalId = 3317459188; GiftId = 3317459187 };
+		};
+		Prices      = { [1]=150; [3]=400; [10]=1200 };
+	},
+	{
+		Group       = "Premium Primal Egg";
+		Display     = "Premium Primal Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3330286154; GiftId = 3330286152 };
+			{ Qty = 3;  NormalId = 3330286155; GiftId = 3330286153 };
+			{ Qty = 10; NormalId = 3330286148; GiftId = 3330286160 };
+		};
+		Prices      = { [1]=150; [3]=400; [10]=1200 };
+	},
+	{
+		Group       = "Premium Fall Egg";
+		Display     = "Premium Fall Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3401426983; GiftId = 3401426986 };
+			{ Qty = 3;  NormalId = 3401426985; GiftId = 3401426987 };
+			{ Qty = 10; NormalId = 3401426984; GiftId = 3401426988 };
+		};
+		Prices      = { [1]=150; [3]=400; [10]=1200 };
+	},
+	{
+		Group       = "Premium Spooky Egg";
+		Display     = "Premium Spooky Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3427163857; GiftId = 3427163851 };
+			{ Qty = 3;  NormalId = 3427163854; GiftId = 3427163855 };
+			{ Qty = 10; NormalId = 3427163853; GiftId = 3427163856 };
+		};
+		Prices      = { [1]=150; [3]=400; [10]=1200 };
+	},
+	{
+		Group       = "Premium Safari Egg";
+		Display     = "Premium Safari Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3444449487; GiftId = 3444449490 };
+			{ Qty = 3;  NormalId = 3444449485; GiftId = 3444449488 };
+			{ Qty = 10; NormalId = 3444449486; GiftId = 3444449489 };
+		};
+		Prices      = { [1]=150; [3]=400; [10]=1200 };
+	},
+	{
+		Group       = "Premium Christmas Egg";
+		Display     = "Premium Christmas Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3477922698; GiftId = 3477922694 };
+			{ Qty = 3;  NormalId = 3477922697; GiftId = 3477922696 };
+			{ Qty = 10; NormalId = 3477922700; GiftId = 3477922699 };
+			{ Qty = 50; NormalId = 3478043835; GiftId = 3478044311 };
+		};
+		Prices      = { [1]=150; [3]=400; [10]=1200; [50]=5500 };
+	},
+	{
+		Group       = "Premium Winter Egg";
+		Display     = "Premium Winter Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3483801741; GiftId = 3483801742 };
+			{ Qty = 3;  NormalId = 3483801745; GiftId = 3483801746 };
+			{ Qty = 10; NormalId = 3483801744; GiftId = 3483801749 };
+			{ Qty = 50; NormalId = 3483801743; GiftId = 3483801747 };
+		};
+		Prices      = { [1]=150; [3]=400; [10]=1200; [50]=5500 };
+	},
+	{
+		Group       = "Premium New Year's Egg";
+		Display     = "Premium New Year's Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3489363343; GiftId = 3489363340 };
+			{ Qty = 3;  NormalId = 3489363338; GiftId = 3489363337 };
+			{ Qty = 10; NormalId = 3489363342; GiftId = 3489363341 };
+			{ Qty = 50; NormalId = 3489363344; GiftId = 3489363345 };
+		};
+		Prices      = { [1]=150; [3]=400; [10]=1200; [50]=5500 };
+	},
+	{
+		Group       = "Premium Carnival Egg";
+		Display     = "Premium Carnival Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3497475839; GiftId = 3497475841 };
+			{ Qty = 3;  NormalId = 3497475846; GiftId = 3497475845 };
+			{ Qty = 10; NormalId = 3497475844; GiftId = 3497475840 };
+			{ Qty = 50; NormalId = 3497475843; GiftId = 3497475842 };
+		};
+		Prices      = { [1]=150; [3]=400; [10]=1200; [50]=5500 };
+	},
+	{
+		Group       = "Premium Bird Egg";
+		Display     = "Premium Bird Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3512151971; GiftId = 3512151974 };
+			{ Qty = 3;  NormalId = 3512151973; GiftId = 3512151972 };
+			{ Qty = 10; NormalId = 3512151976; GiftId = 3512151975 };
+			{ Qty = 50; NormalId = 3512151977; GiftId = 3512151981 };
+		};
+		Prices      = { [1]=150; [3]=400; [10]=1200; [50]=5500 };
+	},
+	{
+		Group       = "Premium Golden Egg";
+		Display     = "Premium Golden Egg";
+		Category    = "Premium Eggs";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3568827015; GiftId = 3568827750 };
+			{ Qty = 3;  NormalId = 3568827227; GiftId = 3568828285 };
+			{ Qty = 10; NormalId = 3568827595; GiftId = 3568828441 };
+			{ Qty = 50; NormalId = 3570157250; GiftId = 3570157336 };
+		};
+		Prices      = { [1]=200; [3]=550; [10]=1700; [50]=7500 };
+	},
+	-- TOKENS
+	{
+		Group               = "Trade Tokens";
+		Display             = "Trade Tokens";
+		Category            = "Tokens";
+		isGiftable          = false;
+		ForcedRobuxPurchase = true;
+		Variants            = {
+			{ Qty = 50;    NormalId = 3460376533; GiftId = 3425758808 };
+			{ Qty = 250;   NormalId = 3460378135; GiftId = 3425758810 };
+			{ Qty = 1000;  NormalId = 3460378800; GiftId = 3425758809 };
+			{ Qty = 5000;  NormalId = 3460379424; GiftId = 3425758811 };
+			{ Qty = 25000; NormalId = 3460379831; GiftId = 3425758812 };
+		};
+		Prices              = { [50]=50; [250]=200; [1000]=700; [5000]=3000; [25000]=12000 };
+	},
+	-- CURRENCY
+	{
+		Group       = "Sheckles (¢)";
+		Display     = "Sheckles";
+		Category    = "Currency";
+		isGiftable  = false;
+		Variants    = {
+			{ Qty = 100;   Label = "100¢";    NormalId = 3250137172; GiftId = 3269363716 };
+			{ Qty = 250;   Label = "250¢";    NormalId = 3250137261; GiftId = 3269364749 };
+			{ Qty = 1000;  Label = "1,000¢";  NormalId = 3250137355; GiftId = 3269364968 };
+			{ Qty = 5000;  Label = "5,000¢";  NormalId = 3250139018; GiftId = 3269365441 };
+		};
+		Prices      = { [100]=25; [250]=60; [1000]=200; [5000]=800 };
+	},
+	-- CONTAINERS
+	{
+		Group       = "Artisan Container";
+		Display     = "Artisan Container";
+		Category    = "Container";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3460380041; GiftId = 3467103686 };
+			{ Qty = 3;  NormalId = 3467103688; GiftId = 3467103689 };
+			{ Qty = 10; NormalId = 3467103687; GiftId = 3467103690 };
+		};
+		Prices      = { [1]=120; [3]=325; [10]=1000 };
+	},
+	{
+		Group       = "Elemental Container";
+		Display     = "Elemental Container";
+		Category    = "Container";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3460380235; GiftId = 3467110139 };
+			{ Qty = 3;  NormalId = 3467110142; GiftId = 3467110144 };
+			{ Qty = 10; NormalId = 3467110145; GiftId = 3467110143 };
+		};
+		Prices      = { [1]=120; [3]=325; [10]=1000 };
+	},
+	{
+		Group       = "Festive Container";
+		Display     = "Festive Container";
+		Category    = "Container";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3478031738; GiftId = 3478032198 };
+			{ Qty = 3;  NormalId = 3478031853; GiftId = 3478032318 };
+			{ Qty = 10; NormalId = 3478031941; GiftId = 3478032404 };
+		};
+		Prices      = { [1]=120; [3]=325; [10]=1000 };
+	},
+	-- PRESENTS
+	{
+		Group       = "Santa's Surprise Present";
+		Display     = "Santa's Surprise Present";
+		Category    = "Present";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3472461585; GiftId = 3472461581 };
+			{ Qty = 3;  NormalId = 3472461575; GiftId = 3472461582 };
+			{ Qty = 10; NormalId = 3472461579; GiftId = 3472461580 };
+			{ Qty = 50; NormalId = 3472461584; GiftId = 3472461583 };
+		};
+		Prices      = { [1]=100; [3]=275; [10]=850; [50]=3800 };
+	},
+	-- SUPER SEEDS
+	{
+		Group       = "Super Seed";
+		Display     = "Super Seed";
+		Category    = "Super Seed";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3482199602; GiftId = 3482199804 };
+			{ Qty = 3;  NormalId = 3482199918; GiftId = 3482200078 };
+			{ Qty = 9;  NormalId = 3249981764; GiftId = 3482222113 };
+			{ Qty = 10; NormalId = 3482200241; GiftId = 3482200423 };
+		};
+		Prices      = { [1]=80; [3]=220; [9]=600; [10]=650 };
+	},
+	{
+		Group       = "Rainbow Peppermint Vine Seed";
+		Display     = "Rainbow Peppermint Vine Seed";
+		Category    = "Super Seed";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1; NormalId = 3482271454; GiftId = 3482271756 };
+		};
+		Prices      = { [1]=400 };
+	},
+	{
+		Group       = "Firework Fern";
+		Display     = "Firework Fern";
+		Category    = "Seeds";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1; NormalId = 3490207231; GiftId = 3490207392 };
+		};
+		Prices      = { [1]=300 };
+	},
+	-- UFO SHARD
+	{
+		Group       = "UFO Shard";
+		Display     = "UFO Shard";
+		Category    = "Pet Shard";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 1;  NormalId = 3546404036 };
+			{ Qty = 3;  NormalId = 3546404197 };
+			{ Qty = 10; NormalId = 3546404927 };
+		};
+		Prices      = { [1]=199; [3]=399; [10]=1399 };
+	},
+	-- BUNDLE PACKS
+	{
+		Group       = "Leaf Clover Pack";
+		Display     = "Leaf Clover Pack";
+		Category    = "Bundle Pack";
+		isGiftable  = false;
+		Variants    = {
+			{ Qty = 1; NormalId = 3555829934 };
+		};
+		Prices      = { [1]=499 };
+	},
+	{
+		Group       = "Blacksmith Pack";
+		Display     = "Blacksmith Pack";
+		Category    = "Bundle Pack";
+		isGiftable  = false;
+		Variants    = {
+			{ Qty = 1; NormalId = 3456989527 };
+		};
+		Prices      = { [1]=799 };
+	},
+	{
+		Group       = "Twilight Pack";
+		Display     = "Twilight Pack";
+		Category    = "Bundle Pack";
+		isGiftable  = false;
+		Variants    = {
+			{ Qty = 1; NormalId = 3432380384 };
+		};
+		Prices      = { [1]=599 };
+	},
+	{
+		Group       = "Rainbow Shovel + Speed Coil";
+		Display     = "Rainbow Shovel + Speed Coil";
+		Category    = "Bundle Pack";
+		isGiftable  = false;
+		Variants    = {
+			{ Qty = 1; NormalId = 3560653460 };
+		};
+		Prices      = { [1]=399 };
+	},
+	-- PASS STORE
+	{ Group="Prime Crate";    Display="Prime Crate";    Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} };
+	{ Group="Holiday Crate";  Display="Holiday Crate";  Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} };
+	{ Group="Season 4 Crate"; Display="Season 4 Crate"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} };
+	{ Group="Egg Yolk Mat";   Display="Egg Yolk Mat";   Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=149} };
+	{ Group="Penguin Statue"; Display="Penguin Statue"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=149} };
+	{ Group="Garden Basin";   Display="Garden Basin";   Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=149} };
+	{ Group="Silver Fertilizer"; Display="Silver Fertilizer"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=199} };
+	{ Group="Levelup Lollipop";  Display="Levelup Lollipop";  Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=199} };
+	{ Group="Grow All";           Display="Grow All";           Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=249} };
+	{ Group="Hammer of Harvest";  Display="Hammer of Harvest";  Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=199} };
+	{ Group="Naval Wort";    Display="Naval Wort";    Category="Seeds"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=99} };
+	{ Group="Pollen Cone";   Display="Pollen Cone";   Category="Seeds"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=99} };
+	{ Group="Purple Treeshroom"; Display="Purple Treeshroom"; Category="Seeds"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=99} };
+	{ Group="Prime Seed Pack";    Display="Prime Seed Pack";    Category="Seed Pack"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} };
+	{ Group="Holiday Seed Pack";  Display="Holiday Seed Pack";  Category="Seed Pack"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} };
+	{ Group="Season 4 Seed Pack"; Display="Season 4 Seed Pack"; Category="Seed Pack"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} };
 }
+
+-- Inject all the 75/200/600 exotic seed packs programmatically
+local exoticPacks = {
+	{ name="Exotic Flower Seed Pack";    ids={ {1,3295548770,3295548788},{3,3295548782,3295548780},{10,3295548781,3295548784} } };
+	{ name="Exotic Crafters Seed Pack";  ids={ {1,3306352279,3306352285},{3,3306352283,3306352286},{10,3306352284,3306352287} } };
+	{ name="Exotic Summer Seed Pack";    ids={ {1,3311388942,3311388950},{3,3311388951,3311388953},{10,3311388948,3311388949} } };
+	{ name="Exotic Ancient Seed Pack";   ids={ {1,3323657553,3323657555},{3,3323657547,3323657556},{10,3323657552,3323657554} } };
+	{ name="Exotic Zen Seed Pack";       ids={ {1,3338826792,3338826788},{3,3338826791,3338826794},{10,3338826790,3338826793} } };
+	{ name="Exotic Gourmet Seed Pack";   ids={ {1,3354839803,3354839820},{3,3354839826,3354839819},{10,3354839817,3354839818} } };
+	{ name="Exotic Sprout Seed Pack";    ids={ {1,3371226353,3371226361},{3,3371226360,3371226362},{10,3371226363,3371226364} } };
+	{ name="Exotic Enchanted Seed Pack"; ids={ {1,3387753641,3387753639},{3,3387753634,3387753637},{10,3387753638,3387753640} } };
+	{ name="Exotic Fall Seed Pack";      ids={ {1,3407391662,3407391673},{3,3407391663,3407391664},{10,3407391666,3407391665} } };
+	{ name="Exotic Safari Seed Pack";    ids={ {1,3449810469,3449810468},{3,3449810472,3449810470},{10,3449810471,3449810473} } };
+}
+for _, ep in ipairs(exoticPacks) do
+	local variants, prices = {}, {}
+	for _, row in ipairs(ep.ids) do
+		table.insert(variants, { Qty=row[1], NormalId=row[2], GiftId=row[3] })
+		prices[row[1]] = row[1]==1 and 75 or row[1]==3 and 200 or 600
+	end
+	table.insert(Products, {
+		Group      = ep.name;
+		Display    = ep.name;
+		Category   = "Seed Pack";
+		isGiftable = true;
+		Variants   = variants;
+		Prices     = prices;
+	})
+end
+
+-- Remove nil sentinel added by the inline IIFE above
+for i = #Products, 1, -1 do
+	if Products[i] == nil then table.remove(Products, i) end
+end
 
 local Categories = {
 	"All", "Seed Pack", "Seeds", "Super Seed",
@@ -231,7 +625,7 @@ local CategoryColors = {
 	["Currency"]     = Color3.fromRGB(255, 220,  60),
 	["Bundle Pack"]  = Color3.fromRGB(100, 250,  90),
 	["Pet Shard"]    = Color3.fromRGB(255, 125, 150),
-	["Pass"]         = Color3.fromRGB(255, 125, 150),
+	["Pass"]         = Color3.fromRGB(180, 140, 255),
 }
 
 local DEFAULT_COLOR = Color3.fromRGB(120, 120, 120)
@@ -249,13 +643,10 @@ end
 local FAST = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local MED  = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
--- Format price as "R$ 75" with comma separators for large numbers
 local function formatPrice(price)
-	if not price then return "" end
+	if not price then return "Free" end
 	local s = tostring(math.floor(price))
-	-- Insert commas
-	local result = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
-	result = result:gsub("^,", "")
+	local result = s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
 	return "🟩 " .. result
 end
 
@@ -272,16 +663,47 @@ Gui.ResetOnSpawn   = false
 Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 Gui.Parent         = game.CoreGui
 
--- Backdrop
+local GuiVisible = true
+
+-- Backdrop (dims bg when open)
 local Backdrop = Instance.new("Frame", Gui)
 Backdrop.Size                   = UDim2.fromScale(1, 1)
 Backdrop.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
 Backdrop.BackgroundTransparency = 0.5
 Backdrop.BorderSizePixel        = 0
 
+------------------------------------------------
+-- TOGGLE BUTTON (always visible, bottom-right)
+------------------------------------------------
+local ToggleBtn = Instance.new("TextButton", Gui)
+ToggleBtn.Size             = UDim2.new(0, 56, 0, 56)
+ToggleBtn.Position         = UDim2.new(1, -72, 1, -72)
+ToggleBtn.AnchorPoint      = Vector2.new(0, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 60, 130)
+ToggleBtn.Text             = "🛒"
+ToggleBtn.TextSize         = 22
+ToggleBtn.Font             = Enum.Font.GothamBold
+ToggleBtn.TextColor3       = Color3.fromRGB(255, 255, 255)
+ToggleBtn.AutoButtonColor  = false
+ToggleBtn.BorderSizePixel  = 0
+ToggleBtn.ZIndex           = 30
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
+
+local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
+ToggleStroke.Color       = Color3.fromRGB(100, 150, 255)
+ToggleStroke.Thickness   = 1.5
+ToggleStroke.Transparency = 0.5
+
+ToggleBtn.MouseEnter:Connect(function()
+	tween(ToggleBtn, FAST, { BackgroundColor3 = Color3.fromRGB(50, 90, 180) })
+end)
+ToggleBtn.MouseLeave:Connect(function()
+	tween(ToggleBtn, FAST, { BackgroundColor3 = Color3.fromRGB(30, 60, 130) })
+end)
+
 -- Main window
 local Main = Instance.new("Frame", Gui)
-Main.Size             = UDim2.new(0, 980, 0, 580)
+Main.Size             = UDim2.new(0, 980, 0, 600)
 Main.Position         = UDim2.new(0.5, 0, 0.5, 0)
 Main.AnchorPoint      = Vector2.new(0.5, 0.5)
 Main.BackgroundColor3 = Color3.fromRGB(14, 14, 14)
@@ -294,47 +716,54 @@ MainStroke.Transparency = 0.88
 MainStroke.Thickness    = 1
 
 ------------------------------------------------
+-- TOGGLE LOGIC
+------------------------------------------------
+local function setVisible(vis)
+	GuiVisible    = vis
+	Main.Visible  = vis
+	Backdrop.Visible = vis
+	ToggleBtn.Text   = vis and "✕" or "🛒"
+	tween(ToggleBtn, FAST, {
+		BackgroundColor3 = vis
+			and Color3.fromRGB(80, 30, 30)
+			or  Color3.fromRGB(30, 60, 130)
+	})
+end
+
+ToggleBtn.MouseButton1Click:Connect(function()
+	setVisible(not GuiVisible)
+end)
+
+-- Keyboard shortcut: RightBracket (]) to toggle
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode == Enum.KeyCode.RightBracket then
+		setVisible(not GuiVisible)
+	end
+end)
+
+------------------------------------------------
 -- DRAGGABLE WINDOW
 ------------------------------------------------
 do
-	local dragging  = false
-	local dragStart = Vector2.new()
-	local winStart  = Vector2.new()
-
-	local function beginDrag(inputPos)
+	local dragging, dragStart, winStart = false, Vector2.new(), Vector2.new()
+	Main.InputBegan:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		if (input.Position.Y - Main.AbsolutePosition.Y) > 52 then return end
 		dragging  = true
-		dragStart = Vector2.new(inputPos.X, inputPos.Y)
+		dragStart = Vector2.new(input.Position.X, input.Position.Y)
 		winStart  = Vector2.new(
 			Main.AbsolutePosition.X + Main.AbsoluteSize.X / 2,
 			Main.AbsolutePosition.Y + Main.AbsoluteSize.Y / 2
 		)
-	end
-
-	Main.InputBegan:Connect(function(input)
-		if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-		local relY = input.Position.Y - Main.AbsolutePosition.Y
-		if relY <= 52 then
-			beginDrag(input.Position)
-		end
 	end)
-
 	UserInputService.InputChanged:Connect(function(input)
-		if not dragging then return end
-		if input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-		local delta = Vector2.new(
-			input.Position.X - dragStart.X,
-			input.Position.Y - dragStart.Y
-		)
-		Main.Position = UDim2.new(
-			0, winStart.X + delta.X,
-			0, winStart.Y + delta.Y
-		)
+		if not dragging or input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+		local d = Vector2.new(input.Position.X - dragStart.X, input.Position.Y - dragStart.Y)
+		Main.Position = UDim2.new(0, winStart.X + d.X, 0, winStart.Y + d.Y)
 	end)
-
 	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = false
-		end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
 	end)
 end
 
@@ -342,34 +771,37 @@ end
 -- TOAST
 ------------------------------------------------
 local Toast = Instance.new("Frame", Gui)
-Toast.Size               = UDim2.new(0, 300, 0, 40)
+Toast.Size               = UDim2.new(0, 320, 0, 44)
 Toast.Position           = UDim2.new(0.5, 0, 1, 60)
 Toast.AnchorPoint        = Vector2.new(0.5, 1)
-Toast.BackgroundColor3   = Color3.fromRGB(30, 30, 30)
+Toast.BackgroundColor3   = Color3.fromRGB(22, 22, 22)
 Toast.BorderSizePixel    = 0
 Toast.ZIndex             = 20
-Instance.new("UICorner", Toast).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", Toast).CornerRadius = UDim.new(0, 10)
 
-local ToastStroke = Instance.new("UIStroke", Toast)
-ToastStroke.Color        = Color3.fromRGB(255, 255, 255)
-ToastStroke.Transparency = 0.8
-ToastStroke.Thickness    = 0.5
+local ToastBar = Instance.new("Frame", Toast)
+ToastBar.Size             = UDim2.new(0, 4, 1, 0)
+ToastBar.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+ToastBar.BorderSizePixel  = 0
+Instance.new("UICorner", ToastBar).CornerRadius = UDim.new(0, 4)
 
 local ToastLabel = Instance.new("TextLabel", Toast)
-ToastLabel.Size                 = UDim2.fromScale(1, 1)
+ToastLabel.Size                   = UDim2.new(1, -16, 1, 0)
+ToastLabel.Position               = UDim2.new(0, 12, 0, 0)
 ToastLabel.BackgroundTransparency = 1
-ToastLabel.TextColor3           = Color3.fromRGB(210, 210, 210)
-ToastLabel.Font                 = Enum.Font.Gotham
-ToastLabel.TextSize             = 13
-ToastLabel.Text                 = ""
-ToastLabel.ZIndex               = 21
+ToastLabel.TextColor3             = Color3.fromRGB(210, 210, 210)
+ToastLabel.Font                   = Enum.Font.Gotham
+ToastLabel.TextSize               = 13
+ToastLabel.Text                   = ""
+ToastLabel.ZIndex                 = 21
+ToastLabel.TextXAlignment         = Enum.TextXAlignment.Left
 
 local toastThread
 local function showToast(msg, color)
 	if toastThread then task.cancel(toastThread) end
-	ToastLabel.Text          = msg
-	ToastStroke.Color        = color or Color3.fromRGB(255, 255, 255)
-	ToastStroke.Transparency = color and 0.4 or 0.8
+	local c = color or Color3.fromRGB(60, 120, 200)
+	ToastLabel.Text      = msg
+	ToastBar.BackgroundColor3 = c
 	tween(Toast, MED, { Position = UDim2.new(0.5, 0, 1, -20) })
 	toastThread = task.delay(2.5, function()
 		tween(Toast, MED, { Position = UDim2.new(0.5, 0, 1, 60) })
@@ -384,7 +816,6 @@ TitleBar.Size             = UDim2.new(1, 0, 0, 52)
 TitleBar.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
 TitleBar.BorderSizePixel  = 0
 Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 14)
-
 local TitleCover = Instance.new("Frame", TitleBar)
 TitleCover.Size             = UDim2.new(1, 0, 0, 14)
 TitleCover.Position         = UDim2.new(0, 0, 1, -14)
@@ -392,33 +823,42 @@ TitleCover.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
 TitleCover.BorderSizePixel  = 0
 
 local TitleLabel = Instance.new("TextLabel", TitleBar)
-TitleLabel.Size                 = UDim2.new(1, -60, 1, 0)
-TitleLabel.Position             = UDim2.new(0, 20, 0, 0)
+TitleLabel.Size                   = UDim2.new(1, -60, 1, 0)
+TitleLabel.Position               = UDim2.new(0, 20, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text                 = "Shop"
-TitleLabel.TextColor3           = Color3.fromRGB(230, 230, 230)
-TitleLabel.Font                 = Enum.Font.GothamBold
-TitleLabel.TextSize             = 16
-TitleLabel.TextXAlignment       = Enum.TextXAlignment.Left
+TitleLabel.Text                   = "🛒  Shop"
+TitleLabel.TextColor3             = Color3.fromRGB(230, 230, 230)
+TitleLabel.Font                   = Enum.Font.GothamBold
+TitleLabel.TextSize               = 16
+TitleLabel.TextXAlignment         = Enum.TextXAlignment.Left
+
+local HotkeyHint = Instance.new("TextLabel", TitleBar)
+HotkeyHint.Size                   = UDim2.new(0, 120, 0, 16)
+HotkeyHint.Position               = UDim2.new(0, 20, 1, -18)
+HotkeyHint.BackgroundTransparency = 1
+HotkeyHint.Text                   = "[ ] to toggle"
+HotkeyHint.TextColor3             = Color3.fromRGB(70, 70, 70)
+HotkeyHint.Font                   = Enum.Font.Gotham
+HotkeyHint.TextSize               = 10
+HotkeyHint.TextXAlignment         = Enum.TextXAlignment.Left
 
 local CloseBtn = Instance.new("TextButton", TitleBar)
 CloseBtn.Size             = UDim2.new(0, 28, 0, 28)
 CloseBtn.Position         = UDim2.new(1, -42, 0.5, -14)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-CloseBtn.Text             = "X"
+CloseBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+CloseBtn.Text             = "✕"
 CloseBtn.TextColor3       = Color3.fromRGB(200, 200, 200)
 CloseBtn.Font             = Enum.Font.GothamBold
 CloseBtn.TextSize         = 13
 CloseBtn.BorderSizePixel  = 0
 CloseBtn.AutoButtonColor  = false
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(1, 0)
-
-CloseBtn.MouseButton1Click:Connect(function() Gui:Destroy() end)
+CloseBtn.MouseButton1Click:Connect(function() setVisible(false) end)
 CloseBtn.MouseEnter:Connect(function()
-	tween(CloseBtn, FAST, { BackgroundColor3 = Color3.fromRGB(200, 60, 60) })
+	tween(CloseBtn, FAST, { BackgroundColor3 = Color3.fromRGB(180, 50, 50) })
 end)
 CloseBtn.MouseLeave:Connect(function()
-	tween(CloseBtn, FAST, { BackgroundColor3 = Color3.fromRGB(60, 60, 60) })
+	tween(CloseBtn, FAST, { BackgroundColor3 = Color3.fromRGB(55, 55, 55) })
 end)
 
 local Divider = Instance.new("Frame", Main)
@@ -432,27 +872,27 @@ Divider.BorderSizePixel        = 0
 -- LEFT PANEL – PLAYER LIST
 ------------------------------------------------
 local Left = Instance.new("Frame", Main)
-Left.Size             = UDim2.new(0, 220, 1, -52)
+Left.Size             = UDim2.new(0, 200, 1, -52)
 Left.Position         = UDim2.new(0, 0, 0, 52)
 Left.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
 Left.BorderSizePixel  = 0
 
-local LeftDivider = Instance.new("Frame", Left)
-LeftDivider.Size                   = UDim2.new(0, 1, 1, 0)
-LeftDivider.Position               = UDim2.new(1, -1, 0, 0)
-LeftDivider.BackgroundColor3       = Color3.fromRGB(255, 255, 255)
-LeftDivider.BackgroundTransparency = 0.88
-LeftDivider.BorderSizePixel        = 0
+local LeftDiv = Instance.new("Frame", Left)
+LeftDiv.Size                   = UDim2.new(0, 1, 1, 0)
+LeftDiv.Position               = UDim2.new(1, -1, 0, 0)
+LeftDiv.BackgroundColor3       = Color3.fromRGB(255, 255, 255)
+LeftDiv.BackgroundTransparency = 0.88
+LeftDiv.BorderSizePixel        = 0
 
 local SectionLabel = Instance.new("TextLabel", Left)
-SectionLabel.Size                 = UDim2.new(1, -16, 0, 32)
-SectionLabel.Position             = UDim2.new(0, 16, 0, 8)
+SectionLabel.Size                   = UDim2.new(1, -16, 0, 32)
+SectionLabel.Position               = UDim2.new(0, 16, 0, 8)
 SectionLabel.BackgroundTransparency = 1
-SectionLabel.Text                 = "SEND GIFT TO"
-SectionLabel.TextColor3           = Color3.fromRGB(100, 100, 100)
-SectionLabel.Font                 = Enum.Font.GothamBold
-SectionLabel.TextSize             = 10
-SectionLabel.TextXAlignment       = Enum.TextXAlignment.Left
+SectionLabel.Text                   = "SEND GIFT TO"
+SectionLabel.TextColor3             = Color3.fromRGB(80, 80, 80)
+SectionLabel.Font                   = Enum.Font.GothamBold
+SectionLabel.TextSize               = 10
+SectionLabel.TextXAlignment         = Enum.TextXAlignment.Left
 
 local PlayerScroll = Instance.new("ScrollingFrame", Left)
 PlayerScroll.Size                 = UDim2.new(1, 0, 1, -44)
@@ -468,83 +908,72 @@ local PlayerLayout = Instance.new("UIListLayout", PlayerScroll)
 PlayerLayout.Padding   = UDim.new(0, 2)
 PlayerLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-local PlayerPadding = Instance.new("UIPadding", PlayerScroll)
-PlayerPadding.PaddingLeft   = UDim.new(0, 8)
-PlayerPadding.PaddingRight  = UDim.new(0, 8)
-PlayerPadding.PaddingTop    = UDim.new(0, 4)
-PlayerPadding.PaddingBottom = UDim.new(0, 8)
+local PlayerPad = Instance.new("UIPadding", PlayerScroll)
+PlayerPad.PaddingLeft   = UDim.new(0, 8)
+PlayerPad.PaddingRight  = UDim.new(0, 8)
+PlayerPad.PaddingTop    = UDim.new(0, 4)
+PlayerPad.PaddingBottom = UDim.new(0, 8)
 
 ------------------------------------------------
 -- PLAYER SELECTION
--- When a player is selected, we broadcast to all cards so they can
--- show or hide their Gift button accordingly.
 ------------------------------------------------
 local SelectedPlayer = LocalPlayer
 local SelectedButton = nil
-
--- Callbacks registered by each card to react to player selection changes
 local onPlayerChangedCallbacks = {}
 
-local function notifyPlayerChanged(newPlayer)
-	for _, cb in ipairs(onPlayerChangedCallbacks) do
-		cb(newPlayer)
-	end
+local function notifyPlayerChanged(p)
+	for _, cb in ipairs(onPlayerChangedCallbacks) do cb(p) end
 end
 
 local function getInitials(name)
 	local up = string.gmatch(name, "%u")
 	local a, b = up(), up()
 	if a and b then return a .. b
-	elseif a     then return a .. string.sub(name, 2, 2):upper()
+	elseif a then return a .. string.sub(name,2,2):upper()
 	end
-	return string.sub(name, 1, 2):upper()
+	return string.sub(name,1,2):upper()
 end
 
 local function selectPlayer(plr, btn)
 	if SelectedButton then
-		tween(SelectedButton, FAST, { BackgroundColor3 = Color3.fromRGB(28, 28, 28) })
-		local lbl = SelectedButton:FindFirstChild("NameLabel")
-		if lbl then tween(lbl, FAST, { TextColor3 = Color3.fromRGB(180, 180, 180) }) end
+		tween(SelectedButton, FAST, { BackgroundColor3 = Color3.fromRGB(26, 26, 26) })
+		local l = SelectedButton:FindFirstChild("NameLabel")
+		if l then tween(l, FAST, { TextColor3 = Color3.fromRGB(160, 160, 160) }) end
 	end
-	SelectedPlayer = plr
-	SelectedButton = btn
-	tween(btn, FAST, { BackgroundColor3 = Color3.fromRGB(40, 70, 140) })
-	local lbl = btn:FindFirstChild("NameLabel")
-	if lbl then tween(lbl, FAST, { TextColor3 = Color3.fromRGB(150, 190, 255) }) end
-
-	-- Tell every card about the new selection
+	SelectedPlayer, SelectedButton = plr, btn
+	tween(btn, FAST, { BackgroundColor3 = Color3.fromRGB(35, 65, 140) })
+	local l = btn:FindFirstChild("NameLabel")
+	if l then tween(l, FAST, { TextColor3 = Color3.fromRGB(140, 185, 255) }) end
 	notifyPlayerChanged(plr)
 end
 
 local function createPlayerButton(plr)
 	local btn = Instance.new("TextButton", PlayerScroll)
 	btn.Name                   = "PlayerBtn_" .. plr.Name
-	btn.Size                   = UDim2.new(1, 0, 0, 54)
-	btn.BackgroundColor3       = Color3.fromRGB(28, 28, 28)
+	btn.Size                   = UDim2.new(1, 0, 0, 50)
+	btn.BackgroundColor3       = Color3.fromRGB(26, 26, 26)
 	btn.BackgroundTransparency = 0
 	btn.Text                   = ""
 	btn.AutoButtonColor        = false
 	btn.BorderSizePixel        = 0
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
 
-	-- Avatar frame (circle)
-	local avFrame = Instance.new("Frame", btn)
-	avFrame.Name             = "Avatar"
-	avFrame.Size             = UDim2.new(0, 34, 0, 34)
-	avFrame.Position         = UDim2.new(0, 10, 0.5, -17)
-	avFrame.BackgroundColor3 = Color3.fromRGB(30, 35, 55)
-	avFrame.BorderSizePixel  = 0
-	Instance.new("UICorner", avFrame).CornerRadius = UDim.new(1, 0)
+	local avF = Instance.new("Frame", btn)
+	avF.Size             = UDim2.new(0, 32, 0, 32)
+	avF.Position         = UDim2.new(0, 9, 0.5, -16)
+	avF.BackgroundColor3 = Color3.fromRGB(28, 33, 55)
+	avF.BorderSizePixel  = 0
+	Instance.new("UICorner", avF).CornerRadius = UDim.new(1, 0)
 
-	local initLabel = Instance.new("TextLabel", avFrame)
-	initLabel.Size                  = UDim2.fromScale(1, 1)
-	initLabel.BackgroundTransparency = 1
-	initLabel.Text                  = getInitials(plr.Name)
-	initLabel.TextColor3            = Color3.fromRGB(150, 190, 255)
-	initLabel.Font                  = Enum.Font.GothamBold
-	initLabel.TextSize              = 12
+	local initL = Instance.new("TextLabel", avF)
+	initL.Size                   = UDim2.fromScale(1, 1)
+	initL.BackgroundTransparency = 1
+	initL.Text                   = getInitials(plr.Name)
+	initL.TextColor3             = Color3.fromRGB(140, 185, 255)
+	initL.Font                   = Enum.Font.GothamBold
+	initL.TextSize               = 11
 
-	local avImg = Instance.new("ImageLabel", avFrame)
+	local avImg = Instance.new("ImageLabel", avF)
 	avImg.Size                   = UDim2.fromScale(1, 1)
 	avImg.BackgroundTransparency = 1
 	avImg.Image                  = ""
@@ -554,77 +983,61 @@ local function createPlayerButton(plr)
 
 	task.spawn(function()
 		local ok, url = pcall(function()
-			return Players:GetUserThumbnailAsync(
-				plr.UserId,
-				Enum.ThumbnailType.HeadShot,
-				Enum.ThumbnailSize.Size48x48
-			)
+			return Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
 		end)
 		if ok and url and url ~= "" then
-			avImg.Image            = url
-			avImg.ImageTransparency = 0
-			initLabel.Visible      = false
+			avImg.Image, avImg.ImageTransparency = url, 0
+			initL.Visible = false
 		end
 	end)
 
-	local nameLabel = Instance.new("TextLabel", btn)
-	nameLabel.Name             = "NameLabel"
-	nameLabel.Size             = UDim2.new(1, -54, 0, 20)
-	nameLabel.Position         = UDim2.new(0, 52, 0, 8)
-	nameLabel.BackgroundTransparency = 1
-	nameLabel.Text             = plr.Name
-	nameLabel.TextColor3       = Color3.fromRGB(180, 180, 180)
-	nameLabel.Font             = Enum.Font.Gotham
-	nameLabel.TextSize         = 13
-	nameLabel.TextXAlignment   = Enum.TextXAlignment.Left
-	nameLabel.TextTruncate     = Enum.TextTruncate.AtEnd
+	local nameL = Instance.new("TextLabel", btn)
+	nameL.Name             = "NameLabel"
+	nameL.Size             = UDim2.new(1, -50, 0, 18)
+	nameL.Position         = UDim2.new(0, 48, 0, 7)
+	nameL.BackgroundTransparency = 1
+	nameL.Text             = plr.Name
+	nameL.TextColor3       = Color3.fromRGB(160, 160, 160)
+	nameL.Font             = Enum.Font.Gotham
+	nameL.TextSize         = 12
+	nameL.TextXAlignment   = Enum.TextXAlignment.Left
+	nameL.TextTruncate     = Enum.TextTruncate.AtEnd
 
 	if plr == LocalPlayer then
-		local youLabel = Instance.new("TextLabel", btn)
-		youLabel.Size             = UDim2.new(1, -54, 0, 14)
-		youLabel.Position         = UDim2.new(0, 52, 0, 30)
-		youLabel.BackgroundTransparency = 1
-		youLabel.Text             = "you"
-		youLabel.TextColor3       = Color3.fromRGB(80, 80, 80)
-		youLabel.Font             = Enum.Font.Gotham
-		youLabel.TextSize         = 11
-		youLabel.TextXAlignment   = Enum.TextXAlignment.Left
+		local youL = Instance.new("TextLabel", btn)
+		youL.Size             = UDim2.new(1, -50, 0, 13)
+		youL.Position         = UDim2.new(0, 48, 0, 28)
+		youL.BackgroundTransparency = 1
+		youL.Text             = "you"
+		youL.TextColor3       = Color3.fromRGB(60, 60, 60)
+		youL.Font             = Enum.Font.Gotham
+		youL.TextSize         = 10
+		youL.TextXAlignment   = Enum.TextXAlignment.Left
 	end
 
 	btn.MouseEnter:Connect(function()
-		if btn ~= SelectedButton then
-			tween(btn, FAST, { BackgroundColor3 = Color3.fromRGB(35, 35, 35) })
-		end
+		if btn ~= SelectedButton then tween(btn, FAST, { BackgroundColor3 = Color3.fromRGB(32, 32, 32) }) end
 	end)
 	btn.MouseLeave:Connect(function()
-		if btn ~= SelectedButton then
-			tween(btn, FAST, { BackgroundColor3 = Color3.fromRGB(28, 28, 28) })
-		end
+		if btn ~= SelectedButton then tween(btn, FAST, { BackgroundColor3 = Color3.fromRGB(26, 26, 26) }) end
 	end)
-	btn.MouseButton1Click:Connect(function()
-		selectPlayer(plr, btn)
-	end)
-
+	btn.MouseButton1Click:Connect(function() selectPlayer(plr, btn) end)
 	return btn
 end
 
 for _, p in ipairs(Players:GetPlayers()) do
-	local btn = createPlayerButton(p)
-	if p == LocalPlayer then
-		task.defer(function() selectPlayer(p, btn) end)
-	end
+	local b = createPlayerButton(p)
+	if p == LocalPlayer then task.defer(function() selectPlayer(p, b) end) end
 end
-
 Players.PlayerAdded:Connect(function(p) createPlayerButton(p) end)
-
 Players.PlayerRemoving:Connect(function(p)
-	local btn = PlayerScroll:FindFirstChild("PlayerBtn_" .. p.Name)
-	if btn then
-		if btn == SelectedButton then
-			local fallback = PlayerScroll:FindFirstChild("PlayerBtn_" .. LocalPlayer.Name)
-			if fallback then selectPlayer(LocalPlayer, fallback) end
+	local b = PlayerScroll:FindFirstChild("PlayerBtn_" .. p.Name)
+	if b then
+		if b == SelectedButton then
+			local fb = PlayerScroll:FindFirstChild("PlayerBtn_" .. LocalPlayer.Name)
+			if fb then selectPlayer(LocalPlayer, fb) end
 		end
-		btn:Destroy()
+		b:Destroy()
 	end
 end)
 
@@ -632,16 +1045,15 @@ end)
 -- RIGHT PANEL
 ------------------------------------------------
 local Right = Instance.new("Frame", Main)
-Right.Size                   = UDim2.new(1, -220, 1, -52)
-Right.Position               = UDim2.new(0, 220, 0, 52)
+Right.Size                   = UDim2.new(1, -200, 1, -52)
+Right.Position               = UDim2.new(0, 200, 0, 52)
 Right.BackgroundTransparency = 1
 Right.BorderSizePixel        = 0
 
--- Horizontally scrollable filter bar
+-- Filter bar
 local FilterBar = Instance.new("Frame", Right)
 FilterBar.Size                   = UDim2.new(1, 0, 0, 46)
 FilterBar.BackgroundTransparency = 1
-FilterBar.BorderSizePixel        = 0
 
 local FilterScroll = Instance.new("ScrollingFrame", FilterBar)
 FilterScroll.Size                 = UDim2.new(1, -24, 1, 0)
@@ -655,19 +1067,17 @@ FilterScroll.BorderSizePixel      = 0
 FilterScroll.ElasticBehavior      = Enum.ElasticBehavior.Never
 
 local FilterLayout = Instance.new("UIListLayout", FilterScroll)
-FilterLayout.FillDirection       = Enum.FillDirection.Horizontal
-FilterLayout.Padding             = UDim.new(0, 6)
-FilterLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
-FilterLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-FilterLayout.SortOrder           = Enum.SortOrder.LayoutOrder
+FilterLayout.FillDirection     = Enum.FillDirection.Horizontal
+FilterLayout.Padding           = UDim.new(0, 6)
+FilterLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+FilterLayout.SortOrder         = Enum.SortOrder.LayoutOrder
 
 local FilterPad = Instance.new("UIPadding", FilterScroll)
 FilterPad.PaddingTop    = UDim.new(0, 8)
 FilterPad.PaddingBottom = UDim.new(0, 8)
 FilterPad.PaddingLeft   = UDim.new(0, 2)
-FilterPad.PaddingRight  = UDim.new(0, 8)
 
--- Product grid
+-- Product grid  — cards are taller now to fit qty selector + buttons
 local ProductScroll = Instance.new("ScrollingFrame", Right)
 ProductScroll.Size                 = UDim2.new(1, 0, 1, -46)
 ProductScroll.Position             = UDim2.new(0, 0, 0, 46)
@@ -679,7 +1089,7 @@ ProductScroll.AutomaticCanvasSize  = Enum.AutomaticSize.Y
 ProductScroll.BorderSizePixel      = 0
 
 local Grid = Instance.new("UIGridLayout", ProductScroll)
-Grid.CellSize    = UDim2.new(0, 220, 0, 150)  -- slightly taller to fit price label
+Grid.CellSize    = UDim2.new(0, 230, 0, 185)
 Grid.CellPadding = UDim2.new(0, 10, 0, 10)
 Grid.SortOrder   = Enum.SortOrder.LayoutOrder
 
@@ -692,248 +1102,356 @@ GridPad.PaddingRight  = UDim.new(0, 12)
 ------------------------------------------------
 -- FILTER STATE
 ------------------------------------------------
-local ActiveFilter = "All"
+local ActiveFilter  = "All"
 local FilterButtons = {}
 local ProductCards  = {}
 
 local function applyFilter(cat)
 	ActiveFilter = cat
 	for _, fb in pairs(FilterButtons) do
-		local isActive = (fb.Category == cat)
-		local col = isActive
-			and (cat ~= "All" and categoryColor(cat) or Color3.fromRGB(100, 100, 115))
-			or Color3.fromRGB(38, 38, 38)
+		local active = (fb.Category == cat)
+		local col = active
+			and (cat ~= "All" and categoryColor(cat) or Color3.fromRGB(90, 90, 105))
+			or Color3.fromRGB(36, 36, 36)
 		tween(fb.Button, FAST, { BackgroundColor3 = col })
-		fb.Button.TextColor3 = isActive
-			and Color3.fromRGB(240, 240, 240)
-			or Color3.fromRGB(130, 130, 130)
+		fb.Button.TextColor3 = active and Color3.fromRGB(240,240,240) or Color3.fromRGB(120,120,120)
 	end
-	for _, entry in pairs(ProductCards) do
-		entry.Card.Visible = (cat == "All") or (entry.Category == cat)
+	for _, e in pairs(ProductCards) do
+		e.Card.Visible = (cat == "All") or (e.Category == cat)
 	end
 end
 
-------------------------------------------------
--- FILTER BUTTONS
-------------------------------------------------
 for i, cat in ipairs(Categories) do
 	local fb = Instance.new("TextButton", FilterScroll)
-	fb.LayoutOrder     = i
-	fb.AutoButtonColor = false
-	fb.BackgroundColor3 = (cat == "All")
-		and Color3.fromRGB(80, 80, 90)
-		or Color3.fromRGB(38, 38, 38)
-	fb.TextColor3      = (cat == "All")
-		and Color3.fromRGB(240, 240, 240)
-		or Color3.fromRGB(130, 130, 130)
-	fb.Font            = Enum.Font.Gotham
-	fb.TextSize        = 12
-	fb.Text            = cat
-	fb.Size            = UDim2.new(0, 0, 0, 30)
-	fb.AutomaticSize   = Enum.AutomaticSize.X
-	fb.BorderSizePixel = 0
+	fb.LayoutOrder      = i
+	fb.AutoButtonColor  = false
+	fb.BackgroundColor3 = cat == "All" and Color3.fromRGB(75,75,90) or Color3.fromRGB(36,36,36)
+	fb.TextColor3       = cat == "All" and Color3.fromRGB(240,240,240) or Color3.fromRGB(120,120,120)
+	fb.Font             = Enum.Font.Gotham
+	fb.TextSize         = 12
+	fb.Text             = cat
+	fb.Size             = UDim2.new(0, 0, 0, 28)
+	fb.AutomaticSize    = Enum.AutomaticSize.X
+	fb.BorderSizePixel  = 0
 	Instance.new("UICorner", fb).CornerRadius = UDim.new(1, 0)
-
-	local fbPad = Instance.new("UIPadding", fb)
-	fbPad.PaddingLeft  = UDim.new(0, 14)
-	fbPad.PaddingRight = UDim.new(0, 14)
+	local p = Instance.new("UIPadding", fb)
+	p.PaddingLeft, p.PaddingRight = UDim.new(0,12), UDim.new(0,12)
 
 	fb.MouseEnter:Connect(function()
-		if ActiveFilter ~= cat then
-			tween(fb, FAST, { BackgroundColor3 = Color3.fromRGB(52, 52, 58) })
-		end
+		if ActiveFilter ~= cat then tween(fb, FAST, { BackgroundColor3 = Color3.fromRGB(48, 48, 54) }) end
 	end)
 	fb.MouseLeave:Connect(function()
-		if ActiveFilter ~= cat then
-			tween(fb, FAST, { BackgroundColor3 = Color3.fromRGB(38, 38, 38) })
-		end
+		if ActiveFilter ~= cat then tween(fb, FAST, { BackgroundColor3 = Color3.fromRGB(36, 36, 36) }) end
 	end)
-	fb.MouseButton1Click:Connect(function()
-		applyFilter(cat)
-	end)
-
+	fb.MouseButton1Click:Connect(function() applyFilter(cat) end)
 	table.insert(FilterButtons, { Button = fb, Category = cat })
 end
 
 ------------------------------------------------
--- PRODUCT CARD BUILDER
+-- CARD BUILDER  (grouped with qty selector)
 ------------------------------------------------
-
--- Returns a buy button that spans full width when alone, or half-width at xOff
-local function makeButton(parent, text, xOff, width, color)
-	local btn = Instance.new("TextButton", parent)
-	btn.Size             = UDim2.new(width, -4, 0, 28)
-	btn.Position         = UDim2.new(xOff, 4, 1, -34)
-	btn.BackgroundColor3 = color
-	btn.Text             = text
-	btn.TextColor3       = Color3.fromRGB(220, 220, 220)
-	btn.Font             = Enum.Font.GothamBold
-	btn.TextSize         = 12
-	btn.AutoButtonColor  = false
-	btn.BorderSizePixel  = 0
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-	return btn
-end
-
-local function setButtonLoading(btn, loading, originalText)
+local function setLoading(btn, loading, label)
 	btn.Active                 = not loading
-	btn.Text                   = loading and "..." or originalText
-	btn.BackgroundTransparency = loading and 0.5 or 0
+	btn.Text                   = loading and "…" or label
+	btn.BackgroundTransparency = loading and 0.55 or 0
 end
 
-local function createProductCard(data)
-	local accentColor = categoryColor(data.Category)
-	local giftable    = data.isGiftable == true  -- explicit opt-in
+local function createCard(data)
+	local accent   = categoryColor(data.Category)
+	local variants = data.Variants or {}
+	local prices   = data.Prices   or {}
+	local giftable = data.isGiftable == true
+
+	-- Filter out entries with no NormalId (pass-store items)
+	local usable = {}
+	for _, v in ipairs(variants) do
+		if v.NormalId then table.insert(usable, v) end
+	end
+
+	-- Selected variant index
+	local selIdx = 1
+	if #usable == 0 then
+		-- Pass-store card: show info only
+		selIdx = 0
+	end
 
 	local card = Instance.new("Frame", ProductScroll)
-	card.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+	card.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 	card.BorderSizePixel  = 0
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
 
 	local stroke = Instance.new("UIStroke", card)
-	stroke.Color        = Color3.fromRGB(255, 255, 255)
+	stroke.Color        = Color3.fromRGB(255,255,255)
 	stroke.Transparency = 0.88
 	stroke.Thickness    = 0.5
-
 	card.MouseEnter:Connect(function()
-		tween(stroke, FAST, { Color = accentColor, Transparency = 0.45 })
+		tween(stroke, FAST, { Color = accent, Transparency = 0.42 })
 	end)
 	card.MouseLeave:Connect(function()
-		tween(stroke, FAST, { Color = Color3.fromRGB(255, 255, 255), Transparency = 0.88 })
+		tween(stroke, FAST, { Color = Color3.fromRGB(255,255,255), Transparency = 0.88 })
 	end)
 
-	-- Category badge
+	-- Top accent bar
+	local topBar = Instance.new("Frame", card)
+	topBar.Size             = UDim2.new(1, 0, 0, 3)
+	topBar.BackgroundColor3 = accent
+	topBar.BorderSizePixel  = 0
+	Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 10)
+	local topCover = Instance.new("Frame", topBar)
+	topCover.Size             = UDim2.new(1, 0, 0.5, 0)
+	topCover.Position         = UDim2.new(0, 0, 0.5, 0)
+	topCover.BackgroundColor3 = accent
+	topCover.BorderSizePixel  = 0
+
+	-- Badge
 	local badge = Instance.new("TextLabel", card)
-	badge.Size                   = UDim2.new(0, 0, 0, 18)
+	badge.Size                   = UDim2.new(0, 0, 0, 16)
 	badge.AutomaticSize          = Enum.AutomaticSize.X
 	badge.Position               = UDim2.new(0, 10, 0, 10)
-	badge.BackgroundColor3       = accentColor
-	badge.BackgroundTransparency = 0.75
+	badge.BackgroundColor3       = accent
+	badge.BackgroundTransparency = 0.78
 	badge.Text                   = data.Category
-	badge.TextColor3             = accentColor
+	badge.TextColor3             = accent
 	badge.Font                   = Enum.Font.GothamBold
-	badge.TextSize               = 10
+	badge.TextSize               = 9
 	badge.BorderSizePixel        = 0
 	Instance.new("UICorner", badge).CornerRadius = UDim.new(1, 0)
 	local badgePad = Instance.new("UIPadding", badge)
-	badgePad.PaddingLeft  = UDim.new(0, 8)
-	badgePad.PaddingRight = UDim.new(0, 8)
+	badgePad.PaddingLeft, badgePad.PaddingRight = UDim.new(0,6), UDim.new(0,6)
 
-	-- Product name
-	local title = Instance.new("TextLabel", card)
-	title.Size                   = UDim2.new(1, -20, 0, 44)
-	title.Position               = UDim2.new(0, 10, 0, 32)
-	title.BackgroundTransparency = 1
-	title.Text                   = data.Display
-	title.TextColor3             = Color3.fromRGB(210, 210, 210)
-	title.Font                   = Enum.Font.GothamBold
-	title.TextSize               = 14
-	title.TextXAlignment         = Enum.TextXAlignment.Left
-	title.TextYAlignment         = Enum.TextYAlignment.Top
-	title.TextWrapped            = true
+	-- Name
+	local titleL = Instance.new("TextLabel", card)
+	titleL.Size                   = UDim2.new(1, -16, 0, 38)
+	titleL.Position               = UDim2.new(0, 8, 0, 30)
+	titleL.BackgroundTransparency = 1
+	titleL.Text                   = data.Display
+	titleL.TextColor3             = Color3.fromRGB(215, 215, 215)
+	titleL.Font                   = Enum.Font.GothamBold
+	titleL.TextSize               = 13
+	titleL.TextXAlignment         = Enum.TextXAlignment.Left
+	titleL.TextYAlignment         = Enum.TextYAlignment.Top
+	titleL.TextWrapped            = true
 
-	-- Price label (Robux icon approximated with "R$" text)
-	local priceLabel = Instance.new("TextLabel", card)
-	priceLabel.Size                   = UDim2.new(1, -20, 0, 18)
-	priceLabel.Position               = UDim2.new(0, 10, 0, 78)
-	priceLabel.BackgroundTransparency = 1
-	priceLabel.Text                   = data.Price and formatPrice(data.Price) or "Free"
-	priceLabel.TextColor3             = Color3.fromRGB(100, 200, 100)   -- green for Robux feel
-	priceLabel.Font                   = Enum.Font.GothamBold
-	priceLabel.TextSize               = 13
-	priceLabel.TextXAlignment         = Enum.TextXAlignment.Left
+	-- Price label (updates with variant)
+	local priceL = Instance.new("TextLabel", card)
+	priceL.Size                   = UDim2.new(1, -16, 0, 16)
+	priceL.Position               = UDim2.new(0, 8, 0, 70)
+	priceL.BackgroundTransparency = 1
+	priceL.TextColor3             = Color3.fromRGB(90, 200, 90)
+	priceL.Font                   = Enum.Font.GothamBold
+	priceL.TextSize               = 12
+	priceL.TextXAlignment         = Enum.TextXAlignment.Left
 
-	-- Buttons: layout depends on whether this item is giftable
-	-- • Giftable  → Buy (48%) | Gift (48%) — gift hidden when self selected
-	-- • Not giftable → Buy (full width)
-	local buyBtn, giftBtn
+	------------------------------------------------
+	-- QUANTITY SELECTOR ROW (only when > 1 variant)
+	------------------------------------------------
+	local qtyRow = Instance.new("Frame", card)
+	qtyRow.Size                   = UDim2.new(1, -16, 0, 26)
+	qtyRow.Position               = UDim2.new(0, 8, 0, 92)
+	qtyRow.BackgroundTransparency = 1
+	qtyRow.BorderSizePixel        = 0
 
-	if giftable then
-		buyBtn  = makeButton(card, "Buy",    0,    0.5, Color3.fromRGB(30,  60, 130))
-		giftBtn = makeButton(card, "Gift →", 0.5,  0.5, Color3.fromRGB(100, 35,  80))
+	local qtyLayout = Instance.new("UIListLayout", qtyRow)
+	qtyLayout.FillDirection       = Enum.FillDirection.Horizontal
+	qtyLayout.Padding             = UDim.new(0, 4)
+	qtyLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
 
-		-- Immediately set correct visibility based on current selection
-		giftBtn.Visible = (SelectedPlayer ~= LocalPlayer)
+	local qtyBtns = {}
 
-		-- Re-evaluate whenever the selected player changes
-		table.insert(onPlayerChangedCallbacks, function(newPlayer)
-			if not card.Parent then return end  -- card was destroyed
-			local isSelf = (newPlayer == LocalPlayer)
-			giftBtn.Visible = not isSelf
-			-- Expand Buy to full width when Gift is hidden
-			buyBtn.Size     = UDim2.new(isSelf and 0.97 or 0.5, -4, 0, 28)
-		end)
-	else
-		-- Non-giftable: single full-width Buy button
-		buyBtn = makeButton(card, "Buy", 0, 0.97, Color3.fromRGB(30, 60, 130))
+	local function updateSelection(idx)
+		selIdx = idx
+		local v   = usable[idx]
+		local qty = v and v.Qty or 1
+		local p   = prices[qty]
+		priceL.Text = p and formatPrice(p) or "Free"
+		for i, qb in ipairs(qtyBtns) do
+			local active = (i == idx)
+			tween(qb, FAST, {
+				BackgroundColor3 = active and accent or Color3.fromRGB(36, 36, 36),
+				TextColor3       = active and Color3.fromRGB(20,20,20) or Color3.fromRGB(140,140,140),
+			})
+		end
 	end
 
-	-- BUY handler
-	buyBtn.MouseButton1Click:Connect(function()
-		if not data.NormalId then
-			showToast("This item has no purchasable ID.", Color3.fromRGB(200, 80, 80))
-			return
+	if #usable > 1 then
+		for i, v in ipairs(usable) do
+			local label = v.Label or ("×" .. tostring(v.Qty))
+			local qb = Instance.new("TextButton", qtyRow)
+			qb.Size             = UDim2.new(0, 0, 1, 0)
+			qb.AutomaticSize    = Enum.AutomaticSize.X
+			qb.BackgroundColor3 = Color3.fromRGB(36, 36, 36)
+			qb.TextColor3       = Color3.fromRGB(140, 140, 140)
+			qb.Font             = Enum.Font.GothamBold
+			qb.TextSize         = 11
+			qb.Text             = label
+			qb.AutoButtonColor  = false
+			qb.BorderSizePixel  = 0
+			Instance.new("UICorner", qb).CornerRadius = UDim.new(1, 0)
+			local qp = Instance.new("UIPadding", qb)
+			qp.PaddingLeft, qp.PaddingRight = UDim.new(0,8), UDim.new(0,8)
+			local _i = i
+			qb.MouseButton1Click:Connect(function() updateSelection(_i) end)
+			table.insert(qtyBtns, qb)
 		end
-		setButtonLoading(buyBtn, true, "Buy")
-		task.spawn(function()
-			local ok, err = pcall(function()
-				PurchaseRemote:InvokeServer(data.NormalId)
-			end)
-			setButtonLoading(buyBtn, false, "Buy")
-			if ok then
-				showToast("Purchased " .. data.Display, categoryColor(data.Category))
-			else
-				showToast("Purchase failed: " .. tostring(err), Color3.fromRGB(200, 80, 80))
-			end
-		end)
-	end)
+	else
+		-- single variant: label shows qty inline in price
+		qtyRow.Visible = false
+	end
 
-	-- GIFT handler (only wired when giftable)
-	if giftable and giftBtn then
-		giftBtn.MouseButton1Click:Connect(function()
-			-- Extra runtime guard: never gift to self even if button is visible
-			if SelectedPlayer == LocalPlayer then
-				showToast("You can't gift to yourself.", Color3.fromRGB(200, 80, 80))
+	-- Initialize display
+	if #usable > 0 then
+		updateSelection(1)
+	else
+		priceL.Text = formatPrice(data.Prices and next(data.Prices) and select(2, next(data.Prices))) or "See Store"
+		qtyRow.Visible = false
+	end
+
+	------------------------------------------------
+	-- ACTION BUTTONS
+	------------------------------------------------
+	local btnY = 0  -- offset from bottom
+	local btnH = 30
+
+	local buyBtn, giftBtn
+
+	local function makeBtnFrame()
+		local f = Instance.new("Frame", card)
+		f.Size             = UDim2.new(1, -16, 0, btnH)
+		f.Position         = UDim2.new(0, 8, 1, -(btnH + 10))
+		f.BackgroundTransparency = 1
+		f.BorderSizePixel  = 0
+		return f
+	end
+
+	if #usable > 0 then
+		local btnFrame = makeBtnFrame()
+		local btnLayout = Instance.new("UIListLayout", btnFrame)
+		btnLayout.FillDirection = Enum.FillDirection.Horizontal
+		btnLayout.Padding       = UDim.new(0, 6)
+
+		-- Buy button
+		buyBtn = Instance.new("TextButton", btnFrame)
+		buyBtn.BackgroundColor3 = Color3.fromRGB(28, 58, 130)
+		buyBtn.TextColor3       = Color3.fromRGB(210, 210, 210)
+		buyBtn.Font             = Enum.Font.GothamBold
+		buyBtn.TextSize         = 12
+		buyBtn.Text             = "Buy"
+		buyBtn.AutoButtonColor  = false
+		buyBtn.BorderSizePixel  = 0
+		buyBtn.Size             = UDim2.new(giftable and 0.5 or 1, giftable and -3 or 0, 1, 0)
+		Instance.new("UICorner", buyBtn).CornerRadius = UDim.new(0, 6)
+
+		buyBtn.MouseEnter:Connect(function()
+			tween(buyBtn, FAST, { BackgroundColor3 = Color3.fromRGB(40, 80, 180) })
+		end)
+		buyBtn.MouseLeave:Connect(function()
+			tween(buyBtn, FAST, { BackgroundColor3 = Color3.fromRGB(28, 58, 130) })
+		end)
+
+		if giftable then
+			giftBtn = Instance.new("TextButton", btnFrame)
+			giftBtn.BackgroundColor3 = Color3.fromRGB(90, 30, 80)
+			giftBtn.TextColor3       = Color3.fromRGB(210, 210, 210)
+			giftBtn.Font             = Enum.Font.GothamBold
+			giftBtn.TextSize         = 12
+			giftBtn.Text             = "🎁 Gift"
+			giftBtn.AutoButtonColor  = false
+			giftBtn.BorderSizePixel  = 0
+			giftBtn.Size             = UDim2.new(0.5, -3, 1, 0)
+			Instance.new("UICorner", giftBtn).CornerRadius = UDim.new(0, 6)
+
+			giftBtn.MouseEnter:Connect(function()
+				tween(giftBtn, FAST, { BackgroundColor3 = Color3.fromRGB(140, 45, 115) })
+			end)
+			giftBtn.MouseLeave:Connect(function()
+				tween(giftBtn, FAST, { BackgroundColor3 = Color3.fromRGB(90, 30, 80) })
+			end)
+
+			-- Show/hide based on selection
+			local function refreshGiftVis(plr)
+				if not card.Parent then return end
+				local isSelf = (plr == LocalPlayer)
+				giftBtn.Visible = not isSelf
+				buyBtn.Size     = UDim2.new(isSelf and 1 or 0.5, isSelf and 0 or -3, 1, 0)
+			end
+			refreshGiftVis(SelectedPlayer)
+			table.insert(onPlayerChangedCallbacks, refreshGiftVis)
+		end
+
+		-- BUY
+		buyBtn.MouseButton1Click:Connect(function()
+			if selIdx == 0 then return end
+			local v = usable[selIdx]
+			if not v or not v.NormalId then
+				showToast("No purchasable ID for this item.", Color3.fromRGB(200,80,80))
 				return
 			end
-			local target = Players:GetPlayerByUserId(SelectedPlayer.UserId)
-			if not target then
-				showToast("That player has left the game.", Color3.fromRGB(200, 80, 80))
-				return
-			end
-			if not data.NormalId then
-				showToast("This item cannot be gifted.", Color3.fromRGB(200, 80, 80))
-				return
-			end
-			setButtonLoading(giftBtn, true, "Gift →")
+			setLoading(buyBtn, true, "Buy")
 			task.spawn(function()
-				local ok, err = pcall(function()
-					GiftRemote:FireServer({
-						productId    = data.NormalId,
-						targetUserId = target.UserId,
-					})
-				end)
-				setButtonLoading(giftBtn, false, "Gift →")
+				local ok, err = pcall(function() PurchaseRemote:InvokeServer(v.NormalId) end)
+				setLoading(buyBtn, false, "Buy")
 				if ok then
-					showToast("Gifted " .. data.Display .. " to " .. target.Name, categoryColor(data.Category))
+					showToast("Purchased " .. data.Display, accent)
 				else
-					showToast("Gift failed: " .. tostring(err), Color3.fromRGB(200, 80, 80))
+					showToast("Purchase failed: " .. tostring(err), Color3.fromRGB(200,80,80))
 				end
 			end)
 		end)
+
+		-- GIFT
+		if giftable and giftBtn then
+			giftBtn.MouseButton1Click:Connect(function()
+				if SelectedPlayer == LocalPlayer then
+					showToast("You can't gift to yourself.", Color3.fromRGB(200,80,80)); return
+				end
+				local target = Players:GetPlayerByUserId(SelectedPlayer.UserId)
+				if not target then
+					showToast("That player has left the game.", Color3.fromRGB(200,80,80)); return
+				end
+				local v = usable[selIdx]
+				if not v or not v.NormalId then
+					showToast("This item cannot be gifted.", Color3.fromRGB(200,80,80)); return
+				end
+				setLoading(giftBtn, true, "🎁 Gift")
+				task.spawn(function()
+					local ok, err = pcall(function()
+						GiftRemote:FireServer({ productId = v.NormalId, targetUserId = target.UserId })
+					end)
+					setLoading(giftBtn, false, "🎁 Gift")
+					if ok then
+						showToast("Gifted " .. data.Display .. " → " .. target.Name, accent)
+					else
+						showToast("Gift failed: " .. tostring(err), Color3.fromRGB(200,80,80))
+					end
+				end)
+			end)
+		end
+	else
+		-- Pass-store: show "Game Pass" label
+		local passL = Instance.new("TextLabel", card)
+		passL.Size                   = UDim2.new(1, -16, 0, btnH)
+		passL.Position               = UDim2.new(0, 8, 1, -(btnH + 10))
+		passL.BackgroundTransparency = 1
+		passL.Text                   = "Available in Game Pass Store"
+		passL.TextColor3             = Color3.fromRGB(100, 100, 100)
+		passL.Font                   = Enum.Font.Gotham
+		passL.TextSize               = 11
+		passL.TextXAlignment         = Enum.TextXAlignment.Center
 	end
 
 	table.insert(ProductCards, { Card = card, Category = data.Category })
 end
 
-for _, data in pairs(Products) do
-	createProductCard(data)
+for _, data in ipairs(Products) do
+	createCard(data)
 end
 
 applyFilter("All")
 
--- Entry animation
-Main.Position               = UDim2.new(0.5, 0, 0.58, 0)
+------------------------------------------------
+-- ENTRY ANIMATION
+------------------------------------------------
+Main.Position               = UDim2.new(0.5, 0, 0.56, 0)
 Main.BackgroundTransparency = 1
 tween(Main, MED, {
 	Position               = UDim2.new(0.5, 0, 0.5, 0),
