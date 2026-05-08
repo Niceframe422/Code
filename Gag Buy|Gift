@@ -49,6 +49,16 @@ local Products = {
 		Prices      = { [1]=75; [3]=200; [10]=600 };
 	},
 	{
+	Group       = "Premium Seed Sacks";
+		Display     = "Premium Seed Sacks";
+		Category    = "Seed Pack";
+		isGiftable  = true;
+		Variants    = {
+			{ Qty = 10; NormalId = 3273679012; GiftId = 3273679009 };
+		};
+		Prices      = { [10]=1699;};
+	},
+	{
 		Group       = "Bug Egg";
 		Display     = "Bug Egg";
 		Category    = "Regular Eggs";
