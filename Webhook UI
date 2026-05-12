@@ -2810,7 +2810,7 @@ local function createPanel()
     -- If a node is missing it lists the actual children so you can see
     -- the real name (useful when the game renamed something).
     local function runProbe()
-        local sg2 = PG:FindFirstChild("TradeTokenCurrency_UI")
+        local sg2 = PG:WaitForChild("TradeTokenCurrency_UI")
         if not sg2 then
             dbgSG.Text       = "NOT FOUND"
             dbgSG.TextColor3 = Theme.RED
@@ -2827,7 +2827,7 @@ local function createPanel()
         dbgSG.Text       = "found ("..sg2.ClassName..")"
         dbgSG.TextColor3 = Theme.GREEN
 
-        local tt2 = sg2:FindFirstChild("TradeTokens")
+        local tt2 = sg2:WaitForChild("TradeTokens")
         if not tt2 then
             dbgTT.Text       = "NOT FOUND"
             dbgTT.TextColor3 = Theme.RED
@@ -2841,7 +2841,7 @@ local function createPanel()
         dbgTT.Text       = "found ("..tt2.ClassName..")"
         dbgTT.TextColor3 = Theme.GREEN
 
-        local lbl2 = tt2:FindFirstChild("TextLabel1")
+        local lbl2 = tt2:WaitForChild("TextLabel1")
         if not lbl2 then
             dbgLbl.Text       = "NOT FOUND"
             dbgLbl.TextColor3 = Theme.RED
