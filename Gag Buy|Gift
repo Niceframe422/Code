@@ -1,9 +1,8 @@
 --[[
-  ╔══════════════════════════════════════════════════════╗
-  ║           SHOP GUI  –  KEY SYSTEM EDITION            ║
-  ║  Key validation · Expiry tracking · Config on disk   ║
-  ║  v2: Cancel key · Balance check · Cart system        ║
-  ╚══════════════════════════════════════════════════════╝
+  ╔══════════════════════════════════════════════════════════╗
+  ║            SHOP GUI  –  KEY SYSTEM EDITION  v3          ║
+  ║  Collapsible queue · Balance deficit · Settings panel   ║
+  ╚══════════════════════════════════════════════════════════╝
 --]]
 
 --// SERVICES
@@ -11,8 +10,8 @@ local Players            = game:GetService("Players")
 local ReplicatedStorage  = game:GetService("ReplicatedStorage")
 local TweenService       = game:GetService("TweenService")
 local UserInputService   = game:GetService("UserInputService")
-local MarketplaceService = game:GetService("MarketplaceService")
 local HttpService        = game:GetService("HttpService")
+local RunService         = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -21,13 +20,13 @@ local LocalPlayer = Players.LocalPlayer
 -- └─────────────────────────────────────────────────────┘
 
 local KEY_CFG = {
-    ConfigFile       = "ShopGUI_Config.json",
-    KeysURL          = "",  -- e.g. "https://pastebin.com/raw/abcdefgh"
-    GetKeyLinks      = {
-        { Label = "Get Key (linkvertise)", URL = "https://linkvertise.com/XXXXXXX/shop-key" },
-        { Label = "Discord Server",        URL = "https://discord.gg/XXXXXXX" },
+    ConfigFile      = "ShopGUI_Config.json",
+    KeysURL         = "",
+    GetKeyLinks     = {
+        -- { Label = "Get Key (LootLab)", URL = "https://loot-link.com/s?dfP52TAg" },
+        -- { Label = "Discord Server",        URL = "https://discord.gg/XXXXXXX" },
     },
-    RevalidateEvery  = 3600,
+    RevalidateEvery = 3600,
 }
 
 local HARDCODED_KEYS = {
@@ -35,8 +34,8 @@ local HARDCODED_KEYS = {
 }
 
 local TIER_DISPLAY = {
-    Premium = { Label = "PREMIUM",  Color = Color3.fromRGB(200, 140, 255) },
-    Basic   = { Label = "BASIC",    Color = Color3.fromRGB(100, 200, 100) },
+    Premium = { Label = "PREMIUM", Color = Color3.fromRGB(200, 140, 255) },
+    Basic   = { Label = "BASIC",   Color = Color3.fromRGB(100, 200, 100) },
 }
 local DEFAULT_TIER = { Label = "UNKNOWN", Color = Color3.fromRGB(160, 160, 160) }
 
@@ -44,15 +43,12 @@ local DEFAULT_TIER = { Label = "UNKNOWN", Color = Color3.fromRGB(160, 160, 160) 
 -- │                 EXECUTOR FILE HELPERS               │
 -- └─────────────────────────────────────────────────────┘
 
-local function safeReadFile(path)
-    local ok, data = pcall(readfile, path)
-    return ok and data or nil
-end
-local function safeWriteFile(path, content) pcall(writefile, path, content) end
-local function jsonEncode(t) local ok,s = pcall(HttpService.JSONEncode,HttpService,t); return ok and s or nil end
-local function jsonDecode(s) local ok,t = pcall(HttpService.JSONDecode,HttpService,s); return ok and t or nil end
-local function loadConfig() local r = safeReadFile(KEY_CFG.ConfigFile); if not r or r=="" then return nil end; return jsonDecode(r) end
-local function saveConfig(data) local e=jsonEncode(data); if e then safeWriteFile(KEY_CFG.ConfigFile,e) end end
+local function safeReadFile(p)  local ok,d=pcall(readfile,p);  return ok and d or nil end
+local function safeWriteFile(p,c) pcall(writefile,p,c) end
+local function jsonEncode(t)  local ok,s=pcall(HttpService.JSONEncode,HttpService,t); return ok and s or nil end
+local function jsonDecode(s)  local ok,t=pcall(HttpService.JSONDecode,HttpService,s); return ok and t or nil end
+local function loadConfig()   local r=safeReadFile(KEY_CFG.ConfigFile); if not r or r=="" then return nil end; return jsonDecode(r) end
+local function saveConfig(d)  local e=jsonEncode(d); if e then safeWriteFile(KEY_CFG.ConfigFile,e) end end
 
 -- ┌─────────────────────────────────────────────────────┐
 -- │                  KEY VALIDATION                     │
@@ -61,103 +57,102 @@ local function saveConfig(data) local e=jsonEncode(data); if e then safeWriteFil
 local function unixNow() return os.time() end
 
 local function checkExpiry(expires)
-    if not expires or expires == 0 then return true, "Permanent" end
-    local remaining = expires - unixNow()
-    if remaining <= 0 then return false, "Expired" end
-    local days = math.floor(remaining / 86400)
-    local hrs  = math.floor((remaining % 86400) / 3600)
-    local mins = math.floor((remaining % 3600)  / 60)
-    if days > 0 then return true, days.."d "..hrs.."h left"
-    elseif hrs > 0 then return true, hrs.."h "..mins.."m left"
-    else return true, mins.."m left" end
+    if not expires or expires==0 then return true,"Permanent" end
+    local r=expires-unixNow()
+    if r<=0 then return false,"Expired" end
+    local d,h,m=math.floor(r/86400),math.floor((r%86400)/3600),math.floor((r%3600)/60)
+    if d>0 then return true,d.."d "..h.."h left"
+    elseif h>0 then return true,h.."h "..m.."m left"
+    else return true,m.."m left" end
 end
 
 local function validateKeyLocal(key)
-    local upper = key:upper():gsub("%s+","")
-    for _, entry in ipairs(HARDCODED_KEYS) do
-        if (entry.Key or ""):upper() == upper then
-            local valid, label = checkExpiry(entry.Expires)
-            if valid then
-                return true, { Key=upper, Tier=entry.Tier or "Basic", Expires=entry.Expires or 0, ExpiryLabel=label, Source="offline" }
-            else return false, "Key has expired." end
+    local u=key:upper():gsub("%s+","")
+    for _,e in ipairs(HARDCODED_KEYS) do
+        if (e.Key or ""):upper()==u then
+            local v,l=checkExpiry(e.Expires)
+            if v then return true,{Key=u,Tier=e.Tier or "Basic",Expires=e.Expires or 0,ExpiryLabel=l,Source="offline"}
+            else return false,"Key has expired." end
         end
     end
-    return false, nil
+    return false,nil
 end
 
 local function validateKeyFull(key)
-    local upper = key:upper():gsub("%s+","")
-    if KEY_CFG.KeysURL ~= "" then
-        local ok, res = pcall(function()
-            local req = (syn and syn.request) or (http and http.request) or (request)
-            if not req then error("no http func") end
-            return req({ Url = KEY_CFG.KeysURL, Method = "GET" })
+    local u=key:upper():gsub("%s+","")
+    if KEY_CFG.KeysURL~="" then
+        local ok,res=pcall(function()
+            local req=(syn and syn.request) or (http and http.request) or request
+            if not req then error("no http") end
+            return req({Url=KEY_CFG.KeysURL,Method="GET"})
         end)
-        if ok and res and res.Body and res.Body ~= "" then
-            local list = jsonDecode(res.Body)
-            if type(list) == "table" then
-                for _, entry in ipairs(list) do
-                    local ek = ((entry.key or entry.Key) or ""):upper()
-                    if ek == upper then
-                        local exp = tonumber(entry.expires or entry.Expires) or 0
-                        local valid, label = checkExpiry(exp)
-                        if valid then
-                            return true, { Key=upper, Tier=entry.tier or entry.Tier or "Basic", Expires=exp, ExpiryLabel=label, Source="remote" }
-                        else return false, "Key has expired." end
+        if ok and res and res.Body and res.Body~="" then
+            local list=jsonDecode(res.Body)
+            if type(list)=="table" then
+                for _,e in ipairs(list) do
+                    local ek=((e.key or e.Key) or ""):upper()
+                    if ek==u then
+                        local exp=tonumber(e.expires or e.Expires) or 0
+                        local v,l=checkExpiry(exp)
+                        if v then return true,{Key=u,Tier=e.tier or e.Tier or "Basic",Expires=exp,ExpiryLabel=l,Source="remote"}
+                        else return false,"Key has expired." end
                     end
                 end
-                return false, "Invalid key."
+                return false,"Invalid key."
             end
         end
     end
-    return validateKeyLocal(upper)
+    return validateKeyLocal(u)
 end
 
--- ┌─────────────────────────────────────────────────────┐
--- │           SAVED CONFIG / SESSION STATE              │
--- └─────────────────────────────────────────────────────┘
-
-local ActiveKeyData      = nil
-local lastRevalidateTime = 0
+local ActiveKeyData=nil; local lastRevalidateTime=0
 
 local function tryLoadSavedKey()
-    local cfg = loadConfig()
-    if not cfg or not cfg.Key or cfg.Key == "" then return false end
-    local valid, label = checkExpiry(cfg.Expires)
-    if not valid then saveConfig({}); return false end
-    cfg.ExpiryLabel = label
-    ActiveKeyData   = cfg
-    return true
+    local cfg=loadConfig(); if not cfg or not cfg.Key or cfg.Key=="" then return false end
+    local v,l=checkExpiry(cfg.Expires); if not v then saveConfig({}); return false end
+    cfg.ExpiryLabel=l; ActiveKeyData=cfg; return true
 end
-
-local keyAlreadyValid = tryLoadSavedKey()
+local keyAlreadyValid=tryLoadSavedKey()
 
 local function startRevalidateLoop()
-    if KEY_CFG.RevalidateEvery <= 0 or not ActiveKeyData then return end
+    if KEY_CFG.RevalidateEvery<=0 or not ActiveKeyData then return end
     task.spawn(function()
         while task.wait(60) do
-            if (unixNow() - lastRevalidateTime) >= KEY_CFG.RevalidateEvery then
-                lastRevalidateTime = unixNow()
-                local valid, data = validateKeyFull(ActiveKeyData.Key)
-                if valid and type(data) == "table" then
-                    ActiveKeyData = data; ActiveKeyData.SavedAt = unixNow(); saveConfig(ActiveKeyData)
-                elseif not valid then
-                    saveConfig({})
-                    if game.CoreGui:FindFirstChild("ShopGui") then game.CoreGui.ShopGui:Destroy() end
-                end
+            if (unixNow()-lastRevalidateTime)>=KEY_CFG.RevalidateEvery then
+                lastRevalidateTime=unixNow()
+                local v,d=validateKeyFull(ActiveKeyData.Key)
+                if v and type(d)=="table" then ActiveKeyData=d; ActiveKeyData.SavedAt=unixNow(); saveConfig(ActiveKeyData)
+                elseif not v then saveConfig({}); if game.CoreGui:FindFirstChild("ShopGui") then game.CoreGui.ShopGui:Destroy() end end
             end
         end
     end)
 end
 
 -- ┌─────────────────────────────────────────────────────┐
--- │               SHARED TWEEN HELPERS                  │
+-- │               TWEEN HELPERS                         │
 -- └─────────────────────────────────────────────────────┘
 
-local function tw(obj, info, props) TweenService:Create(obj, info, props):Play() end
-local FAST = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local MED  = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local SLOW = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local function tw(o,i,p) TweenService:Create(o,i,p):Play() end
+local FAST = TweenInfo.new(0.15,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+local MED  = TweenInfo.new(0.25,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+local SLOW = TweenInfo.new(0.45,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+
+-- ┌─────────────────────────────────────────────────────┐
+-- │               BALANCE HELPER                        │
+-- └─────────────────────────────────────────────────────┘
+
+local function getTokenBalance()
+    local pg=LocalPlayer:FindFirstChild("PlayerGui"); if not pg then return nil end
+    local ui=pg:FindFirstChild("TradeTokenCurrency_UI",true); if not ui then return nil end
+    for _,d in ipairs(ui:GetDescendants()) do
+        if d.Name=="val" and d:IsA("NumberValue") then return d.Value end
+    end
+    return nil
+end
+
+local function fmtNum(n)
+    return tostring(math.floor(n)):reverse():gsub("(%d%d%d)","%1,"):reverse():gsub("^,","")
+end
 
 -- ┌─────────────────────────────────────────────────────┐
 -- │                   ROOT SCREENGUI                    │
@@ -165,393 +160,252 @@ local SLOW = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out
 
 if game.CoreGui:FindFirstChild("ShopGui") then game.CoreGui.ShopGui:Destroy() end
 
-local Gui = Instance.new("ScreenGui")
-Gui.Name           = "ShopGui"
-Gui.ResetOnSpawn   = false
-Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-Gui.Parent         = game.CoreGui
+local Gui=Instance.new("ScreenGui")
+Gui.Name="ShopGui"; Gui.ResetOnSpawn=false; Gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; Gui.Parent=game.CoreGui
 
 -- ┌─────────────────────────────────────────────────────┐
 -- │                   KEY SCREEN                        │
 -- └─────────────────────────────────────────────────────┘
 
-local KeyScreen = Instance.new("Frame", Gui)
-KeyScreen.Size                   = UDim2.fromScale(1, 1)
-KeyScreen.BackgroundColor3       = Color3.fromRGB(8, 8, 10)
-KeyScreen.BackgroundTransparency = 0
-KeyScreen.BorderSizePixel        = 0
-KeyScreen.ZIndex                 = 100
+local KeyScreen=Instance.new("Frame",Gui)
+KeyScreen.Size=UDim2.fromScale(1,1); KeyScreen.BackgroundColor3=Color3.fromRGB(8,8,10)
+KeyScreen.BackgroundTransparency=0; KeyScreen.BorderSizePixel=0; KeyScreen.ZIndex=100
 
--- Animated background dots
-for i = 1, 18 do
-    local dot = Instance.new("Frame", KeyScreen)
-    local sz  = math.random(2, 5)
-    dot.Size                   = UDim2.fromOffset(sz, sz)
-    dot.Position               = UDim2.fromScale(math.random()*0.9+0.05, math.random()*0.9+0.05)
-    dot.BackgroundColor3       = Color3.fromRGB(50, 80, 160)
-    dot.BackgroundTransparency = 0.7 + math.random()*0.25
-    dot.BorderSizePixel        = 0
-    dot.ZIndex                 = 100
-    Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
-    task.spawn(function()
-        while dot.Parent do
-            tw(dot, TweenInfo.new(2+math.random()*3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { BackgroundTransparency = 0.92 })
-            task.wait(2+math.random()*3)
-        end
-    end)
+for i=1,18 do
+    local dot=Instance.new("Frame",KeyScreen); local sz=math.random(2,5)
+    dot.Size=UDim2.fromOffset(sz,sz); dot.Position=UDim2.fromScale(math.random()*.9+.05,math.random()*.9+.05)
+    dot.BackgroundColor3=Color3.fromRGB(50,80,160); dot.BackgroundTransparency=.7+math.random()*.25
+    dot.BorderSizePixel=0; dot.ZIndex=100; Instance.new("UICorner",dot).CornerRadius=UDim.new(1,0)
+    task.spawn(function() while dot.Parent do tw(dot,TweenInfo.new(2+math.random()*3,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut,-1,true),{BackgroundTransparency=.92}); task.wait(2+math.random()*3) end end)
 end
 
--- Center card
-local KeyCard = Instance.new("Frame", KeyScreen)
-KeyCard.Size             = UDim2.fromOffset(440, 400)
-KeyCard.AnchorPoint      = Vector2.new(0.5, 0.5)
-KeyCard.Position         = UDim2.fromScale(0.5, 0.6)
-KeyCard.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
-KeyCard.BorderSizePixel  = 0
-KeyCard.ZIndex           = 101
-Instance.new("UICorner", KeyCard).CornerRadius = UDim.new(0, 16)
+local KeyCard=Instance.new("Frame",KeyScreen)
+KeyCard.Size=UDim2.fromOffset(440,410); KeyCard.AnchorPoint=Vector2.new(.5,.5); KeyCard.Position=UDim2.fromScale(.5,.6)
+KeyCard.BackgroundColor3=Color3.fromRGB(16,16,20); KeyCard.BorderSizePixel=0; KeyCard.ZIndex=101
+Instance.new("UICorner",KeyCard).CornerRadius=UDim.new(0,16)
+local keyCardStroke=Instance.new("UIStroke",KeyCard); keyCardStroke.Color=Color3.fromRGB(80,100,220); keyCardStroke.Transparency=.55; keyCardStroke.Thickness=1.5
+local keyGlow=Instance.new("Frame",KeyCard); keyGlow.Size=UDim2.new(1,0,0,3); keyGlow.BackgroundColor3=Color3.fromRGB(80,120,255); keyGlow.BorderSizePixel=0; keyGlow.ZIndex=102
+Instance.new("UICorner",keyGlow).CornerRadius=UDim.new(0,16)
+local glowCover=Instance.new("Frame",keyGlow); glowCover.Size=UDim2.new(1,0,.5,0); glowCover.Position=UDim2.new(0,0,.5,0); glowCover.BackgroundColor3=Color3.fromRGB(80,120,255); glowCover.BorderSizePixel=0; glowCover.ZIndex=102
 
-local keyCardStroke = Instance.new("UIStroke", KeyCard)
-keyCardStroke.Color        = Color3.fromRGB(80, 100, 220)
-keyCardStroke.Transparency = 0.55
-keyCardStroke.Thickness    = 1.5
+local function keyLabel(parent,text,size,bold,color,posY,height)
+    local l=Instance.new("TextLabel",parent); l.Size=UDim2.new(1,-40,0,height or 20); l.Position=UDim2.fromOffset(20,posY)
+    l.BackgroundTransparency=1; l.Text=text; l.TextColor3=color or Color3.fromRGB(215,215,215)
+    l.Font=bold and Enum.Font.GothamBold or Enum.Font.Gotham; l.TextSize=size; l.TextXAlignment=Enum.TextXAlignment.Center; l.ZIndex=102; return l
+end
 
-local keyGlow = Instance.new("Frame", KeyCard)
-keyGlow.Size             = UDim2.new(1, 0, 0, 3)
-keyGlow.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
-keyGlow.BorderSizePixel  = 0
-keyGlow.ZIndex           = 102
-Instance.new("UICorner", keyGlow).CornerRadius = UDim.new(0, 16)
-local glowCover = Instance.new("Frame", keyGlow)
-glowCover.Size             = UDim2.new(1, 0, 0.5, 0)
-glowCover.Position         = UDim2.new(0, 0, 0.5, 0)
-glowCover.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
-glowCover.BorderSizePixel  = 0
-glowCover.ZIndex           = 102
+keyLabel(KeyCard,"🔑",36,false,nil,22,52)
+keyLabel(KeyCard,"Enter Your Key",20,true,Color3.fromRGB(220,220,230),80,28)
+keyLabel(KeyCard,"A valid key is required to use the Shop GUI",12,false,Color3.fromRGB(80,80,100),112,18)
 
-local keyIcon = Instance.new("TextLabel", KeyCard)
-keyIcon.Size                   = UDim2.new(1, 0, 0, 52)
-keyIcon.Position               = UDim2.fromOffset(0, 22)
-keyIcon.BackgroundTransparency = 1
-keyIcon.Text                   = "🔑"
-keyIcon.TextSize               = 36
-keyIcon.Font                   = Enum.Font.Gotham
-keyIcon.ZIndex                 = 102
+local keyInputBg=Instance.new("Frame",KeyCard); keyInputBg.Size=UDim2.new(1,-40,0,42); keyInputBg.Position=UDim2.fromOffset(20,142)
+keyInputBg.BackgroundColor3=Color3.fromRGB(22,22,28); keyInputBg.BorderSizePixel=0; keyInputBg.ZIndex=102
+Instance.new("UICorner",keyInputBg).CornerRadius=UDim.new(0,8)
+local keyInputStroke=Instance.new("UIStroke",keyInputBg); keyInputStroke.Color=Color3.fromRGB(55,55,75); keyInputStroke.Thickness=1
+local keyInput=Instance.new("TextBox",keyInputBg); keyInput.Size=UDim2.new(1,-16,1,0); keyInput.Position=UDim2.fromOffset(8,0)
+keyInput.BackgroundTransparency=1; keyInput.PlaceholderText="SHOP-XXXX-XXXX-XXXX"; keyInput.PlaceholderColor3=Color3.fromRGB(55,55,70)
+keyInput.Text=""; keyInput.TextColor3=Color3.fromRGB(190,190,220); keyInput.Font=Enum.Font.GothamBold; keyInput.TextSize=14
+keyInput.ClearTextOnFocus=false; keyInput.ZIndex=103
+keyInput.Focused:Connect(function() tw(keyInputStroke,FAST,{Color=Color3.fromRGB(80,100,220),Thickness=1.5}) end)
+keyInput.FocusLost:Connect(function() tw(keyInputStroke,FAST,{Color=Color3.fromRGB(55,55,75),Thickness=1}) end)
 
-local keyTitle = Instance.new("TextLabel", KeyCard)
-keyTitle.Size                   = UDim2.new(1, -32, 0, 28)
-keyTitle.Position               = UDim2.fromOffset(16, 80)
-keyTitle.BackgroundTransparency = 1
-keyTitle.Text                   = "Enter Your Key"
-keyTitle.TextColor3             = Color3.fromRGB(220, 220, 230)
-keyTitle.Font                   = Enum.Font.GothamBold
-keyTitle.TextSize               = 20
-keyTitle.TextXAlignment         = Enum.TextXAlignment.Center
-keyTitle.ZIndex                 = 102
+local keyStatus=keyLabel(KeyCard,"",11,false,Color3.fromRGB(100,100,120),192,16)
 
-local keySub = Instance.new("TextLabel", KeyCard)
-keySub.Size                   = UDim2.new(1, -40, 0, 18)
-keySub.Position               = UDim2.fromOffset(20, 112)
-keySub.BackgroundTransparency = 1
-keySub.Text                   = "A valid key is required to use the Shop GUI"
-keySub.TextColor3             = Color3.fromRGB(80, 80, 100)
-keySub.Font                   = Enum.Font.Gotham
-keySub.TextSize               = 12
-keySub.TextXAlignment         = Enum.TextXAlignment.Center
-keySub.ZIndex                 = 102
+local function makeKeyBtn(parent,text,y,h,bg,fg)
+    local b=Instance.new("TextButton",parent); b.Size=UDim2.new(1,-40,0,h); b.Position=UDim2.fromOffset(20,y)
+    b.BackgroundColor3=bg; b.TextColor3=fg; b.Font=Enum.Font.GothamBold; b.TextSize=13; b.Text=text
+    b.AutoButtonColor=false; b.BorderSizePixel=0; b.ZIndex=102; Instance.new("UICorner",b).CornerRadius=UDim.new(0,8); return b
+end
 
-local keyInputBg = Instance.new("Frame", KeyCard)
-keyInputBg.Size             = UDim2.new(1, -40, 0, 42)
-keyInputBg.Position         = UDim2.fromOffset(20, 142)
-keyInputBg.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-keyInputBg.BorderSizePixel  = 0
-keyInputBg.ZIndex           = 102
-Instance.new("UICorner", keyInputBg).CornerRadius = UDim.new(0, 8)
-local keyInputStroke = Instance.new("UIStroke", keyInputBg)
-keyInputStroke.Color     = Color3.fromRGB(55, 55, 75)
-keyInputStroke.Thickness = 1
+local keyValidateBtn=makeKeyBtn(KeyCard,"Validate Key",216,38,Color3.fromRGB(40,70,180),Color3.fromRGB(220,220,240))
+keyValidateBtn.MouseEnter:Connect(function() tw(keyValidateBtn,FAST,{BackgroundColor3=Color3.fromRGB(60,100,220)}) end)
+keyValidateBtn.MouseLeave:Connect(function() tw(keyValidateBtn,FAST,{BackgroundColor3=Color3.fromRGB(40,70,180)}) end)
 
-local keyInput = Instance.new("TextBox", keyInputBg)
-keyInput.Size                   = UDim2.new(1, -16, 1, 0)
-keyInput.Position               = UDim2.fromOffset(8, 0)
-keyInput.BackgroundTransparency = 1
-keyInput.PlaceholderText        = "SHOP-XXXX-XXXX-XXXX"
-keyInput.PlaceholderColor3      = Color3.fromRGB(55, 55, 70)
-keyInput.Text                   = ""
-keyInput.TextColor3             = Color3.fromRGB(190, 190, 220)
-keyInput.Font                   = Enum.Font.GothamBold
-keyInput.TextSize               = 14
-keyInput.ClearTextOnFocus       = false
-keyInput.ZIndex                 = 103
-keyInput.Focused:Connect(function() tw(keyInputStroke, FAST, { Color=Color3.fromRGB(80,100,220), Thickness=1.5 }) end)
-keyInput.FocusLost:Connect(function() tw(keyInputStroke, FAST, { Color=Color3.fromRGB(55,55,75), Thickness=1 }) end)
-
-local keyStatus = Instance.new("TextLabel", KeyCard)
-keyStatus.Size                   = UDim2.new(1, -40, 0, 16)
-keyStatus.Position               = UDim2.fromOffset(20, 192)
-keyStatus.BackgroundTransparency = 1
-keyStatus.Text                   = ""
-keyStatus.TextColor3             = Color3.fromRGB(100, 100, 120)
-keyStatus.Font                   = Enum.Font.Gotham
-keyStatus.TextSize               = 11
-keyStatus.TextXAlignment         = Enum.TextXAlignment.Center
-keyStatus.ZIndex                 = 102
-
-local keyValidateBtn = Instance.new("TextButton", KeyCard)
-keyValidateBtn.Size             = UDim2.new(1, -40, 0, 38)
-keyValidateBtn.Position         = UDim2.fromOffset(20, 216)
-keyValidateBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 180)
-keyValidateBtn.TextColor3       = Color3.fromRGB(220, 220, 240)
-keyValidateBtn.Font             = Enum.Font.GothamBold
-keyValidateBtn.TextSize         = 14
-keyValidateBtn.Text             = "Validate Key"
-keyValidateBtn.AutoButtonColor  = false
-keyValidateBtn.BorderSizePixel  = 0
-keyValidateBtn.ZIndex           = 102
-Instance.new("UICorner", keyValidateBtn).CornerRadius = UDim.new(0, 8)
-keyValidateBtn.MouseEnter:Connect(function() tw(keyValidateBtn, FAST, { BackgroundColor3=Color3.fromRGB(60,100,220) }) end)
-keyValidateBtn.MouseLeave:Connect(function() tw(keyValidateBtn, FAST, { BackgroundColor3=Color3.fromRGB(40,70,180) }) end)
-
--- ┌─────────────────────────────────────────────────────┐
--- │          NEW: CANCEL / EXIT KEY SCREEN BUTTON       │
--- └─────────────────────────────────────────────────────┘
-
-local keyCancelBtn = Instance.new("TextButton", KeyCard)
-keyCancelBtn.Size             = UDim2.new(1, -40, 0, 32)
-keyCancelBtn.Position         = UDim2.fromOffset(20, 262)
-keyCancelBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-keyCancelBtn.TextColor3       = Color3.fromRGB(100, 100, 110)
-keyCancelBtn.Font             = Enum.Font.Gotham
-keyCancelBtn.TextSize         = 13
-keyCancelBtn.Text             = "✕  Exit without a key"
-keyCancelBtn.AutoButtonColor  = false
-keyCancelBtn.BorderSizePixel  = 0
-keyCancelBtn.ZIndex           = 102
-Instance.new("UICorner", keyCancelBtn).CornerRadius = UDim.new(0, 8)
-local cancelStroke = Instance.new("UIStroke", keyCancelBtn)
-cancelStroke.Color = Color3.fromRGB(45, 45, 55); cancelStroke.Thickness = 1
-keyCancelBtn.MouseEnter:Connect(function()
-    tw(keyCancelBtn, FAST, { BackgroundColor3=Color3.fromRGB(60,25,25), TextColor3=Color3.fromRGB(200,80,80) })
-    tw(cancelStroke, FAST, { Color=Color3.fromRGB(120,40,40) })
-end)
-keyCancelBtn.MouseLeave:Connect(function()
-    tw(keyCancelBtn, FAST, { BackgroundColor3=Color3.fromRGB(30,30,35), TextColor3=Color3.fromRGB(100,100,110) })
-    tw(cancelStroke, FAST, { Color=Color3.fromRGB(45,45,55) })
-end)
+local keyCancelBtn=makeKeyBtn(KeyCard,"✕  Exit without a key",262,32,Color3.fromRGB(30,30,35),Color3.fromRGB(100,100,110))
+local cancelStroke=Instance.new("UIStroke",keyCancelBtn); cancelStroke.Color=Color3.fromRGB(45,45,55); cancelStroke.Thickness=1
+keyCancelBtn.MouseEnter:Connect(function() tw(keyCancelBtn,FAST,{BackgroundColor3=Color3.fromRGB(60,25,25),TextColor3=Color3.fromRGB(200,80,80)}); tw(cancelStroke,FAST,{Color=Color3.fromRGB(120,40,40)}) end)
+keyCancelBtn.MouseLeave:Connect(function() tw(keyCancelBtn,FAST,{BackgroundColor3=Color3.fromRGB(30,30,35),TextColor3=Color3.fromRGB(100,100,110)}); tw(cancelStroke,FAST,{Color=Color3.fromRGB(45,45,55)}) end)
 keyCancelBtn.MouseButton1Click:Connect(function()
-    -- Slide card out and destroy the whole GUI
-    tw(KeyCard, MED, { Position=UDim2.new(0.5,0,1.5,0) })
-    task.delay(0.3, function()
-        tw(KeyScreen, MED, { BackgroundTransparency=1 })
-        task.delay(0.3, function() Gui:Destroy() end)
-    end)
+    tw(KeyCard,MED,{Position=UDim2.new(.5,0,1.5,0)})
+    task.delay(.3,function() tw(KeyScreen,MED,{BackgroundTransparency=1}); task.delay(.3,function() Gui:Destroy() end) end)
 end)
 
--- "Get Key" links (shifted down to make room for cancel btn)
-local linkY = 302
-for i, link in ipairs(KEY_CFG.GetKeyLinks) do
-    local lb = Instance.new("TextButton", KeyCard)
-    lb.Size             = UDim2.new(1, -40, 0, 28)
-    lb.Position         = UDim2.fromOffset(20, linkY + (i-1)*34)
-    lb.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-    lb.TextColor3       = Color3.fromRGB(90, 130, 220)
-    lb.Font             = Enum.Font.Gotham
-    lb.TextSize         = 12
-    lb.Text             = "🔗 " .. link.Label
-    lb.AutoButtonColor  = false
-    lb.BorderSizePixel  = 0
-    lb.ZIndex           = 102
-    Instance.new("UICorner", lb).CornerRadius = UDim.new(0, 6)
-    local lbs = Instance.new("UIStroke", lb); lbs.Color=Color3.fromRGB(35,35,50); lbs.Thickness=1
+local linkY=302
+for i,link in ipairs(KEY_CFG.GetKeyLinks) do
+    local lb=makeKeyBtn(KeyCard,"🔗 "..link.Label,linkY+(i-1)*34,28,Color3.fromRGB(22,22,28),Color3.fromRGB(90,130,220))
+    lb.Font=Enum.Font.Gotham; lb.TextSize=12
+    local lbs=Instance.new("UIStroke",lb); lbs.Color=Color3.fromRGB(35,35,50); lbs.Thickness=1
     lb.MouseEnter:Connect(function() tw(lb,FAST,{BackgroundColor3=Color3.fromRGB(28,28,38)}); tw(lbs,FAST,{Color=Color3.fromRGB(70,100,200)}) end)
     lb.MouseLeave:Connect(function() tw(lb,FAST,{BackgroundColor3=Color3.fromRGB(22,22,28)}); tw(lbs,FAST,{Color=Color3.fromRGB(35,35,50)}) end)
-    lb.MouseButton1Click:Connect(function()
-        pcall(setclipboard, link.URL)
-        lb.Text = "✓ URL copied!"
-        task.delay(2, function() lb.Text = "🔗 " .. link.Label end)
-    end)
+    lb.MouseButton1Click:Connect(function() pcall(setclipboard,link.URL); lb.Text="✓ URL copied!"; task.delay(2,function() lb.Text="🔗 "..link.Label end) end)
 end
 
-tw(KeyCard, SLOW, { Position=UDim2.new(0.5,0,0.5,0) })
-
--- ┌─────────────────────────────────────────────────────┐
--- │                  BALANCE HELPER                     │
--- └─────────────────────────────────────────────────────┘
-
--- Reads token balance from the game UI object
-local function getTokenBalance()
-    local plrGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not plrGui then return nil end
-    local ui = plrGui:FindFirstChild("TradeTokenCurrency_UI", true)
-    if not ui then return nil end
-    for _, desc in ipairs(ui:GetDescendants()) do
-        if desc.Name == "val" and desc:IsA("NumberValue") then
-            return desc.Value
-        end
-    end
-    return nil
-end
+tw(KeyCard,SLOW,{Position=UDim2.new(.5,0,.5,0)})
 
 -- ┌─────────────────────────────────────────────────────┐
 -- │             MAIN SHOP BOOT FUNCTION                 │
 -- └─────────────────────────────────────────────────────┘
 
 local function bootShop()
-    tw(KeyCard, MED, { Position=UDim2.new(0.5,0,-0.6,0) })
-    task.delay(0.35, function()
-        tw(KeyScreen, MED, { BackgroundTransparency=1 })
-        task.delay(0.3, function() KeyScreen:Destroy() end)
-    end)
-
+    tw(KeyCard,MED,{Position=UDim2.new(.5,0,-.6,0)})
+    task.delay(.35,function() tw(KeyScreen,MED,{BackgroundTransparency=1}); task.delay(.3,function() KeyScreen:Destroy() end) end)
     startRevalidateLoop()
 
     --------------------------------------------------------
     -- REMOTES
     --------------------------------------------------------
-    local PurchaseRemote = ReplicatedStorage
-        :WaitForChild("GameEvents"):WaitForChild("TradeEvents")
-        :WaitForChild("TradeTokens"):WaitForChild("Purchase")
+    local PurchaseRemote=ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("TradeEvents"):WaitForChild("TradeTokens"):WaitForChild("Purchase")
+    local GiftRemote=ReplicatedStorage:WaitForChild("GameEvents"):WaitForChild("Gift"):WaitForChild("SendGiftTo")
 
-    local GiftRemote = ReplicatedStorage
-        :WaitForChild("GameEvents"):WaitForChild("Gift"):WaitForChild("SendGiftTo")
+    --------------------------------------------------------
+    -- SETTINGS STATE
+    --------------------------------------------------------
+    local Settings = {
+        QueueDelay        = 0.6,   -- seconds between queue purchases
+        ShowBalanceOnCard = true,  -- per-card deficit warning
+        ConfirmBuy        = false, -- require double-click to buy
+        AutoRefreshBal    = true,  -- auto refresh balance every 5s
+        HidePassItems     = false, -- hide "Pass" category items
+        CompactCards      = false, -- smaller card grid
+        PurchaseSound     = true,  -- play a sound on successful buy
+        ShowTestingCat    = true,  -- show Testing category
+        HighlightAfford   = true,  -- dim cards you can't afford
+        QueuePanelOpen    = false, -- queue panel open by default
+    }
 
     --------------------------------------------------------
     -- PRODUCT DATABASE
     --------------------------------------------------------
     local Products = {
-        { Group="Exotic Seed Pack"; Display="Exotic Seed Pack"; Category="Seed Pack"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3267528421;GiftId=3269033223};{Qty=3;NormalId=3267548052;GiftId=3269033336};{Qty=10;NormalId=3267548161;GiftId=3269033529}};
-          Prices={[1]=75;[3]=200;[10]=600} },
-        { Group="Premium Seed Sacks"; Display="Premium Seed Sacks"; Category="Seed Pack"; isGiftable=true;
-          Variants={{Qty=10;NormalId=3273679012;GiftId=3273679009}}; Prices={[10]=1699} },
-        { Group="Bug Egg"; Display="Bug Egg"; Category="Regular Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3278426597;GiftId=3277815193};{Qty=3;NormalId=3277814538;GiftId=3277815350};{Qty=10;NormalId=3277814625;GiftId=3277815654}};
-          Prices={[1]=50;[3]=130;[10]=400} },
-        { Group="Premium Night Seeds"; Display="Premium Night Seeds"; Category="Testing"; isGiftable=true;
-          Variants={{Qty=10;NormalId=3282157462;GiftId=3282733014}}; Prices={[10]=450} },
-        { Group="Premium Night Eggs"; Display="Premium Night Eggs"; Category="Testing"; isGiftable=true;
-          Variants={{Qty=10;NormalId=3282157312;GiftId=3282661439}}; Prices={[10]=450} },
-        { Group="Exclusive Cosmetic Crate"; Display="Exclusive Cosmetic Crate"; Category="Crates"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3290672626;GiftId=3290672926};{Qty=3;NormalId=3290672712;GiftId=3290673007};{Qty=10;NormalId=3290672848;GiftId=3290673073}};
-          Prices={[1]=100;[3]=275;[10]=850} },
-        { Group="Exotic Culinarian Chest"; Display="Exotic Culinarian Chest"; Category="Chests"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3362680911;GiftId=3362680913};{Qty=3;NormalId=3362680917;GiftId=3362680919};{Qty=10;NormalId=3362680916;GiftId=3362680914}};
-          Prices={[1]=199;[3]=575;[10]=1699} },
-        { Group="Exotic Kitsune Chest"; Display="Exotic Kitsune Chest"; Category="Chests"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3345819463;GiftId=3345819471};{Qty=3;NormalId=3345819470;GiftId=3345819477};{Qty=10;NormalId=3345819472;GiftId=3345819473}};
-          Prices={[1]=100;[3]=275;[10]=800} },
-        { Group="Exotic Skyroot Chest"; Display="Exotic Skyroot Chest"; Category="Chests"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3379038157;GiftId=3379038160};{Qty=3;NormalId=3379038152;GiftId=3379038158};{Qty=10;NormalId=3379038159;GiftId=3379038166}};
-          Prices={[1]=100;[3]=275;[10]=800} },
-        { Group="Exotic Enchanted Chest"; Display="Exotic Enchanted Chest"; Category="Chests"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3394224231;GiftId=3394224240};{Qty=3;NormalId=3394224239;GiftId=3394224238};{Qty=10;NormalId=3394224237;GiftId=3394224256}};
-          Prices={[1]=100;[3]=275;[10]=800} },
-        { Group="Exotic Nutty Chest"; Display="Exotic Nutty Chest"; Category="Chests"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3420021045;GiftId=3420021048};{Qty=3;NormalId=3420021043;GiftId=3420021049};{Qty=10;NormalId=3420021044;GiftId=3420021050}};
-          Prices={[1]=100;[3]=275;[10]=800} },
-        { Group="Exotic Spooky Chest"; Display="Exotic Spooky Chest"; Category="Chests"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3438653519;GiftId=3438653515};{Qty=3;NormalId=3438653518;GiftId=3438653520};{Qty=10;NormalId=3438653517;GiftId=3438653521}};
-          Prices={[1]=100;[3]=275;[10]=800} },
-        { Group="Exotic Gem Chest"; Display="Exotic Gem Chest"; Category="Chests"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3460600740;GiftId=3460600738};{Qty=3;NormalId=3460600737;GiftId=3460600739};{Qty=10;NormalId=3460600736;GiftId=3460600741}};
-          Prices={[1]=100;[3]=275;[10]=800} },
-        { Group="Exotic Buttercup Chest"; Display="Exotic Buttercup Chest"; Category="Chests"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3520430329;GiftId=3520430333};{Qty=3;NormalId=3520430327;GiftId=3520430330};{Qty=10;NormalId=3520430328;GiftId=3520430332};{Qty=50;NormalId=3520430331;GiftId=3520430334}};
-          Prices={[1]=100;[3]=275;[10]=800;[50]=3500} },
-        { Group="Iconic Gonme Crate"; Display="Iconic Gonme Crate"; Category="Crates"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3300962946;GiftId=3300962951};{Qty=3;NormalId=3300962950;GiftId=3300962954};{Qty=10;NormalId=3300962952;GiftId=3300962960}};
-          Prices={[1]=100;[3]=275;[10]=850} },
-        { Group="Premium Anti Bee Egg"; Display="Premium Anti Bee Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3301567958;GiftId=3301567956};{Qty=3;NormalId=3301567955;GiftId=3301567959};{Qty=10;NormalId=3301567960;GiftId=3301567957}};
-          Prices={[1]=150;[3]=400;[10]=1200} },
-        { Group="Premium Oasis Egg"; Display="Premium Oasis Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3317459182;GiftId=3317459189};{Qty=3;NormalId=3317459186;GiftId=3317459185};{Qty=10;NormalId=3317459188;GiftId=3317459187}};
-          Prices={[1]=150;[3]=400;[10]=1200} },
-        { Group="Premium Primal Egg"; Display="Premium Primal Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3330286154;GiftId=3330286152};{Qty=3;NormalId=3330286155;GiftId=3330286153};{Qty=10;NormalId=3330286148;GiftId=3330286160}};
-          Prices={[1]=150;[3]=400;[10]=1200} },
-        { Group="Premium Fall Egg"; Display="Premium Fall Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3401426983;GiftId=3401426986};{Qty=3;NormalId=3401426985;GiftId=3401426987};{Qty=10;NormalId=3401426984;GiftId=3401426988}};
-          Prices={[1]=150;[3]=400;[10]=1200} },
-        { Group="Premium Spooky Egg"; Display="Premium Spooky Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3427163857;GiftId=3427163851};{Qty=3;NormalId=3427163854;GiftId=3427163855};{Qty=10;NormalId=3427163853;GiftId=3427163856}};
-          Prices={[1]=150;[3]=400;[10]=1200} },
-        { Group="Premium Safari Egg"; Display="Premium Safari Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3444449487;GiftId=3444449490};{Qty=3;NormalId=3444449485;GiftId=3444449488};{Qty=10;NormalId=3444449486;GiftId=3444449489}};
-          Prices={[1]=150;[3]=400;[10]=1200} },
-        { Group="Premium Christmas Egg"; Display="Premium Christmas Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3477922698;GiftId=3477922694};{Qty=3;NormalId=3477922697;GiftId=3477922696};{Qty=10;NormalId=3477922700;GiftId=3477922699};{Qty=50;NormalId=3478043835;GiftId=3478044311}};
-          Prices={[1]=150;[3]=400;[10]=1200;[50]=5500} },
-        { Group="Premium Winter Egg"; Display="Premium Winter Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3483801741;GiftId=3483801742};{Qty=3;NormalId=3483801745;GiftId=3483801746};{Qty=10;NormalId=3483801744;GiftId=3483801749};{Qty=50;NormalId=3483801743;GiftId=3483801747}};
-          Prices={[1]=150;[3]=400;[10]=1200;[50]=5500} },
-        { Group="Premium New Year's Egg"; Display="Premium New Year's Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3489363343;GiftId=3489363340};{Qty=3;NormalId=3489363338;GiftId=3489363337};{Qty=10;NormalId=3489363342;GiftId=3489363341};{Qty=50;NormalId=3489363344;GiftId=3489363345}};
-          Prices={[1]=150;[3]=400;[10]=1200;[50]=5500} },
-        { Group="Premium Carnival Egg"; Display="Premium Carnival Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3497475839;GiftId=3497475841};{Qty=3;NormalId=3497475846;GiftId=3497475845};{Qty=10;NormalId=3497475844;GiftId=3497475840};{Qty=50;NormalId=3497475843;GiftId=3497475842}};
-          Prices={[1]=150;[3]=400;[10]=1200;[50]=5500} },
-        { Group="Premium Bird Egg"; Display="Premium Bird Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3512151971;GiftId=3512151974};{Qty=3;NormalId=3512151973;GiftId=3512151972};{Qty=10;NormalId=3512151976;GiftId=3512151975};{Qty=50;NormalId=3512151977;GiftId=3512151981}};
-          Prices={[1]=150;[3]=400;[10]=1200;[50]=5500} },
-        { Group="Premium Golden Egg"; Display="Premium Golden Egg"; Category="Premium Eggs"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3568827015;GiftId=3568827750};{Qty=3;NormalId=3568827227;GiftId=3568828285};{Qty=10;NormalId=3568827595;GiftId=3568828441};{Qty=50;NormalId=3570157250;GiftId=3570157336}};
-          Prices={[1]=200;[3]=550;[10]=1700;[50]=7500} },
-        { Group="Trade Tokens"; Display="Trade Tokens"; Category="Tokens"; isGiftable=false; ForcedRobuxPurchase=true;
-          Variants={{Qty=50;NormalId=3460376533};{Qty=250;NormalId=3460378135};{Qty=1000;NormalId=3460378800};{Qty=5000;NormalId=3460379424};{Qty=25000;NormalId=3460379831}};
-          Prices={[50]=50;[250]=200;[1000]=700;[5000]=3000;[25000]=12000} },
-        { Group="Sheckles (¢)"; Display="Sheckles"; Category="Currency"; isGiftable=false;
-          Variants={{Qty=100;Label="100¢";NormalId=3250137172};{Qty=250;Label="250¢";NormalId=3250137261};{Qty=1000;Label="1,000¢";NormalId=3250137355};{Qty=5000;Label="5,000¢";NormalId=3250139018}};
-          Prices={[100]=25;[250]=60;[1000]=200;[5000]=800} },
-        { Group="Artisan Container"; Display="Artisan Container"; Category="Container"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3460380041;GiftId=3467103686};{Qty=3;NormalId=3467103688;GiftId=3467103689};{Qty=10;NormalId=3467103687;GiftId=3467103690}};
-          Prices={[1]=120;[3]=325;[10]=1000} },
-        { Group="Elemental Container"; Display="Elemental Container"; Category="Container"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3460380235;GiftId=3467110139};{Qty=3;NormalId=3467110142;GiftId=3467110144};{Qty=10;NormalId=3467110145;GiftId=3467110143}};
-          Prices={[1]=120;[3]=325;[10]=1000} },
-        { Group="Festive Container"; Display="Festive Container"; Category="Container"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3478031738;GiftId=3478032198};{Qty=3;NormalId=3478031853;GiftId=3478032318};{Qty=10;NormalId=3478031941;GiftId=3478032404}};
-          Prices={[1]=120;[3]=325;[10]=1000} },
-        { Group="Santa's Surprise Present"; Display="Santa's Surprise Present"; Category="Present"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3472461585;GiftId=3472461581};{Qty=3;NormalId=3472461575;GiftId=3472461582};{Qty=10;NormalId=3472461579;GiftId=3472461580};{Qty=50;NormalId=3472461584;GiftId=3472461583}};
-          Prices={[1]=100;[3]=275;[10]=850;[50]=3800} },
-        { Group="Super Seed"; Display="Super Seed"; Category="Super Seed"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3482199602;GiftId=3482199804};{Qty=3;NormalId=3482199918;GiftId=3482200078};{Qty=9;NormalId=3249981764;GiftId=3482222113};{Qty=10;NormalId=3482200241;GiftId=3482200423}};
-          Prices={[1]=80;[3]=220;[9]=600;[10]=650} },
-        { Group="Rainbow Peppermint Vine Seed"; Display="Rainbow Peppermint Vine Seed"; Category="Super Seed"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3482271454;GiftId=3482271756}}; Prices={[1]=400} },
-        { Group="Firework Fern"; Display="Firework Fern"; Category="Seeds"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3490207231;GiftId=3490207392}}; Prices={[1]=300} },
-        { Group="UFO Shard"; Display="UFO Shard"; Category="Pet Shard"; isGiftable=true;
-          Variants={{Qty=1;NormalId=3546404036};{Qty=3;NormalId=3546404197};{Qty=10;NormalId=3546404927}};
-          Prices={[1]=199;[3]=399;[10]=1399} },
-        { Group="Leaf Clover Pack"; Display="Leaf Clover Pack"; Category="Bundle Pack"; isGiftable=false;
-          Variants={{Qty=1;NormalId=3555829934}}; Prices={[1]=499} },
-        { Group="Blacksmith Pack"; Display="Blacksmith Pack"; Category="Bundle Pack"; isGiftable=false;
-          Variants={{Qty=1;NormalId=3456989527}}; Prices={[1]=799} },
-        { Group="Twilight Pack"; Display="Twilight Pack"; Category="Bundle Pack"; isGiftable=false;
-          Variants={{Qty=1;NormalId=3432380384}}; Prices={[1]=599} },
-        { Group="Rainbow Shovel + Speed Coil"; Display="Rainbow Shovel + Speed Coil"; Category="Bundle Pack"; isGiftable=false;
-          Variants={{Qty=1;NormalId=3560653460}}; Prices={[1]=399} },
-        { Group="Prime Crate"; Display="Prime Crate"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} },
-        { Group="Holiday Crate"; Display="Holiday Crate"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} },
-        { Group="Season 4 Crate"; Display="Season 4 Crate"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} },
-        { Group="Egg Yolk Mat"; Display="Egg Yolk Mat"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=149} },
-        { Group="Penguin Statue"; Display="Penguin Statue"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=149} },
-        { Group="Garden Basin"; Display="Garden Basin"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=149} },
-        { Group="Silver Fertilizer"; Display="Silver Fertilizer"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=199} },
-        { Group="Levelup Lollipop"; Display="Levelup Lollipop"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=199} },
-        { Group="Grow All"; Display="Grow All"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=249} },
-        { Group="Hammer of Harvest"; Display="Hammer of Harvest"; Category="Pass"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=199} },
-        { Group="Naval Wort"; Display="Naval Wort"; Category="Seeds"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=99} },
-        { Group="Pollen Cone"; Display="Pollen Cone"; Category="Seeds"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=99} },
-        { Group="Purple Treeshroom"; Display="Purple Treeshroom"; Category="Seeds"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=99} },
-        { Group="Prime Seed Pack"; Display="Prime Seed Pack"; Category="Seed Pack"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} },
-        { Group="Holiday Seed Pack"; Display="Holiday Seed Pack"; Category="Seed Pack"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} },
-        { Group="Season 4 Seed Pack"; Display="Season 4 Seed Pack"; Category="Seed Pack"; isGiftable=false; Variants={{Qty=1}}; Prices={[1]=299} },
+        {Group="Exotic Seed Pack";Display="Exotic Seed Pack";Category="Seed Pack";isGiftable=true;
+         Variants={{Qty=1;NormalId=3267528421;GiftId=3269033223};{Qty=3;NormalId=3267548052;GiftId=3269033336};{Qty=10;NormalId=3267548161;GiftId=3269033529}};
+         Prices={[1]=75;[3]=200;[10]=600}},
+        {Group="Premium Seed Sacks";Display="Premium Seed Sacks";Category="Seed Pack";isGiftable=true;
+         Variants={{Qty=10;NormalId=3273679012;GiftId=3273679009}};Prices={[10]=1699}},
+        {Group="Bug Egg";Display="Bug Egg";Category="Regular Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3278426597;GiftId=3277815193};{Qty=3;NormalId=3277814538;GiftId=3277815350};{Qty=10;NormalId=3277814625;GiftId=3277815654}};
+         Prices={[1]=50;[3]=130;[10]=400}},
+        {Group="Premium Night Seeds";Display="Premium Night Seeds";Category="Testing";isGiftable=true;
+         Variants={{Qty=10;NormalId=3282157462;GiftId=3282733014}};Prices={[10]=450}},
+        {Group="Premium Night Eggs";Display="Premium Night Eggs";Category="Testing";isGiftable=true;
+         Variants={{Qty=10;NormalId=3282157312;GiftId=3282661439}};Prices={[10]=450}},
+        {Group="Exclusive Cosmetic Crate";Display="Exclusive Cosmetic Crate";Category="Crates";isGiftable=true;
+         Variants={{Qty=1;NormalId=3290672626;GiftId=3290672926};{Qty=3;NormalId=3290672712;GiftId=3290673007};{Qty=10;NormalId=3290672848;GiftId=3290673073}};
+         Prices={[1]=100;[3]=275;[10]=850}},
+        {Group="Exotic Culinarian Chest";Display="Exotic Culinarian Chest";Category="Chests";isGiftable=true;
+         Variants={{Qty=1;NormalId=3362680911;GiftId=3362680913};{Qty=3;NormalId=3362680917;GiftId=3362680919};{Qty=10;NormalId=3362680916;GiftId=3362680914}};
+         Prices={[1]=199;[3]=575;[10]=1699}},
+        {Group="Exotic Kitsune Chest";Display="Exotic Kitsune Chest";Category="Chests";isGiftable=true;
+         Variants={{Qty=1;NormalId=3345819463;GiftId=3345819471};{Qty=3;NormalId=3345819470;GiftId=3345819477};{Qty=10;NormalId=3345819472;GiftId=3345819473}};
+         Prices={[1]=100;[3]=275;[10]=800}},
+        {Group="Exotic Skyroot Chest";Display="Exotic Skyroot Chest";Category="Chests";isGiftable=true;
+         Variants={{Qty=1;NormalId=3379038157;GiftId=3379038160};{Qty=3;NormalId=3379038152;GiftId=3379038158};{Qty=10;NormalId=3379038159;GiftId=3379038166}};
+         Prices={[1]=100;[3]=275;[10]=800}},
+        {Group="Exotic Enchanted Chest";Display="Exotic Enchanted Chest";Category="Chests";isGiftable=true;
+         Variants={{Qty=1;NormalId=3394224231;GiftId=3394224240};{Qty=3;NormalId=3394224239;GiftId=3394224238};{Qty=10;NormalId=3394224237;GiftId=3394224256}};
+         Prices={[1]=100;[3]=275;[10]=800}},
+        {Group="Exotic Nutty Chest";Display="Exotic Nutty Chest";Category="Chests";isGiftable=true;
+         Variants={{Qty=1;NormalId=3420021045;GiftId=3420021048};{Qty=3;NormalId=3420021043;GiftId=3420021049};{Qty=10;NormalId=3420021044;GiftId=3420021050}};
+         Prices={[1]=100;[3]=275;[10]=800}},
+        {Group="Exotic Spooky Chest";Display="Exotic Spooky Chest";Category="Chests";isGiftable=true;
+         Variants={{Qty=1;NormalId=3438653519;GiftId=3438653515};{Qty=3;NormalId=3438653518;GiftId=3438653520};{Qty=10;NormalId=3438653517;GiftId=3438653521}};
+         Prices={[1]=100;[3]=275;[10]=800}},
+        {Group="Exotic Gem Chest";Display="Exotic Gem Chest";Category="Chests";isGiftable=true;
+         Variants={{Qty=1;NormalId=3460600740;GiftId=3460600738};{Qty=3;NormalId=3460600737;GiftId=3460600739};{Qty=10;NormalId=3460600736;GiftId=3460600741}};
+         Prices={[1]=100;[3]=275;[10]=800}},
+        {Group="Exotic Buttercup Chest";Display="Exotic Buttercup Chest";Category="Chests";isGiftable=true;
+         Variants={{Qty=1;NormalId=3520430329;GiftId=3520430333};{Qty=3;NormalId=3520430327;GiftId=3520430330};{Qty=10;NormalId=3520430328;GiftId=3520430332};{Qty=50;NormalId=3520430331;GiftId=3520430334}};
+         Prices={[1]=100;[3]=275;[10]=800;[50]=3500}},
+        {Group="Iconic Gonme Crate";Display="Iconic Gonme Crate";Category="Crates";isGiftable=true;
+         Variants={{Qty=1;NormalId=3300962946;GiftId=3300962951};{Qty=3;NormalId=3300962950;GiftId=3300962954};{Qty=10;NormalId=3300962952;GiftId=3300962960}};
+         Prices={[1]=100;[3]=275;[10]=850}},
+        {Group="Premium Anti Bee Egg";Display="Premium Anti Bee Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3301567958;GiftId=3301567956};{Qty=3;NormalId=3301567955;GiftId=3301567959};{Qty=10;NormalId=3301567960;GiftId=3301567957}};
+         Prices={[1]=150;[3]=400;[10]=1200}},
+        {Group="Premium Oasis Egg";Display="Premium Oasis Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3317459182;GiftId=3317459189};{Qty=3;NormalId=3317459186;GiftId=3317459185};{Qty=10;NormalId=3317459188;GiftId=3317459187}};
+         Prices={[1]=150;[3]=400;[10]=1200}},
+        {Group="Premium Primal Egg";Display="Premium Primal Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3330286154;GiftId=3330286152};{Qty=3;NormalId=3330286155;GiftId=3330286153};{Qty=10;NormalId=3330286148;GiftId=3330286160}};
+         Prices={[1]=150;[3]=400;[10]=1200}},
+        {Group="Premium Fall Egg";Display="Premium Fall Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3401426983;GiftId=3401426986};{Qty=3;NormalId=3401426985;GiftId=3401426987};{Qty=10;NormalId=3401426984;GiftId=3401426988}};
+         Prices={[1]=150;[3]=400;[10]=1200}},
+        {Group="Premium Spooky Egg";Display="Premium Spooky Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3427163857;GiftId=3427163851};{Qty=3;NormalId=3427163854;GiftId=3427163855};{Qty=10;NormalId=3427163853;GiftId=3427163856}};
+         Prices={[1]=150;[3]=400;[10]=1200}},
+        {Group="Premium Safari Egg";Display="Premium Safari Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3444449487;GiftId=3444449490};{Qty=3;NormalId=3444449485;GiftId=3444449488};{Qty=10;NormalId=3444449486;GiftId=3444449489}};
+         Prices={[1]=150;[3]=400;[10]=1200}},
+        {Group="Premium Christmas Egg";Display="Premium Christmas Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3477922698;GiftId=3477922694};{Qty=3;NormalId=3477922697;GiftId=3477922696};{Qty=10;NormalId=3477922700;GiftId=3477922699};{Qty=50;NormalId=3478043835;GiftId=3478044311}};
+         Prices={[1]=150;[3]=400;[10]=1200;[50]=5500}},
+        {Group="Premium Winter Egg";Display="Premium Winter Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3483801741;GiftId=3483801742};{Qty=3;NormalId=3483801745;GiftId=3483801746};{Qty=10;NormalId=3483801744;GiftId=3483801749};{Qty=50;NormalId=3483801743;GiftId=3483801747}};
+         Prices={[1]=150;[3]=400;[10]=1200;[50]=5500}},
+        {Group="Premium New Year's Egg";Display="Premium New Year's Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3489363343;GiftId=3489363340};{Qty=3;NormalId=3489363338;GiftId=3489363337};{Qty=10;NormalId=3489363342;GiftId=3489363341};{Qty=50;NormalId=3489363344;GiftId=3489363345}};
+         Prices={[1]=150;[3]=400;[10]=1200;[50]=5500}},
+        {Group="Premium Carnival Egg";Display="Premium Carnival Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3497475839;GiftId=3497475841};{Qty=3;NormalId=3497475846;GiftId=3497475845};{Qty=10;NormalId=3497475844;GiftId=3497475840};{Qty=50;NormalId=3497475843;GiftId=3497475842}};
+         Prices={[1]=150;[3]=400;[10]=1200;[50]=5500}},
+        {Group="Premium Bird Egg";Display="Premium Bird Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3512151971;GiftId=3512151974};{Qty=3;NormalId=3512151973;GiftId=3512151972};{Qty=10;NormalId=3512151976;GiftId=3512151975};{Qty=50;NormalId=3512151977;GiftId=3512151981}};
+         Prices={[1]=150;[3]=400;[10]=1200;[50]=5500}},
+        {Group="Premium Golden Egg";Display="Premium Golden Egg";Category="Premium Eggs";isGiftable=true;
+         Variants={{Qty=1;NormalId=3568827015;GiftId=3568827750};{Qty=3;NormalId=3568827227;GiftId=3568828285};{Qty=10;NormalId=3568827595;GiftId=3568828441};{Qty=50;NormalId=3570157250;GiftId=3570157336}};
+         Prices={[1]=200;[3]=550;[10]=1700;[50]=7500}},
+        {Group="Trade Tokens";Display="Trade Tokens";Category="Tokens";isGiftable=false;ForcedRobuxPurchase=true;
+         Variants={{Qty=50;NormalId=3460376533};{Qty=250;NormalId=3460378135};{Qty=1000;NormalId=3460378800};{Qty=5000;NormalId=3460379424};{Qty=25000;NormalId=3460379831}};
+         Prices={[50]=50;[250]=200;[1000]=700;[5000]=3000;[25000]=12000}},
+        {Group="Sheckles (¢)";Display="Sheckles";Category="Currency";isGiftable=false;
+         Variants={{Qty=100;Label="100¢";NormalId=3250137172};{Qty=250;Label="250¢";NormalId=3250137261};{Qty=1000;Label="1,000¢";NormalId=3250137355};{Qty=5000;Label="5,000¢";NormalId=3250139018}};
+         Prices={[100]=25;[250]=60;[1000]=200;[5000]=800}},
+        {Group="Artisan Container";Display="Artisan Container";Category="Container";isGiftable=true;
+         Variants={{Qty=1;NormalId=3460380041;GiftId=3467103686};{Qty=3;NormalId=3467103688;GiftId=3467103689};{Qty=10;NormalId=3467103687;GiftId=3467103690}};
+         Prices={[1]=120;[3]=325;[10]=1000}},
+        {Group="Elemental Container";Display="Elemental Container";Category="Container";isGiftable=true;
+         Variants={{Qty=1;NormalId=3460380235;GiftId=3467110139};{Qty=3;NormalId=3467110142;GiftId=3467110144};{Qty=10;NormalId=3467110145;GiftId=3467110143}};
+         Prices={[1]=120;[3]=325;[10]=1000}},
+        {Group="Festive Container";Display="Festive Container";Category="Container";isGiftable=true;
+         Variants={{Qty=1;NormalId=3478031738;GiftId=3478032198};{Qty=3;NormalId=3478031853;GiftId=3478032318};{Qty=10;NormalId=3478031941;GiftId=3478032404}};
+         Prices={[1]=120;[3]=325;[10]=1000}},
+        {Group="Santa's Surprise Present";Display="Santa's Surprise Present";Category="Present";isGiftable=true;
+         Variants={{Qty=1;NormalId=3472461585;GiftId=3472461581};{Qty=3;NormalId=3472461575;GiftId=3472461582};{Qty=10;NormalId=3472461579;GiftId=3472461580};{Qty=50;NormalId=3472461584;GiftId=3472461583}};
+         Prices={[1]=100;[3]=275;[10]=850;[50]=3800}},
+        {Group="Super Seed";Display="Super Seed";Category="Super Seed";isGiftable=true;
+         Variants={{Qty=1;NormalId=3482199602;GiftId=3482199804};{Qty=3;NormalId=3482199918;GiftId=3482200078};{Qty=9;NormalId=3249981764;GiftId=3482222113};{Qty=10;NormalId=3482200241;GiftId=3482200423}};
+         Prices={[1]=80;[3]=220;[9]=600;[10]=650}},
+        {Group="Rainbow Peppermint Vine Seed";Display="Rainbow Peppermint Vine Seed";Category="Super Seed";isGiftable=true;
+         Variants={{Qty=1;NormalId=3482271454;GiftId=3482271756}};Prices={[1]=400}},
+        {Group="Firework Fern";Display="Firework Fern";Category="Seeds";isGiftable=true;
+         Variants={{Qty=1;NormalId=3490207231;GiftId=3490207392}};Prices={[1]=300}},
+        {Group="UFO Shard";Display="UFO Shard";Category="Pet Shard";isGiftable=true;
+         Variants={{Qty=1;NormalId=3546404036};{Qty=3;NormalId=3546404197};{Qty=10;NormalId=3546404927}};
+         Prices={[1]=199;[3]=399;[10]=1399}},
+        {Group="Leaf Clover Pack";Display="Leaf Clover Pack";Category="Bundle Pack";isGiftable=false;Variants={{Qty=1;NormalId=3555829934}};Prices={[1]=499}},
+        {Group="Blacksmith Pack";Display="Blacksmith Pack";Category="Bundle Pack";isGiftable=false;Variants={{Qty=1;NormalId=3456989527}};Prices={[1]=799}},
+        {Group="Twilight Pack";Display="Twilight Pack";Category="Bundle Pack";isGiftable=false;Variants={{Qty=1;NormalId=3432380384}};Prices={[1]=599}},
+        {Group="Rainbow Shovel + Speed Coil";Display="Rainbow Shovel + Speed Coil";Category="Bundle Pack";isGiftable=false;Variants={{Qty=1;NormalId=3560653460}};Prices={[1]=399}},
+        {Group="Prime Crate";Display="Prime Crate";Category="Pass";isGiftable=false;Variants={{Qty=1}};Prices={[1]=299}},
+        {Group="Holiday Crate";Display="Holiday Crate";Category="Pass";isGiftable=false;Variants={{Qty=1}};Prices={[1]=299}},
+        {Group="Season 4 Crate";Display="Season 4 Crate";Category="Pass";isGiftable=false;Variants={{Qty=1}};Prices={[1]=299}},
+        {Group="Egg Yolk Mat";Display="Egg Yolk Mat";Category="Pass";isGiftable=false;Variants={{Qty=1}};Prices={[1]=149}},
+        {Group="Penguin Statue";Display="Penguin Statue";Category="Pass";isGiftable=false;Variants={{Qty=1}};Prices={[1]=149}},
+        {Group="Garden Basin";Display="Garden Basin";Category="Pass";isGiftable=false;Variants={{Qty=1}};Prices={[1]=149}},
+        {Group="Silver Fertilizer";Display="Silver Fertilizer";Category="Pass";isGiftable=false;Variants={{Qty=1}};Prices={[1]=199}},
+        {Group="Levelup Lollipop";Display="Levelup Lollipop";Category="Pass";isGiftable=false;Variants={{Qty=1}};Prices={[1]=199}},
+        {Group="Grow All";Display="Grow All";Category="Pass";isGiftable=false;Variants={{Qty=1}};Prices={[1]=249}},
+        {Group="Hammer of Harvest";Display="Hammer of Harvest";Category="Pass";isGiftable=false;Variants={{Qty=1}};Prices={[1]=199}},
+        {Group="Naval Wort";Display="Naval Wort";Category="Seeds";isGiftable=false;Variants={{Qty=1}};Prices={[1]=99}},
+        {Group="Pollen Cone";Display="Pollen Cone";Category="Seeds";isGiftable=false;Variants={{Qty=1}};Prices={[1]=99}},
+        {Group="Purple Treeshroom";Display="Purple Treeshroom";Category="Seeds";isGiftable=false;Variants={{Qty=1}};Prices={[1]=99}},
+        {Group="Prime Seed Pack";Display="Prime Seed Pack";Category="Seed Pack";isGiftable=false;Variants={{Qty=1}};Prices={[1]=299}},
+        {Group="Holiday Seed Pack";Display="Holiday Seed Pack";Category="Seed Pack";isGiftable=false;Variants={{Qty=1}};Prices={[1]=299}},
+        {Group="Season 4 Seed Pack";Display="Season 4 Seed Pack";Category="Seed Pack";isGiftable=false;Variants={{Qty=1}};Prices={[1]=299}},
     }
 
-    local exoticPacks = {
+    local exoticPacks={
         {name="Exotic Flower Seed Pack";    ids={{1,3295548770,3295548788},{3,3295548782,3295548780},{10,3295548781,3295548784}}};
         {name="Exotic Crafters Seed Pack";  ids={{1,3306352279,3306352285},{3,3306352283,3306352286},{10,3306352284,3306352287}}};
         {name="Exotic Summer Seed Pack";    ids={{1,3311388942,3311388950},{3,3311388951,3311388953},{10,3311388948,3311388949}}};
@@ -563,277 +417,210 @@ local function bootShop()
         {name="Exotic Fall Seed Pack";      ids={{1,3407391662,3407391673},{3,3407391663,3407391664},{10,3407391666,3407391665}}};
         {name="Exotic Safari Seed Pack";    ids={{1,3449810469,3449810468},{3,3449810472,3449810470},{10,3449810471,3449810473}}};
     }
-    for _, ep in ipairs(exoticPacks) do
-        local variants, prices = {}, {}
-        for _, row in ipairs(ep.ids) do
-            table.insert(variants, { Qty=row[1], NormalId=row[2], GiftId=row[3] })
-            prices[row[1]] = row[1]==1 and 75 or row[1]==3 and 200 or 600
+    for _,ep in ipairs(exoticPacks) do
+        local variants,prices={},{}
+        for _,row in ipairs(ep.ids) do
+            table.insert(variants,{Qty=row[1],NormalId=row[2],GiftId=row[3]})
+            prices[row[1]]=row[1]==1 and 75 or row[1]==3 and 200 or 600
         end
-        table.insert(Products, { Group=ep.name; Display=ep.name; Category="Seed Pack"; isGiftable=true; Variants=variants; Prices=prices })
+        table.insert(Products,{Group=ep.name;Display=ep.name;Category="Seed Pack";isGiftable=true;Variants=variants;Prices=prices})
     end
 
-    local Categories = {
-        "All","Seed Pack","Seeds","Super Seed",
-        "Regular Eggs","Premium Eggs","Pet Shard",
-        "Chests","Crates","Container","Present",
-        "Tokens","Currency","Bundle Pack","Pass","Testing"
+    local Categories={"All","Seed Pack","Seeds","Super Seed","Regular Eggs","Premium Eggs","Pet Shard","Chests","Crates","Container","Present","Tokens","Currency","Bundle Pack","Pass","Testing"}
+    local CategoryColors={
+        ["Seed Pack"]=Color3.fromRGB(60,200,120);["Seeds"]=Color3.fromRGB(80,210,100);["Super Seed"]=Color3.fromRGB(0,230,180);
+        ["Regular Eggs"]=Color3.fromRGB(255,120,180);["Premium Eggs"]=Color3.fromRGB(200,100,255);["Chests"]=Color3.fromRGB(255,180,60);
+        ["Crates"]=Color3.fromRGB(255,100,100);["Container"]=Color3.fromRGB(100,200,255);["Present"]=Color3.fromRGB(255,100,160);
+        ["Tokens"]=Color3.fromRGB(100,140,255);["Currency"]=Color3.fromRGB(255,220,60);["Bundle Pack"]=Color3.fromRGB(100,250,90);
+        ["Pet Shard"]=Color3.fromRGB(255,125,150);["Pass"]=Color3.fromRGB(180,140,255);["Testing"]=Color3.fromRGB(180,140,255);
     }
-    local CategoryColors = {
-        ["Seed Pack"]   =Color3.fromRGB(60,200,120);  ["Seeds"]=Color3.fromRGB(80,210,100);
-        ["Super Seed"]  =Color3.fromRGB(0,230,180);   ["Regular Eggs"]=Color3.fromRGB(255,120,180);
-        ["Premium Eggs"]=Color3.fromRGB(200,100,255); ["Chests"]=Color3.fromRGB(255,180,60);
-        ["Crates"]      =Color3.fromRGB(255,100,100); ["Container"]=Color3.fromRGB(100,200,255);
-        ["Present"]     =Color3.fromRGB(255,100,160); ["Tokens"]=Color3.fromRGB(100,140,255);
-        ["Currency"]    =Color3.fromRGB(255,220,60);  ["Bundle Pack"]=Color3.fromRGB(100,250,90);
-        ["Pet Shard"]   =Color3.fromRGB(255,125,150); ["Pass"]=Color3.fromRGB(180,140,255);
-        ["Testing"]     =Color3.fromRGB(180,140,255);
-    }
-    local DEFAULT_COLOR = Color3.fromRGB(120,120,120)
-    local function categoryColor(cat) return CategoryColors[cat] or DEFAULT_COLOR end
-
-    local function formatPrice(price)
-        if not price then return "Free" end
-        local s = tostring(math.floor(price)):reverse():gsub("(%d%d%d)","%1,"):reverse():gsub("^,","")
-        return "🟩 " .. s
-    end
+    local function catColor(c) return CategoryColors[c] or Color3.fromRGB(120,120,120) end
+    local function fmtPrice(p) if not p then return "Free" end; return "🟩 "..fmtNum(p) end
 
     --------------------------------------------------------
-    -- CART SYSTEM
+    -- CART
     --------------------------------------------------------
-    -- Cart entry: { display, productId, price, isGift, targetName, targetUserId }
-    local Cart = {}
-    local cartUpdateCallbacks = {}
-
-    local function notifyCartUpdate()
-        for _, cb in ipairs(cartUpdateCallbacks) do cb() end
-    end
-
-    local function cartTotalCost()
-        local total = 0
-        for _, item in ipairs(Cart) do total = total + (item.price or 0) end
-        return total
-    end
-
-    local function addToCart(entry)
-        table.insert(Cart, entry)
-        notifyCartUpdate()
-    end
-
-    local function clearCart()
-        Cart = {}
-        notifyCartUpdate()
-    end
+    local Cart={}
+    local cartCallbacks={}
+    local function notifyCart() for _,cb in ipairs(cartCallbacks) do cb() end end
+    local function cartTotal() local t=0; for _,i in ipairs(Cart) do t=t+(i.price or 0) end; return t end
+    local function clearCart() Cart={}; notifyCart() end
 
     --------------------------------------------------------
-    -- MAIN WINDOW
+    -- MAIN WINDOW  (980 wide – full width, queue overlays)
     --------------------------------------------------------
-    local GuiVisible = true
+    local GuiVisible=true
 
-    local Backdrop = Instance.new("Frame", Gui)
-    Backdrop.Size                   = UDim2.fromScale(1, 1)
-    Backdrop.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
-    Backdrop.BackgroundTransparency = 0.5
-    Backdrop.BorderSizePixel        = 0
+    local Backdrop=Instance.new("Frame",Gui)
+    Backdrop.Size=UDim2.fromScale(1,1); Backdrop.BackgroundColor3=Color3.fromRGB(0,0,0)
+    Backdrop.BackgroundTransparency=.5; Backdrop.BorderSizePixel=0
 
-    local ToggleBtn = Instance.new("TextButton", Gui)
-    ToggleBtn.Size             = UDim2.new(0, 56, 0, 56)
-    ToggleBtn.Position         = UDim2.new(1, -72, 1, -72)
-    ToggleBtn.AnchorPoint      = Vector2.new(0, 0)
-    ToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 60, 130)
-    ToggleBtn.Text             = "🛒"
-    ToggleBtn.TextSize         = 22
-    ToggleBtn.Font             = Enum.Font.GothamBold
-    ToggleBtn.TextColor3       = Color3.fromRGB(255, 255, 255)
-    ToggleBtn.AutoButtonColor  = false
-    ToggleBtn.BorderSizePixel  = 0
-    ToggleBtn.ZIndex           = 30
-    Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
-    local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
-    ToggleStroke.Color=Color3.fromRGB(100,150,255); ToggleStroke.Thickness=1.5; ToggleStroke.Transparency=0.5
+    -- Toggle button
+    local ToggleBtn=Instance.new("TextButton",Gui)
+    ToggleBtn.Size=UDim2.new(0,56,0,56); ToggleBtn.Position=UDim2.new(1,-72,1,-72)
+    ToggleBtn.AnchorPoint=Vector2.new(0,0); ToggleBtn.BackgroundColor3=Color3.fromRGB(30,60,130)
+    ToggleBtn.Text="🛒"; ToggleBtn.TextSize=22; ToggleBtn.Font=Enum.Font.GothamBold
+    ToggleBtn.TextColor3=Color3.fromRGB(255,255,255); ToggleBtn.AutoButtonColor=false; ToggleBtn.BorderSizePixel=0; ToggleBtn.ZIndex=30
+    Instance.new("UICorner",ToggleBtn).CornerRadius=UDim.new(1,0)
+    local ts=Instance.new("UIStroke",ToggleBtn); ts.Color=Color3.fromRGB(100,150,255); ts.Thickness=1.5; ts.Transparency=.5
     ToggleBtn.MouseEnter:Connect(function() tw(ToggleBtn,FAST,{BackgroundColor3=Color3.fromRGB(50,90,180)}) end)
     ToggleBtn.MouseLeave:Connect(function() tw(ToggleBtn,FAST,{BackgroundColor3=Color3.fromRGB(30,60,130)}) end)
 
-    local Main = Instance.new("Frame", Gui)
-    Main.Size             = UDim2.new(0, 1060, 0, 620)
-    Main.Position         = UDim2.new(0.5, 0, 0.5, 0)
-    Main.AnchorPoint      = Vector2.new(0.5, 0.5)
-    Main.BackgroundColor3 = Color3.fromRGB(14, 14, 14)
-    Main.BorderSizePixel  = 0
-    Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 14)
-    local MainStroke = Instance.new("UIStroke", Main)
-    MainStroke.Color=Color3.fromRGB(255,255,255); MainStroke.Transparency=0.88; MainStroke.Thickness=1
+    local Main=Instance.new("Frame",Gui)
+    Main.Size=UDim2.new(0,980,0,600); Main.Position=UDim2.new(.5,0,.5,0); Main.AnchorPoint=Vector2.new(.5,.5)
+    Main.BackgroundColor3=Color3.fromRGB(14,14,14); Main.BorderSizePixel=0; Main.ClipsDescendants=true
+    Instance.new("UICorner",Main).CornerRadius=UDim.new(0,14)
+    local mainStroke=Instance.new("UIStroke",Main); mainStroke.Color=Color3.fromRGB(255,255,255); mainStroke.Transparency=.88; mainStroke.Thickness=1
 
-    local function setVisible(vis)
-        GuiVisible = vis; Main.Visible = vis; Backdrop.Visible = vis
-        ToggleBtn.Text = vis and "✕" or "🛒"
-        tw(ToggleBtn, FAST, { BackgroundColor3 = vis and Color3.fromRGB(80,30,30) or Color3.fromRGB(30,60,130) })
+    local function setVisible(v)
+        GuiVisible=v; Main.Visible=v; Backdrop.Visible=v; ToggleBtn.Text=v and "✕" or "🛒"
+        tw(ToggleBtn,FAST,{BackgroundColor3=v and Color3.fromRGB(80,30,30) or Color3.fromRGB(30,60,130)})
     end
     ToggleBtn.MouseButton1Click:Connect(function() setVisible(not GuiVisible) end)
-    UserInputService.InputBegan:Connect(function(input, processed)
-        if processed then return end
-        if input.KeyCode == Enum.KeyCode.RightBracket then setVisible(not GuiVisible) end
-    end)
+    UserInputService.InputBegan:Connect(function(i,p) if not p and i.KeyCode==Enum.KeyCode.RightBracket then setVisible(not GuiVisible) end end)
 
-    -- Draggable
+    -- Drag
     do
-        local dragging, dragStart, winStart = false, Vector2.new(), Vector2.new()
-        Main.InputBegan:Connect(function(input)
-            if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-            if (input.Position.Y - Main.AbsolutePosition.Y) > 52 then return end
-            dragging=true; dragStart=Vector2.new(input.Position.X,input.Position.Y)
-            winStart=Vector2.new(Main.AbsolutePosition.X+Main.AbsoluteSize.X/2, Main.AbsolutePosition.Y+Main.AbsoluteSize.Y/2)
+        local dragging,dragStart,winStart=false,Vector2.new(),Vector2.new()
+        Main.InputBegan:Connect(function(i)
+            if i.UserInputType~=Enum.UserInputType.MouseButton1 then return end
+            if (i.Position.Y-Main.AbsolutePosition.Y)>52 then return end
+            dragging=true; dragStart=Vector2.new(i.Position.X,i.Position.Y)
+            winStart=Vector2.new(Main.AbsolutePosition.X+Main.AbsoluteSize.X/2,Main.AbsolutePosition.Y+Main.AbsoluteSize.Y/2)
         end)
-        UserInputService.InputChanged:Connect(function(input)
-            if not dragging or input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-            local d = Vector2.new(input.Position.X-dragStart.X, input.Position.Y-dragStart.Y)
-            Main.Position = UDim2.new(0, winStart.X+d.X, 0, winStart.Y+d.Y)
+        UserInputService.InputChanged:Connect(function(i)
+            if not dragging or i.UserInputType~=Enum.UserInputType.MouseMovement then return end
+            local d=Vector2.new(i.Position.X-dragStart.X,i.Position.Y-dragStart.Y)
+            Main.Position=UDim2.new(0,winStart.X+d.X,0,winStart.Y+d.Y)
         end)
-        UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging=false end
-        end)
+        UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end end)
     end
 
     --------------------------------------------------------
     -- TOAST
     --------------------------------------------------------
-    local Toast = Instance.new("Frame", Gui)
-    Toast.Size=UDim2.new(0,360,0,44); Toast.Position=UDim2.new(0.5,0,1,60)
-    Toast.AnchorPoint=Vector2.new(0.5,1); Toast.BackgroundColor3=Color3.fromRGB(22,22,22)
-    Toast.BorderSizePixel=0; Toast.ZIndex=20
+    local Toast=Instance.new("Frame",Gui)
+    Toast.Size=UDim2.new(0,380,0,48); Toast.Position=UDim2.new(.5,0,1,60); Toast.AnchorPoint=Vector2.new(.5,1)
+    Toast.BackgroundColor3=Color3.fromRGB(20,20,22); Toast.BorderSizePixel=0; Toast.ZIndex=50
     Instance.new("UICorner",Toast).CornerRadius=UDim.new(0,10)
-    local ToastBar=Instance.new("Frame",Toast); ToastBar.Size=UDim2.new(0,4,1,0)
+    local ToastBar=Instance.new("Frame",Toast); ToastBar.Size=UDim2.new(0,4,1,-8); ToastBar.Position=UDim2.new(0,0,.5,0); ToastBar.AnchorPoint=Vector2.new(0,.5)
     ToastBar.BackgroundColor3=Color3.fromRGB(80,80,80); ToastBar.BorderSizePixel=0
     Instance.new("UICorner",ToastBar).CornerRadius=UDim.new(0,4)
-    local ToastLabel=Instance.new("TextLabel",Toast); ToastLabel.Size=UDim2.new(1,-16,1,0)
-    ToastLabel.Position=UDim2.new(0,12,0,0); ToastLabel.BackgroundTransparency=1
-    ToastLabel.TextColor3=Color3.fromRGB(210,210,210); ToastLabel.Font=Enum.Font.Gotham
-    ToastLabel.TextSize=13; ToastLabel.Text=""; ToastLabel.ZIndex=21; ToastLabel.TextXAlignment=Enum.TextXAlignment.Left
-
+    local ToastIco=Instance.new("TextLabel",Toast); ToastIco.Size=UDim2.new(0,28,1,0); ToastIco.Position=UDim2.new(0,8,0,0)
+    ToastIco.BackgroundTransparency=1; ToastIco.Text="ℹ"; ToastIco.TextColor3=Color3.fromRGB(180,180,180)
+    ToastIco.Font=Enum.Font.GothamBold; ToastIco.TextSize=16; ToastIco.ZIndex=51
+    local ToastLabel=Instance.new("TextLabel",Toast); ToastLabel.Size=UDim2.new(1,-44,1,0); ToastLabel.Position=UDim2.new(0,38,0,0)
+    ToastLabel.BackgroundTransparency=1; ToastLabel.TextColor3=Color3.fromRGB(210,210,210); ToastLabel.Font=Enum.Font.Gotham
+    ToastLabel.TextSize=12; ToastLabel.Text=""; ToastLabel.ZIndex=51; ToastLabel.TextXAlignment=Enum.TextXAlignment.Left
+    ToastLabel.TextWrapped=true
     local toastThread
-    local function showToast(msg, color)
+    local function showToast(msg,color,icon)
         if toastThread then task.cancel(toastThread) end
-        local c = color or Color3.fromRGB(60,120,200)
-        ToastLabel.Text=msg; ToastBar.BackgroundColor3=c
-        tw(Toast, MED, {Position=UDim2.new(0.5,0,1,-20)})
-        toastThread = task.delay(2.8, function() tw(Toast,MED,{Position=UDim2.new(0.5,0,1,60)}) end)
+        local c=color or Color3.fromRGB(60,120,200)
+        ToastLabel.Text=msg; ToastBar.BackgroundColor3=c; ToastIco.Text=icon or "ℹ"; ToastIco.TextColor3=c
+        tw(Toast,MED,{Position=UDim2.new(.5,0,1,-18)})
+        toastThread=task.delay(3,function() tw(Toast,MED,{Position=UDim2.new(.5,0,1,60)}) end)
     end
 
     --------------------------------------------------------
     -- TITLE BAR
     --------------------------------------------------------
-    local TitleBar = Instance.new("Frame", Main)
+    local TitleBar=Instance.new("Frame",Main)
     TitleBar.Size=UDim2.new(1,0,0,52); TitleBar.BackgroundColor3=Color3.fromRGB(18,18,18); TitleBar.BorderSizePixel=0
     Instance.new("UICorner",TitleBar).CornerRadius=UDim.new(0,14)
-    local TitleCover=Instance.new("Frame",TitleBar); TitleCover.Size=UDim2.new(1,0,0,14)
-    TitleCover.Position=UDim2.new(0,0,1,-14); TitleCover.BackgroundColor3=Color3.fromRGB(18,18,18); TitleCover.BorderSizePixel=0
+    local tc=Instance.new("Frame",TitleBar); tc.Size=UDim2.new(1,0,0,14); tc.Position=UDim2.new(0,0,1,-14); tc.BackgroundColor3=Color3.fromRGB(18,18,18); tc.BorderSizePixel=0
 
-    local TitleLabel=Instance.new("TextLabel",TitleBar); TitleLabel.Size=UDim2.new(0,120,1,0)
-    TitleLabel.Position=UDim2.new(0,20,0,0); TitleLabel.BackgroundTransparency=1; TitleLabel.Text="🛒  Shop"
-    TitleLabel.TextColor3=Color3.fromRGB(230,230,230); TitleLabel.Font=Enum.Font.GothamBold; TitleLabel.TextSize=16
-    TitleLabel.TextXAlignment=Enum.TextXAlignment.Left
+    local TitleLabel=Instance.new("TextLabel",TitleBar); TitleLabel.Size=UDim2.new(0,100,1,0); TitleLabel.Position=UDim2.new(0,16,0,0)
+    TitleLabel.BackgroundTransparency=1; TitleLabel.Text="🛒  Shop"; TitleLabel.TextColor3=Color3.fromRGB(230,230,230)
+    TitleLabel.Font=Enum.Font.GothamBold; TitleLabel.TextSize=16; TitleLabel.TextXAlignment=Enum.TextXAlignment.Left
 
-    local tierCfg = (ActiveKeyData and TIER_DISPLAY[ActiveKeyData.Tier]) or DEFAULT_TIER
-    local TierBadge=Instance.new("TextLabel",TitleBar); TierBadge.Size=UDim2.new(0,0,0,18)
-    TierBadge.AutomaticSize=Enum.AutomaticSize.X; TierBadge.Position=UDim2.new(0,148,0.5,-9)
-    TierBadge.BackgroundColor3=tierCfg.Color; TierBadge.BackgroundTransparency=0.72; TierBadge.Text=tierCfg.Label
-    TierBadge.TextColor3=tierCfg.Color; TierBadge.Font=Enum.Font.GothamBold; TierBadge.TextSize=9; TierBadge.BorderSizePixel=0
+    local tierCfg=(ActiveKeyData and TIER_DISPLAY[ActiveKeyData.Tier]) or DEFAULT_TIER
+    local TierBadge=Instance.new("TextLabel",TitleBar); TierBadge.Size=UDim2.new(0,0,0,18); TierBadge.AutomaticSize=Enum.AutomaticSize.X
+    TierBadge.Position=UDim2.new(0,120,0.5,-9); TierBadge.BackgroundColor3=tierCfg.Color; TierBadge.BackgroundTransparency=.72
+    TierBadge.Text=tierCfg.Label; TierBadge.TextColor3=tierCfg.Color; TierBadge.Font=Enum.Font.GothamBold; TierBadge.TextSize=9; TierBadge.BorderSizePixel=0
     Instance.new("UICorner",TierBadge).CornerRadius=UDim.new(1,0)
-    local tbPad=Instance.new("UIPadding",TierBadge); tbPad.PaddingLeft,tbPad.PaddingRight=UDim.new(0,6),UDim.new(0,6)
+    local tbp=Instance.new("UIPadding",TierBadge); tbp.PaddingLeft,tbp.PaddingRight=UDim.new(0,6),UDim.new(0,6)
 
-    -- ┌────────────────────────────────────────────┐
-    -- │  NEW: BALANCE DISPLAY in title bar         │
-    -- └────────────────────────────────────────────┘
-    local BalanceLabel = Instance.new("TextLabel", TitleBar)
-    BalanceLabel.Size                   = UDim2.new(0, 180, 0, 14)
-    BalanceLabel.Position               = UDim2.new(0, 250, 0.5, -7)
-    BalanceLabel.BackgroundTransparency = 1
-    BalanceLabel.Font                   = Enum.Font.Gotham
-    BalanceLabel.TextSize               = 11
-    BalanceLabel.TextXAlignment         = Enum.TextXAlignment.Left
-    BalanceLabel.Text                   = "💰 Balance: —"
-    BalanceLabel.TextColor3             = Color3.fromRGB(70, 180, 100)
-
-    local function refreshBalanceDisplay()
-        local bal = getTokenBalance()
-        if bal then
-            BalanceLabel.Text = string.format("💰 %s tokens", tostring(math.floor(bal)):reverse():gsub("(%d%d%d)","%1,"):reverse():gsub("^,",""))
-        else
-            BalanceLabel.Text = "💰 Balance: —"
-        end
+    -- Balance display
+    local BalLabel=Instance.new("TextLabel",TitleBar); BalLabel.Size=UDim2.new(0,200,0,14); BalLabel.Position=UDim2.new(0,16,1,-17)
+    BalLabel.BackgroundTransparency=1; BalLabel.Font=Enum.Font.Gotham; BalLabel.TextSize=11; BalLabel.TextXAlignment=Enum.TextXAlignment.Left
+    BalLabel.Text="💰 Balance: —"; BalLabel.TextColor3=Color3.fromRGB(70,180,100)
+    local function refreshBal()
+        local b=getTokenBalance()
+        BalLabel.Text=b and ("💰 "..fmtNum(b).." tokens") or "💰 Balance: —"
     end
-    refreshBalanceDisplay()
-    task.spawn(function()
-        while Main.Parent do task.wait(5); refreshBalanceDisplay() end
-    end)
+    refreshBal()
+    task.spawn(function() while Main.Parent do task.wait(5); if Settings.AutoRefreshBal then refreshBal() end end end)
 
-    local ExpiryLabel=Instance.new("TextLabel",TitleBar); ExpiryLabel.Size=UDim2.new(0,180,0,14)
-    ExpiryLabel.Position=UDim2.new(0,20,1,-17); ExpiryLabel.BackgroundTransparency=1
-    ExpiryLabel.Font=Enum.Font.Gotham; ExpiryLabel.TextSize=10; ExpiryLabel.TextXAlignment=Enum.TextXAlignment.Left
-
-    local function refreshExpiryDisplay()
+    -- Expiry
+    local ExpiryLabel=Instance.new("TextLabel",TitleBar); ExpiryLabel.Size=UDim2.new(0,160,0,14); ExpiryLabel.Position=UDim2.new(0,220,1,-17)
+    ExpiryLabel.BackgroundTransparency=1; ExpiryLabel.Font=Enum.Font.Gotham; ExpiryLabel.TextSize=10; ExpiryLabel.TextXAlignment=Enum.TextXAlignment.Left
+    local function refreshExpiry()
         if not ActiveKeyData then ExpiryLabel.Text=""; ExpiryLabel.TextColor3=Color3.fromRGB(70,70,70); return end
-        local valid,label=checkExpiry(ActiveKeyData.Expires)
-        if not valid then ExpiryLabel.Text="⚠ Key expired"; ExpiryLabel.TextColor3=Color3.fromRGB(220,80,80)
+        local v,l=checkExpiry(ActiveKeyData.Expires)
+        if not v then ExpiryLabel.Text="⚠ Key expired"; ExpiryLabel.TextColor3=Color3.fromRGB(220,80,80)
         else
-            ExpiryLabel.Text="🔑 "..label
+            ExpiryLabel.Text="🔑 "..l
             local warn=ActiveKeyData.Expires~=0 and (ActiveKeyData.Expires-unixNow())<172800
             ExpiryLabel.TextColor3=warn and Color3.fromRGB(220,160,50) or Color3.fromRGB(60,60,75)
         end
     end
-    refreshExpiryDisplay()
-    task.spawn(function() while Main.Parent do task.wait(60); refreshExpiryDisplay() end end)
+    refreshExpiry()
+    task.spawn(function() while Main.Parent do task.wait(60); refreshExpiry() end end)
 
-    local HotkeyHint=Instance.new("TextLabel",TitleBar); HotkeyHint.Size=UDim2.new(0,100,0,14)
-    HotkeyHint.Position=UDim2.new(0,204,1,-17); HotkeyHint.BackgroundTransparency=1
-    HotkeyHint.Text="[ ] to toggle"; HotkeyHint.TextColor3=Color3.fromRGB(50,50,60)
+    local HotkeyHint=Instance.new("TextLabel",TitleBar); HotkeyHint.Size=UDim2.new(0,90,0,14); HotkeyHint.Position=UDim2.new(0,386,1,-17)
+    HotkeyHint.BackgroundTransparency=1; HotkeyHint.Text="[ ] to toggle"; HotkeyHint.TextColor3=Color3.fromRGB(45,45,55)
     HotkeyHint.Font=Enum.Font.Gotham; HotkeyHint.TextSize=10; HotkeyHint.TextXAlignment=Enum.TextXAlignment.Left
 
-    local CloseBtn=Instance.new("TextButton",TitleBar); CloseBtn.Size=UDim2.new(0,28,0,28)
-    CloseBtn.Position=UDim2.new(1,-42,0.5,-14); CloseBtn.BackgroundColor3=Color3.fromRGB(55,55,55)
-    CloseBtn.Text="✕"; CloseBtn.TextColor3=Color3.fromRGB(200,200,200); CloseBtn.Font=Enum.Font.GothamBold
-    CloseBtn.TextSize=13; CloseBtn.BorderSizePixel=0; CloseBtn.AutoButtonColor=false
-    Instance.new("UICorner",CloseBtn).CornerRadius=UDim.new(1,0)
-    CloseBtn.MouseButton1Click:Connect(function() setVisible(false) end)
+    -- Title bar right buttons (Settings, Queue toggle, Close)
+    local function makeTitleBtn(icon,rightOffset,color)
+        local b=Instance.new("TextButton",TitleBar); b.Size=UDim2.new(0,28,0,28); b.Position=UDim2.new(1,rightOffset,.5,-14)
+        b.BackgroundColor3=color or Color3.fromRGB(32,32,32); b.Text=icon; b.TextColor3=Color3.fromRGB(180,180,180)
+        b.Font=Enum.Font.GothamBold; b.TextSize=13; b.BorderSizePixel=0; b.AutoButtonColor=false
+        Instance.new("UICorner",b).CornerRadius=UDim.new(1,0); return b
+    end
+    local CloseBtn=makeTitleBtn("✕",-14,Color3.fromRGB(55,55,55))
+    local QueueToggleBtn=makeTitleBtn("🛒",-48,Color3.fromRGB(30,50,30))
+    local SettingsBtn=makeTitleBtn("⚙",-82,Color3.fromRGB(32,32,42))
+
     CloseBtn.MouseEnter:Connect(function() tw(CloseBtn,FAST,{BackgroundColor3=Color3.fromRGB(180,50,50)}) end)
     CloseBtn.MouseLeave:Connect(function() tw(CloseBtn,FAST,{BackgroundColor3=Color3.fromRGB(55,55,55)}) end)
+    CloseBtn.MouseButton1Click:Connect(function() setVisible(false) end)
 
     local Divider=Instance.new("Frame",Main); Divider.Size=UDim2.new(1,0,0,1); Divider.Position=UDim2.new(0,0,0,52)
-    Divider.BackgroundColor3=Color3.fromRGB(255,255,255); Divider.BackgroundTransparency=0.88; Divider.BorderSizePixel=0
+    Divider.BackgroundColor3=Color3.fromRGB(255,255,255); Divider.BackgroundTransparency=.88; Divider.BorderSizePixel=0
 
     --------------------------------------------------------
-    -- LEFT PANEL – PLAYER LIST
+    -- LEFT PANEL – PLAYER LIST  (200px)
     --------------------------------------------------------
-    local Left=Instance.new("Frame",Main); Left.Size=UDim2.new(0,200,1,-52); Left.Position=UDim2.new(0,0,0,52)
+    local Left=Instance.new("Frame",Main)
+    Left.Size=UDim2.new(0,200,1,-52); Left.Position=UDim2.new(0,0,0,52)
     Left.BackgroundColor3=Color3.fromRGB(18,18,18); Left.BorderSizePixel=0
-    local LeftDiv=Instance.new("Frame",Left); LeftDiv.Size=UDim2.new(0,1,1,0); LeftDiv.Position=UDim2.new(1,-1,0,0)
-    LeftDiv.BackgroundColor3=Color3.fromRGB(255,255,255); LeftDiv.BackgroundTransparency=0.88; LeftDiv.BorderSizePixel=0
-    local SectionLabel=Instance.new("TextLabel",Left); SectionLabel.Size=UDim2.new(1,-16,0,32); SectionLabel.Position=UDim2.new(0,16,0,8)
-    SectionLabel.BackgroundTransparency=1; SectionLabel.Text="SEND GIFT TO"; SectionLabel.TextColor3=Color3.fromRGB(80,80,80)
-    SectionLabel.Font=Enum.Font.GothamBold; SectionLabel.TextSize=10; SectionLabel.TextXAlignment=Enum.TextXAlignment.Left
-    local PlayerScroll=Instance.new("ScrollingFrame",Left); PlayerScroll.Size=UDim2.new(1,0,1,-44)
-    PlayerScroll.Position=UDim2.new(0,0,0,44); PlayerScroll.BackgroundTransparency=1; PlayerScroll.ScrollBarThickness=4
-    PlayerScroll.ScrollBarImageColor3=Color3.fromRGB(80,80,80); PlayerScroll.ScrollingDirection=Enum.ScrollingDirection.Y
-    PlayerScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y; PlayerScroll.BorderSizePixel=0
-    local PlayerLayout=Instance.new("UIListLayout",PlayerScroll); PlayerLayout.Padding=UDim.new(0,2); PlayerLayout.SortOrder=Enum.SortOrder.LayoutOrder
-    local PlayerPad=Instance.new("UIPadding",PlayerScroll)
-    PlayerPad.PaddingLeft=UDim.new(0,8); PlayerPad.PaddingRight=UDim.new(0,8)
-    PlayerPad.PaddingTop=UDim.new(0,4); PlayerPad.PaddingBottom=UDim.new(0,8)
+    local ld=Instance.new("Frame",Left); ld.Size=UDim2.new(0,1,1,0); ld.Position=UDim2.new(1,-1,0,0)
+    ld.BackgroundColor3=Color3.fromRGB(255,255,255); ld.BackgroundTransparency=.88; ld.BorderSizePixel=0
 
-    --------------------------------------------------------
-    -- PLAYER SELECTION
-    --------------------------------------------------------
-    local SelectedPlayer = LocalPlayer
-    local SelectedButton = nil
-    local onPlayerChangedCallbacks = {}
-    local function notifyPlayerChanged(p) for _,cb in ipairs(onPlayerChangedCallbacks) do cb(p) end end
+    local sl=Instance.new("TextLabel",Left); sl.Size=UDim2.new(1,-16,0,32); sl.Position=UDim2.new(0,16,0,8)
+    sl.BackgroundTransparency=1; sl.Text="SEND GIFT TO"; sl.TextColor3=Color3.fromRGB(80,80,80)
+    sl.Font=Enum.Font.GothamBold; sl.TextSize=10; sl.TextXAlignment=Enum.TextXAlignment.Left
 
-    local function getInitials(name)
-        local up=string.gmatch(name,"%u"); local a,b=up(),up()
-        if a and b then return a..b elseif a then return a..string.sub(name,2,2):upper() end
-        return string.sub(name,1,2):upper()
+    local PlayerScroll=Instance.new("ScrollingFrame",Left)
+    PlayerScroll.Size=UDim2.new(1,0,1,-44); PlayerScroll.Position=UDim2.new(0,0,0,44)
+    PlayerScroll.BackgroundTransparency=1; PlayerScroll.ScrollBarThickness=4; PlayerScroll.ScrollBarImageColor3=Color3.fromRGB(80,80,80)
+    PlayerScroll.ScrollingDirection=Enum.ScrollingDirection.Y; PlayerScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y; PlayerScroll.BorderSizePixel=0
+    local pl=Instance.new("UIListLayout",PlayerScroll); pl.Padding=UDim.new(0,2); pl.SortOrder=Enum.SortOrder.LayoutOrder
+    local pp=Instance.new("UIPadding",PlayerScroll); pp.PaddingLeft,pp.PaddingRight,pp.PaddingTop,pp.PaddingBottom=UDim.new(0,8),UDim.new(0,8),UDim.new(0,4),UDim.new(0,8)
+
+    local SelectedPlayer=LocalPlayer; local SelectedButton=nil
+    local onPlayerChanged={}
+    local function notifyPlayerChange(p) for _,cb in ipairs(onPlayerChanged) do cb(p) end end
+
+    local function getInitials(n)
+        local u=string.gmatch(n,"%u"); local a,b=u(),u()
+        if a and b then return a..b elseif a then return a..string.sub(n,2,2):upper() end
+        return string.sub(n,1,2):upper()
     end
 
-    local function selectPlayer(plr, btn)
+    local function selectPlayer(plr,btn)
         if SelectedButton then
             tw(SelectedButton,FAST,{BackgroundColor3=Color3.fromRGB(26,26,26)})
             local l=SelectedButton:FindFirstChild("NameLabel"); if l then tw(l,FAST,{TextColor3=Color3.fromRGB(160,160,160)}) end
@@ -841,30 +628,27 @@ local function bootShop()
         SelectedPlayer,SelectedButton=plr,btn
         tw(btn,FAST,{BackgroundColor3=Color3.fromRGB(35,65,140)})
         local l=btn:FindFirstChild("NameLabel"); if l then tw(l,FAST,{TextColor3=Color3.fromRGB(140,185,255)}) end
-        notifyPlayerChanged(plr)
+        notifyPlayerChange(plr)
     end
 
-    local function createPlayerButton(plr)
-        local btn=Instance.new("TextButton",PlayerScroll); btn.Name="PlayerBtn_"..plr.Name
+    local function createPlayerBtn(plr)
+        local btn=Instance.new("TextButton",PlayerScroll); btn.Name="PB_"..plr.Name
         btn.Size=UDim2.new(1,0,0,50); btn.BackgroundColor3=Color3.fromRGB(26,26,26)
         btn.BackgroundTransparency=0; btn.Text=""; btn.AutoButtonColor=false; btn.BorderSizePixel=0
         Instance.new("UICorner",btn).CornerRadius=UDim.new(0,8)
-        local avF=Instance.new("Frame",btn); avF.Size=UDim2.new(0,32,0,32); avF.Position=UDim2.new(0,9,0.5,-16)
-        avF.BackgroundColor3=Color3.fromRGB(28,33,55); avF.BorderSizePixel=0
-        Instance.new("UICorner",avF).CornerRadius=UDim.new(1,0)
+        local avF=Instance.new("Frame",btn); avF.Size=UDim2.new(0,32,0,32); avF.Position=UDim2.new(0,9,.5,-16)
+        avF.BackgroundColor3=Color3.fromRGB(28,33,55); avF.BorderSizePixel=0; Instance.new("UICorner",avF).CornerRadius=UDim.new(1,0)
         local initL=Instance.new("TextLabel",avF); initL.Size=UDim2.fromScale(1,1); initL.BackgroundTransparency=1
         initL.Text=getInitials(plr.Name); initL.TextColor3=Color3.fromRGB(140,185,255); initL.Font=Enum.Font.GothamBold; initL.TextSize=11
         local avImg=Instance.new("ImageLabel",avF); avImg.Size=UDim2.fromScale(1,1); avImg.BackgroundTransparency=1
-        avImg.Image=""; avImg.ImageTransparency=1; avImg.ScaleType=Enum.ScaleType.Crop
-        Instance.new("UICorner",avImg).CornerRadius=UDim.new(1,0)
+        avImg.Image=""; avImg.ImageTransparency=1; avImg.ScaleType=Enum.ScaleType.Crop; Instance.new("UICorner",avImg).CornerRadius=UDim.new(1,0)
         task.spawn(function()
             local ok,url=pcall(function() return Players:GetUserThumbnailAsync(plr.UserId,Enum.ThumbnailType.HeadShot,Enum.ThumbnailSize.Size48x48) end)
             if ok and url and url~="" then avImg.Image=url; avImg.ImageTransparency=0; initL.Visible=false end
         end)
-        local nameL=Instance.new("TextLabel",btn); nameL.Name="NameLabel"; nameL.Size=UDim2.new(1,-50,0,18)
-        nameL.Position=UDim2.new(0,48,0,7); nameL.BackgroundTransparency=1; nameL.Text=plr.Name
-        nameL.TextColor3=Color3.fromRGB(160,160,160); nameL.Font=Enum.Font.Gotham; nameL.TextSize=12
-        nameL.TextXAlignment=Enum.TextXAlignment.Left; nameL.TextTruncate=Enum.TextTruncate.AtEnd
+        local nameL=Instance.new("TextLabel",btn); nameL.Name="NameLabel"; nameL.Size=UDim2.new(1,-50,0,18); nameL.Position=UDim2.new(0,48,0,7)
+        nameL.BackgroundTransparency=1; nameL.Text=plr.Name; nameL.TextColor3=Color3.fromRGB(160,160,160)
+        nameL.Font=Enum.Font.Gotham; nameL.TextSize=12; nameL.TextXAlignment=Enum.TextXAlignment.Left; nameL.TextTruncate=Enum.TextTruncate.AtEnd
         if plr==LocalPlayer then
             local youL=Instance.new("TextLabel",btn); youL.Size=UDim2.new(1,-50,0,13); youL.Position=UDim2.new(0,48,0,28)
             youL.BackgroundTransparency=1; youL.Text="you"; youL.TextColor3=Color3.fromRGB(60,60,60)
@@ -877,247 +661,444 @@ local function bootShop()
     end
 
     for _,p in ipairs(Players:GetPlayers()) do
-        local b=createPlayerButton(p)
-        if p==LocalPlayer then task.defer(function() selectPlayer(p,b) end) end
+        local b=createPlayerBtn(p); if p==LocalPlayer then task.defer(function() selectPlayer(p,b) end) end
     end
-    Players.PlayerAdded:Connect(function(p) createPlayerButton(p) end)
+    Players.PlayerAdded:Connect(function(p) createPlayerBtn(p) end)
     Players.PlayerRemoving:Connect(function(p)
-        local b=PlayerScroll:FindFirstChild("PlayerBtn_"..p.Name)
-        if b then
-            if b==SelectedButton then
-                local fb=PlayerScroll:FindFirstChild("PlayerBtn_"..LocalPlayer.Name)
-                if fb then selectPlayer(LocalPlayer,fb) end
-            end
+        local b=PlayerScroll:FindFirstChild("PB_"..p.Name); if b then
+            if b==SelectedButton then local fb=PlayerScroll:FindFirstChild("PB_"..LocalPlayer.Name); if fb then selectPlayer(LocalPlayer,fb) end end
             b:Destroy()
         end
     end)
 
     --------------------------------------------------------
-    -- RIGHT PANEL (product area: 200→980 of 1060, leaving 80 for cart)
+    -- MAIN CONTENT (product area fills Left→right edge)
     --------------------------------------------------------
-    local Right=Instance.new("Frame",Main); Right.Size=UDim2.new(1,-280,1,-52); Right.Position=UDim2.new(0,200,0,52)
-    Right.BackgroundTransparency=1; Right.BorderSizePixel=0
+    local Right=Instance.new("Frame",Main)
+    Right.Size=UDim2.new(1,-200,1,-52); Right.Position=UDim2.new(0,200,0,52)
+    Right.BackgroundTransparency=1; Right.BorderSizePixel=0; Right.ClipsDescendants=true
 
     local FilterBar=Instance.new("Frame",Right); FilterBar.Size=UDim2.new(1,0,0,46); FilterBar.BackgroundTransparency=1
-    local FilterScroll=Instance.new("ScrollingFrame",FilterBar); FilterScroll.Size=UDim2.new(1,-24,1,0)
-    FilterScroll.Position=UDim2.new(0,12,0,0); FilterScroll.BackgroundTransparency=1; FilterScroll.ScrollBarThickness=0
-    FilterScroll.ScrollingDirection=Enum.ScrollingDirection.X; FilterScroll.AutomaticCanvasSize=Enum.AutomaticSize.X
-    FilterScroll.CanvasSize=UDim2.new(0,0,0,0); FilterScroll.BorderSizePixel=0; FilterScroll.ElasticBehavior=Enum.ElasticBehavior.Never
-    local FilterLayout=Instance.new("UIListLayout",FilterScroll); FilterLayout.FillDirection=Enum.FillDirection.Horizontal
-    FilterLayout.Padding=UDim.new(0,6); FilterLayout.VerticalAlignment=Enum.VerticalAlignment.Center; FilterLayout.SortOrder=Enum.SortOrder.LayoutOrder
-    local FilterPad=Instance.new("UIPadding",FilterScroll); FilterPad.PaddingTop=UDim.new(0,8); FilterPad.PaddingBottom=UDim.new(0,8); FilterPad.PaddingLeft=UDim.new(0,2)
+    local FilterScroll=Instance.new("ScrollingFrame",FilterBar); FilterScroll.Size=UDim2.new(1,-24,1,0); FilterScroll.Position=UDim2.new(0,12,0,0)
+    FilterScroll.BackgroundTransparency=1; FilterScroll.ScrollBarThickness=0; FilterScroll.ScrollingDirection=Enum.ScrollingDirection.X
+    FilterScroll.AutomaticCanvasSize=Enum.AutomaticSize.X; FilterScroll.CanvasSize=UDim2.new(0,0,0,0); FilterScroll.BorderSizePixel=0; FilterScroll.ElasticBehavior=Enum.ElasticBehavior.Never
+    local fl=Instance.new("UIListLayout",FilterScroll); fl.FillDirection=Enum.FillDirection.Horizontal; fl.Padding=UDim.new(0,6); fl.VerticalAlignment=Enum.VerticalAlignment.Center; fl.SortOrder=Enum.SortOrder.LayoutOrder
+    local fp=Instance.new("UIPadding",FilterScroll); fp.PaddingTop,fp.PaddingBottom,fp.PaddingLeft=UDim.new(0,8),UDim.new(0,8),UDim.new(0,2)
 
-    local ProductScroll=Instance.new("ScrollingFrame",Right); ProductScroll.Size=UDim2.new(1,0,1,-46)
-    ProductScroll.Position=UDim2.new(0,0,0,46); ProductScroll.BackgroundTransparency=1; ProductScroll.ScrollBarThickness=5
-    ProductScroll.ScrollBarImageColor3=Color3.fromRGB(70,70,70); ProductScroll.ScrollingDirection=Enum.ScrollingDirection.Y
-    ProductScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y; ProductScroll.BorderSizePixel=0
-    local Grid=Instance.new("UIGridLayout",ProductScroll); Grid.CellSize=UDim2.new(0,230,0,200); Grid.CellPadding=UDim2.new(0,10,0,10); Grid.SortOrder=Enum.SortOrder.LayoutOrder
-    local GridPad=Instance.new("UIPadding",ProductScroll); GridPad.PaddingTop=UDim.new(0,12); GridPad.PaddingBottom=UDim.new(0,12); GridPad.PaddingLeft=UDim.new(0,12); GridPad.PaddingRight=UDim.new(0,12)
+    local ProductScroll=Instance.new("ScrollingFrame",Right)
+    ProductScroll.Size=UDim2.new(1,0,1,-46); ProductScroll.Position=UDim2.new(0,0,0,46)
+    ProductScroll.BackgroundTransparency=1; ProductScroll.ScrollBarThickness=5; ProductScroll.ScrollBarImageColor3=Color3.fromRGB(70,70,70)
+    ProductScroll.ScrollingDirection=Enum.ScrollingDirection.Y; ProductScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y; ProductScroll.BorderSizePixel=0
+    local Grid=Instance.new("UIGridLayout",ProductScroll); Grid.CellSize=UDim2.new(0,210,0,195); Grid.CellPadding=UDim2.new(0,10,0,10); Grid.SortOrder=Enum.SortOrder.LayoutOrder
+    local gp=Instance.new("UIPadding",ProductScroll); gp.PaddingTop,gp.PaddingBottom,gp.PaddingLeft,gp.PaddingRight=UDim.new(0,12),UDim.new(0,12),UDim.new(0,12),UDim.new(0,12)
 
     --------------------------------------------------------
-    -- CART PANEL (right side, 80px wide)
+    -- QUEUE PANEL  (slides in from right, overlays products)
     --------------------------------------------------------
-    local CartPanel = Instance.new("Frame", Main)
-    CartPanel.Size             = UDim2.new(0, 240, 1, -52)
-    CartPanel.Position         = UDim2.new(1, -240, 0, 52)
-    CartPanel.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
-    CartPanel.BorderSizePixel  = 0
-    local cartPanelStroke = Instance.new("UIStroke", CartPanel)
-    cartPanelStroke.Color=Color3.fromRGB(255,255,255); cartPanelStroke.Transparency=0.9; cartPanelStroke.Thickness=1
+    local QUEUE_W=260
+    local QueuePanel=Instance.new("Frame",Right)
+    QueuePanel.Size=UDim2.new(0,QUEUE_W,1,0); QueuePanel.Position=UDim2.new(1,0,0,0) -- hidden off right
+    QueuePanel.BackgroundColor3=Color3.fromRGB(13,13,18); QueuePanel.BorderSizePixel=0; QueuePanel.ZIndex=10
+    Instance.new("UICorner",QueuePanel).CornerRadius=UDim.new(0,10)
+    local qps=Instance.new("UIStroke",QueuePanel); qps.Color=Color3.fromRGB(60,80,200); qps.Transparency=.65; qps.Thickness=1
 
-    local CartHeader = Instance.new("TextLabel", CartPanel)
-    CartHeader.Size=UDim2.new(1,0,0,36); CartHeader.BackgroundColor3=Color3.fromRGB(20,20,26)
-    CartHeader.BackgroundTransparency=0; CartHeader.BorderSizePixel=0
-    CartHeader.Text="🛒  Queue"; CartHeader.TextColor3=Color3.fromRGB(180,180,200)
-    CartHeader.Font=Enum.Font.GothamBold; CartHeader.TextSize=13
-    Instance.new("UICorner",CartHeader).CornerRadius=UDim.new(0,8)
+    local QueueOpen=Settings.QueuePanelOpen
+    local function setQueueOpen(open)
+        QueueOpen=open
+        local targetX=open and 1,-QUEUE_W or 1,0
+        tw(QueuePanel,MED,{Position=open and UDim2.new(1,-QUEUE_W,0,0) or UDim2.new(1,0,0,0)})
+        QueueToggleBtn.BackgroundColor3=open and Color3.fromRGB(30,70,30) or Color3.fromRGB(30,50,30)
+        QueueToggleBtn.TextColor3=open and Color3.fromRGB(80,220,80) or Color3.fromRGB(130,180,130)
+    end
+    setQueueOpen(QueueOpen) -- init
 
-    local CartHDiv=Instance.new("Frame",CartPanel); CartHDiv.Size=UDim2.new(1,0,0,1); CartHDiv.Position=UDim2.new(0,0,0,36)
-    CartHDiv.BackgroundColor3=Color3.fromRGB(255,255,255); CartHDiv.BackgroundTransparency=0.9; CartHDiv.BorderSizePixel=0
+    QueueToggleBtn.MouseEnter:Connect(function() tw(QueueToggleBtn,FAST,{BackgroundColor3=Color3.fromRGB(40,70,40)}) end)
+    QueueToggleBtn.MouseLeave:Connect(function() tw(QueueToggleBtn,FAST,{BackgroundColor3=QueueOpen and Color3.fromRGB(30,70,30) or Color3.fromRGB(30,50,30)}) end)
+    QueueToggleBtn.MouseButton1Click:Connect(function() setQueueOpen(not QueueOpen) end)
 
-    local CartScroll = Instance.new("ScrollingFrame", CartPanel)
-    CartScroll.Size=UDim2.new(1,0,1,-120); CartScroll.Position=UDim2.new(0,0,0,37)
-    CartScroll.BackgroundTransparency=1; CartScroll.ScrollBarThickness=3
-    CartScroll.ScrollBarImageColor3=Color3.fromRGB(70,70,70); CartScroll.ScrollingDirection=Enum.ScrollingDirection.Y
-    CartScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y; CartScroll.BorderSizePixel=0
-    local CartLayout=Instance.new("UIListLayout",CartScroll); CartLayout.Padding=UDim.new(0,4); CartLayout.SortOrder=Enum.SortOrder.LayoutOrder
-    local CartScrollPad=Instance.new("UIPadding",CartScroll); CartScrollPad.PaddingTop=UDim.new(0,6); CartScrollPad.PaddingLeft=UDim.new(0,6); CartScrollPad.PaddingRight=UDim.new(0,6)
+    local QHeader=Instance.new("Frame",QueuePanel); QHeader.Size=UDim2.new(1,0,0,40); QHeader.BackgroundColor3=Color3.fromRGB(16,16,22); QHeader.BorderSizePixel=0; QHeader.ZIndex=11
+    Instance.new("UICorner",QHeader).CornerRadius=UDim.new(0,10)
+    local qhc=Instance.new("Frame",QHeader); qhc.Size=UDim2.new(1,0,.5,0); qhc.Position=UDim2.new(0,0,.5,0); qhc.BackgroundColor3=Color3.fromRGB(16,16,22); qhc.BorderSizePixel=0; qhc.ZIndex=11
 
-    local CartEmptyLabel=Instance.new("TextLabel",CartScroll); CartEmptyLabel.Size=UDim2.new(1,0,0,60)
-    CartEmptyLabel.BackgroundTransparency=1; CartEmptyLabel.Text="No items queued\nAdd items with +Queue"
-    CartEmptyLabel.TextColor3=Color3.fromRGB(55,55,65); CartEmptyLabel.Font=Enum.Font.Gotham
-    CartEmptyLabel.TextSize=11; CartEmptyLabel.TextWrapped=true
+    local QHeaderLabel=Instance.new("TextLabel",QHeader); QHeaderLabel.Size=UDim2.new(1,-44,1,0); QHeaderLabel.Position=UDim2.new(0,12,0,0)
+    QHeaderLabel.BackgroundTransparency=1; QHeaderLabel.Text="🛒  Purchase Queue"; QHeaderLabel.TextColor3=Color3.fromRGB(170,170,195)
+    QHeaderLabel.Font=Enum.Font.GothamBold; QHeaderLabel.TextSize=12; QHeaderLabel.TextXAlignment=Enum.TextXAlignment.Left; QHeaderLabel.ZIndex=11
 
-    local CartTotalLabel=Instance.new("TextLabel",CartPanel); CartTotalLabel.Size=UDim2.new(1,-12,0,16)
-    CartTotalLabel.Position=UDim2.new(0,6,1,-80); CartTotalLabel.BackgroundTransparency=1
-    CartTotalLabel.TextColor3=Color3.fromRGB(90,200,90); CartTotalLabel.Font=Enum.Font.GothamBold
-    CartTotalLabel.TextSize=12; CartTotalLabel.Text="Total: 🟩 0"; CartTotalLabel.TextXAlignment=Enum.TextXAlignment.Left
+    local QCountBadge=Instance.new("TextLabel",QHeader); QCountBadge.Size=UDim2.new(0,24,0,18); QCountBadge.Position=UDim2.new(1,-38,.5,-9)
+    QCountBadge.BackgroundColor3=Color3.fromRGB(40,80,200); QCountBadge.BackgroundTransparency=.5; QCountBadge.Text="0"
+    QCountBadge.TextColor3=Color3.fromRGB(180,200,255); QCountBadge.Font=Enum.Font.GothamBold; QCountBadge.TextSize=10; QCountBadge.BorderSizePixel=0; QCountBadge.ZIndex=11
+    Instance.new("UICorner",QCountBadge).CornerRadius=UDim.new(1,0)
 
-    local CartBalWarn=Instance.new("TextLabel",CartPanel); CartBalWarn.Size=UDim2.new(1,-12,0,14)
-    CartBalWarn.Position=UDim2.new(0,6,1,-62); CartBalWarn.BackgroundTransparency=1
-    CartBalWarn.TextColor3=Color3.fromRGB(220,130,50); CartBalWarn.Font=Enum.Font.Gotham
-    CartBalWarn.TextSize=10; CartBalWarn.Text=""; CartBalWarn.TextXAlignment=Enum.TextXAlignment.Left; CartBalWarn.TextWrapped=true
+    local QScrollFrame=Instance.new("ScrollingFrame",QueuePanel)
+    QScrollFrame.Size=UDim2.new(1,0,1,-150); QScrollFrame.Position=UDim2.new(0,0,0,41)
+    QScrollFrame.BackgroundTransparency=1; QScrollFrame.ScrollBarThickness=3; QScrollFrame.ScrollBarImageColor3=Color3.fromRGB(70,70,90)
+    QScrollFrame.ScrollingDirection=Enum.ScrollingDirection.Y; QScrollFrame.AutomaticCanvasSize=Enum.AutomaticSize.Y; QScrollFrame.BorderSizePixel=0; QScrollFrame.ZIndex=11
+    local qsl=Instance.new("UIListLayout",QScrollFrame); qsl.Padding=UDim.new(0,4); qsl.SortOrder=Enum.SortOrder.LayoutOrder
+    local qsp=Instance.new("UIPadding",QScrollFrame); qsp.PaddingTop,qsp.PaddingLeft,qsp.PaddingRight=UDim.new(0,6),UDim.new(0,6),UDim.new(0,6)
 
-    local CartClearBtn=Instance.new("TextButton",CartPanel); CartClearBtn.Size=UDim2.new(0.45,-8,0,28)
-    CartClearBtn.Position=UDim2.new(0,6,1,-46); CartClearBtn.BackgroundColor3=Color3.fromRGB(55,25,25)
-    CartClearBtn.TextColor3=Color3.fromRGB(200,80,80); CartClearBtn.Font=Enum.Font.GothamBold; CartClearBtn.TextSize=11
-    CartClearBtn.Text="✕ Clear"; CartClearBtn.AutoButtonColor=false; CartClearBtn.BorderSizePixel=0
-    Instance.new("UICorner",CartClearBtn).CornerRadius=UDim.new(0,6)
-    CartClearBtn.MouseEnter:Connect(function() tw(CartClearBtn,FAST,{BackgroundColor3=Color3.fromRGB(80,30,30)}) end)
-    CartClearBtn.MouseLeave:Connect(function() tw(CartClearBtn,FAST,{BackgroundColor3=Color3.fromRGB(55,25,25)}) end)
+    local QEmptyLabel=Instance.new("TextLabel",QScrollFrame); QEmptyLabel.Size=UDim2.new(1,0,0,60)
+    QEmptyLabel.BackgroundTransparency=1; QEmptyLabel.Text="Queue is empty.\nClick +Q on any item\nto add it here."
+    QEmptyLabel.TextColor3=Color3.fromRGB(50,50,65); QEmptyLabel.Font=Enum.Font.Gotham; QEmptyLabel.TextSize=11; QEmptyLabel.TextWrapped=true; QEmptyLabel.ZIndex=11
 
-    local CartRunBtn=Instance.new("TextButton",CartPanel); CartRunBtn.Size=UDim2.new(0.55,-8,0,28)
-    CartRunBtn.Position=UDim2.new(0.45,2,1,-46); CartRunBtn.BackgroundColor3=Color3.fromRGB(30,80,170)
-    CartRunBtn.TextColor3=Color3.fromRGB(200,220,255); CartRunBtn.Font=Enum.Font.GothamBold; CartRunBtn.TextSize=11
-    CartRunBtn.Text="▶ Run Queue"; CartRunBtn.AutoButtonColor=false; CartRunBtn.BorderSizePixel=0
-    Instance.new("UICorner",CartRunBtn).CornerRadius=UDim.new(0,6)
-    CartRunBtn.MouseEnter:Connect(function() tw(CartRunBtn,FAST,{BackgroundColor3=Color3.fromRGB(50,110,220)}) end)
-    CartRunBtn.MouseLeave:Connect(function() tw(CartRunBtn,FAST,{BackgroundColor3=Color3.fromRGB(30,80,170)}) end)
+    -- Footer section
+    local QFooter=Instance.new("Frame",QueuePanel); QFooter.Size=UDim2.new(1,0,0,108); QFooter.Position=UDim2.new(0,0,1,-108)
+    QFooter.BackgroundColor3=Color3.fromRGB(14,14,20); QFooter.BorderSizePixel=0; QFooter.ZIndex=11
+    local qfd=Instance.new("Frame",QFooter); qfd.Size=UDim2.new(1,-16,0,1); qfd.Position=UDim2.new(0,8,0,0); qfd.BackgroundColor3=Color3.fromRGB(255,255,255); qfd.BackgroundTransparency=.92; qfd.BorderSizePixel=0; qfd.ZIndex=11
 
-    local CartStatusLabel=Instance.new("TextLabel",CartPanel); CartStatusLabel.Size=UDim2.new(1,-12,0,13)
-    CartStatusLabel.Position=UDim2.new(0,6,1,-16); CartStatusLabel.BackgroundTransparency=1
-    CartStatusLabel.TextColor3=Color3.fromRGB(60,60,70); CartStatusLabel.Font=Enum.Font.Gotham
-    CartStatusLabel.TextSize=10; CartStatusLabel.Text=""; CartStatusLabel.TextXAlignment=Enum.TextXAlignment.Left
+    local QTotalRow=Instance.new("Frame",QFooter); QTotalRow.Size=UDim2.new(1,-12,0,22); QTotalRow.Position=UDim2.new(0,6,0,8); QTotalRow.BackgroundTransparency=1; QTotalRow.ZIndex=11
+    local QTotalLabel=Instance.new("TextLabel",QTotalRow); QTotalLabel.Size=UDim2.new(.5,0,1,0); QTotalLabel.BackgroundTransparency=1
+    QTotalLabel.Text="Total:"; QTotalLabel.TextColor3=Color3.fromRGB(100,100,120); QTotalLabel.Font=Enum.Font.Gotham; QTotalLabel.TextSize=11; QTotalLabel.TextXAlignment=Enum.TextXAlignment.Left; QTotalLabel.ZIndex=11
+    local QTotalAmt=Instance.new("TextLabel",QTotalRow); QTotalAmt.Size=UDim2.new(.5,0,1,0); QTotalAmt.Position=UDim2.new(.5,0,0,0); QTotalAmt.BackgroundTransparency=1
+    QTotalAmt.Text="🟩 0"; QTotalAmt.TextColor3=Color3.fromRGB(80,200,80); QTotalAmt.Font=Enum.Font.GothamBold; QTotalAmt.TextSize=11; QTotalAmt.TextXAlignment=Enum.TextXAlignment.Right; QTotalAmt.ZIndex=11
 
-    local function rebuildCartUI()
-        -- Clear old entries (keep fixed children)
-        for _, child in ipairs(CartScroll:GetChildren()) do
-            if child:IsA("Frame") and child.Name:sub(1,8)=="CartItem" then child:Destroy() end
-        end
+    -- Balance row
+    local QBalRow=Instance.new("Frame",QFooter); QBalRow.Size=UDim2.new(1,-12,0,18); QBalRow.Position=UDim2.new(0,6,0,32); QBalRow.BackgroundTransparency=1; QBalRow.ZIndex=11
+    local QBalLabel=Instance.new("TextLabel",QBalRow); QBalLabel.Size=UDim2.new(.45,0,1,0); QBalLabel.BackgroundTransparency=1
+    QBalLabel.Text="Balance:"; QBalLabel.TextColor3=Color3.fromRGB(100,100,120); QBalLabel.Font=Enum.Font.Gotham; QBalLabel.TextSize=10; QBalLabel.TextXAlignment=Enum.TextXAlignment.Left; QBalLabel.ZIndex=11
+    local QBalAmt=Instance.new("TextLabel",QBalRow); QBalAmt.Size=UDim2.new(.55,0,1,0); QBalAmt.Position=UDim2.new(.45,0,0,0); QBalAmt.BackgroundTransparency=1
+    QBalAmt.Text="—"; QBalAmt.TextColor3=Color3.fromRGB(70,190,100); QBalAmt.Font=Enum.Font.GothamBold; QBalAmt.TextSize=10; QBalAmt.TextXAlignment=Enum.TextXAlignment.Right; QBalAmt.ZIndex=11
 
-        CartEmptyLabel.Visible = (#Cart == 0)
-        local total = cartTotalCost()
-        local totalStr = tostring(math.floor(total)):reverse():gsub("(%d%d%d)","%1,"):reverse():gsub("^,","")
-        CartTotalLabel.Text = "Total: 🟩 " .. totalStr
+    -- Deficit row (shown when can't afford)
+    local QDeficitRow=Instance.new("Frame",QFooter); QDeficitRow.Size=UDim2.new(1,-12,0,16); QDeficitRow.Position=UDim2.new(0,6,0,51); QDeficitRow.BackgroundTransparency=1; QDeficitRow.ZIndex=11
+    local QDeficitLabel=Instance.new("TextLabel",QDeficitRow); QDeficitLabel.Size=UDim2.new(1,0,1,0); QDeficitLabel.BackgroundTransparency=1
+    QDeficitLabel.Text=""; QDeficitLabel.TextColor3=Color3.fromRGB(220,100,50); QDeficitLabel.Font=Enum.Font.GothamBold; QDeficitLabel.TextSize=10; QDeficitLabel.TextXAlignment=Enum.TextXAlignment.Left; QDeficitLabel.ZIndex=11
 
-        local bal = getTokenBalance()
-        if bal and total > bal then
-            CartBalWarn.Text = string.format("⚠ Need %d more tokens", math.ceil(total - bal))
+    -- Buttons row
+    local QBtnRow=Instance.new("Frame",QFooter); QBtnRow.Size=UDim2.new(1,-12,0,30); QBtnRow.Position=UDim2.new(0,6,0,70); QBtnRow.BackgroundTransparency=1; QBtnRow.ZIndex=11
+    local function makeQBtn(txt,xoff,wide,bg,fg)
+        local b=Instance.new("TextButton",QBtnRow); b.Size=UDim2.new(0,wide,1,0); b.Position=UDim2.new(0,xoff,0,0)
+        b.BackgroundColor3=bg; b.TextColor3=fg; b.Font=Enum.Font.GothamBold; b.TextSize=11; b.Text=txt
+        b.AutoButtonColor=false; b.BorderSizePixel=0; b.ZIndex=11; Instance.new("UICorner",b).CornerRadius=UDim.new(0,6); return b
+    end
+    local QClearBtn=makeQBtn("✕ Clear",0,78,Color3.fromRGB(55,22,22),Color3.fromRGB(200,80,80))
+    local QRunBtn=makeQBtn("▶ Run All",84,QUEUE_W-12-84-1,Color3.fromRGB(28,60,150),Color3.fromRGB(170,200,255))
+    local QStatusLabel=Instance.new("TextLabel",QueuePanel); QStatusLabel.Size=UDim2.new(1,-12,0,12); QStatusLabel.Position=UDim2.new(0,6,1,-14)
+    QStatusLabel.BackgroundTransparency=1; QStatusLabel.Text=""; QStatusLabel.TextColor3=Color3.fromRGB(55,55,70); QStatusLabel.Font=Enum.Font.Gotham; QStatusLabel.TextSize=9; QStatusLabel.TextXAlignment=Enum.TextXAlignment.Left; QStatusLabel.ZIndex=11
+
+    QClearBtn.MouseEnter:Connect(function() tw(QClearBtn,FAST,{BackgroundColor3=Color3.fromRGB(90,28,28)}) end)
+    QClearBtn.MouseLeave:Connect(function() tw(QClearBtn,FAST,{BackgroundColor3=Color3.fromRGB(55,22,22)}) end)
+    QRunBtn.MouseEnter:Connect(function() tw(QRunBtn,FAST,{BackgroundColor3=Color3.fromRGB(45,90,210)}) end)
+    QRunBtn.MouseLeave:Connect(function() tw(QRunBtn,FAST,{BackgroundColor3=Color3.fromRGB(28,60,150)}) end)
+
+    -- Rebuild queue UI
+    local function rebuildQueue()
+        for _,c in ipairs(QScrollFrame:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+        QEmptyLabel.Visible=(#Cart==0)
+        QCountBadge.Text=tostring(#Cart)
+        QCountBadge.BackgroundTransparency=#Cart==0 and .85 or .5
+
+        local total=cartTotal()
+        local bal=getTokenBalance()
+        QTotalAmt.Text="🟩 "..fmtNum(total)
+        QBalAmt.Text=bal and fmtNum(bal) or "—"
+
+        if bal and total>bal then
+            local deficit=math.ceil(total-bal)
+            QDeficitLabel.Text="⚠ Need "..fmtNum(deficit).." more tokens"
+            QTotalAmt.TextColor3=Color3.fromRGB(220,100,50)
+            QBalAmt.TextColor3=Color3.fromRGB(220,80,80)
         else
-            CartBalWarn.Text = ""
+            QDeficitLabel.Text=""
+            QTotalAmt.TextColor3=Color3.fromRGB(80,200,80)
+            QBalAmt.TextColor3=Color3.fromRGB(70,190,100)
         end
 
-        for i, item in ipairs(Cart) do
-            local row = Instance.new("Frame", CartScroll)
-            row.Name = "CartItem_"..i; row.Size=UDim2.new(1,-4,0,48)
-            row.BackgroundColor3=Color3.fromRGB(22,22,28); row.BorderSizePixel=0
-            Instance.new("UICorner",row).CornerRadius=UDim.new(0,6)
-
-            local nameL=Instance.new("TextLabel",row); nameL.Size=UDim2.new(1,-30,0,16); nameL.Position=UDim2.new(0,6,0,5)
-            nameL.BackgroundTransparency=1; nameL.Text=item.display; nameL.TextColor3=Color3.fromRGB(190,190,200)
-            nameL.Font=Enum.Font.GothamBold; nameL.TextSize=10; nameL.TextXAlignment=Enum.TextXAlignment.Left; nameL.TextTruncate=Enum.TextTruncate.AtEnd
-
-            local typeL=Instance.new("TextLabel",row); typeL.Size=UDim2.new(1,-30,0,13); typeL.Position=UDim2.new(0,6,0,23)
-            typeL.BackgroundTransparency=1; typeL.TextColor3=Color3.fromRGB(80,80,95); typeL.Font=Enum.Font.Gotham; typeL.TextSize=10
-            typeL.TextXAlignment=Enum.TextXAlignment.Left
-            typeL.Text = item.isGift and ("🎁 → "..item.targetName) or "Buy (self)"
-
-            local priceL=Instance.new("TextLabel",row); priceL.Size=UDim2.new(1,-30,0,12); priceL.Position=UDim2.new(0,6,1,-16)
-            priceL.BackgroundTransparency=1; priceL.TextColor3=Color3.fromRGB(70,190,90); priceL.Font=Enum.Font.GothamBold; priceL.TextSize=10
-            priceL.TextXAlignment=Enum.TextXAlignment.Left; priceL.Text="🟩 "..(item.price or 0)
-
-            local remBtn=Instance.new("TextButton",row); remBtn.Size=UDim2.new(0,22,0,22); remBtn.Position=UDim2.new(1,-26,0,13)
-            remBtn.BackgroundColor3=Color3.fromRGB(55,25,25); remBtn.TextColor3=Color3.fromRGB(200,80,80)
-            remBtn.Font=Enum.Font.GothamBold; remBtn.TextSize=11; remBtn.Text="✕"; remBtn.AutoButtonColor=false; remBtn.BorderSizePixel=0
+        for i,item in ipairs(Cart) do
+            local row=Instance.new("Frame",QScrollFrame); row.Name="QI_"..i
+            row.Size=UDim2.new(1,-4,0,52); row.BackgroundColor3=Color3.fromRGB(19,19,26); row.BorderSizePixel=0; row.ZIndex=12
+            Instance.new("UICorner",row).CornerRadius=UDim.new(0,7)
+            -- accent bar
+            local ab=Instance.new("Frame",row); ab.Size=UDim2.new(0,3,1,-8); ab.Position=UDim2.new(0,0,.5,0); ab.AnchorPoint=Vector2.new(0,.5)
+            ab.BackgroundColor3=item.isGift and Color3.fromRGB(180,60,160) or Color3.fromRGB(40,100,220); ab.BorderSizePixel=0
+            Instance.new("UICorner",ab).CornerRadius=UDim.new(0,3)
+            local nameL=Instance.new("TextLabel",row); nameL.Size=UDim2.new(1,-32,0,15); nameL.Position=UDim2.new(0,10,0,5)
+            nameL.BackgroundTransparency=1; nameL.Text=item.display; nameL.TextColor3=Color3.fromRGB(190,190,205)
+            nameL.Font=Enum.Font.GothamBold; nameL.TextSize=10; nameL.TextXAlignment=Enum.TextXAlignment.Left; nameL.TextTruncate=Enum.TextTruncate.AtEnd; nameL.ZIndex=12
+            local typeL=Instance.new("TextLabel",row); typeL.Size=UDim2.new(1,-32,0,12); typeL.Position=UDim2.new(0,10,0,22)
+            typeL.BackgroundTransparency=1; typeL.TextColor3=Color3.fromRGB(75,75,95); typeL.Font=Enum.Font.Gotham; typeL.TextSize=9; typeL.TextXAlignment=Enum.TextXAlignment.Left; typeL.ZIndex=12
+            typeL.Text=item.isGift and ("🎁 → "..item.targetName) or "🛒 Buy (self)"
+            local priceL=Instance.new("TextLabel",row); priceL.Size=UDim2.new(1,-32,0,12); priceL.Position=UDim2.new(0,10,1,-16)
+            priceL.BackgroundTransparency=1; priceL.TextColor3=Color3.fromRGB(65,185,85); priceL.Font=Enum.Font.GothamBold; priceL.TextSize=9; priceL.TextXAlignment=Enum.TextXAlignment.Left; priceL.ZIndex=12
+            priceL.Text="🟩 "..(item.price or 0)
+            local remBtn=Instance.new("TextButton",row); remBtn.Size=UDim2.new(0,20,0,20); remBtn.Position=UDim2.new(1,-24,.5,-10)
+            remBtn.BackgroundColor3=Color3.fromRGB(50,20,20); remBtn.TextColor3=Color3.fromRGB(180,70,70)
+            remBtn.Font=Enum.Font.GothamBold; remBtn.TextSize=10; remBtn.Text="✕"; remBtn.AutoButtonColor=false; remBtn.BorderSizePixel=0; remBtn.ZIndex=12
             Instance.new("UICorner",remBtn).CornerRadius=UDim.new(1,0)
-            local _i = i
-            remBtn.MouseButton1Click:Connect(function()
-                table.remove(Cart, _i); notifyCartUpdate()
-            end)
-            remBtn.MouseEnter:Connect(function() tw(remBtn,FAST,{BackgroundColor3=Color3.fromRGB(100,30,30)}) end)
-            remBtn.MouseLeave:Connect(function() tw(remBtn,FAST,{BackgroundColor3=Color3.fromRGB(55,25,25)}) end)
+            local _i=i
+            remBtn.MouseButton1Click:Connect(function() table.remove(Cart,_i); notifyCart() end)
+            remBtn.MouseEnter:Connect(function() tw(remBtn,FAST,{BackgroundColor3=Color3.fromRGB(90,25,25)}) end)
+            remBtn.MouseLeave:Connect(function() tw(remBtn,FAST,{BackgroundColor3=Color3.fromRGB(50,20,20)}) end)
         end
     end
+    table.insert(cartCallbacks,rebuildQueue)
 
-    table.insert(cartUpdateCallbacks, rebuildCartUI)
+    QClearBtn.MouseButton1Click:Connect(function() clearCart(); showToast("Queue cleared.","","🗑") end)
 
-    CartClearBtn.MouseButton1Click:Connect(function()
-        clearCart(); showToast("Queue cleared.", Color3.fromRGB(150,80,80))
-    end)
-
-    local cartRunning = false
-    CartRunBtn.MouseButton1Click:Connect(function()
+    local cartRunning=false
+    QRunBtn.MouseButton1Click:Connect(function()
         if cartRunning then return end
-        if #Cart == 0 then showToast("Queue is empty.", Color3.fromRGB(150,100,50)); return end
-
-        -- Balance check for full cart
-        local bal = getTokenBalance()
-        local total = cartTotalCost()
-        if bal and total > bal then
-            showToast(string.format("⚠ Not enough tokens! Need %d, have %d.", math.ceil(total), math.floor(bal)), Color3.fromRGB(200,100,50))
-            return
+        if #Cart==0 then showToast("Queue is empty.",Color3.fromRGB(150,100,50),"⚠"); return end
+        local bal=getTokenBalance(); local total=cartTotal()
+        if bal and total>bal then
+            local deficit=math.ceil(total-bal)
+            showToast("Not enough tokens! Need "..fmtNum(deficit).." more.",Color3.fromRGB(220,100,50),"⚠"); return
         end
-
-        cartRunning = true
-        CartRunBtn.Text = "Running…"; CartRunBtn.Active=false
-        local items = {}; for _,v in ipairs(Cart) do table.insert(items,v) end
-        clearCart()
-
+        cartRunning=true; QRunBtn.Text="Running…"; QRunBtn.Active=false
+        local items={}; for _,v in ipairs(Cart) do table.insert(items,v) end; clearCart()
         task.spawn(function()
-            local succeeded, failed = 0, 0
-            for idx, item in ipairs(items) do
-                CartStatusLabel.Text = string.format("[%d/%d] %s…", idx, #items, item.display)
-                local ok, err
+            local ok_c,fail_c=0,0
+            for idx,item in ipairs(items) do
+                QStatusLabel.Text=string.format("[%d/%d] %s…",idx,#items,item.display)
                 if item.isGift then
-                    local target = Players:GetPlayerByUserId(item.targetUserId)
-                    if not target then
-                        failed = failed + 1
-                        CartStatusLabel.Text = "⚠ Player left: "..item.targetName
-                        task.wait(0.5)
+                    local target=Players:GetPlayerByUserId(item.targetUserId)
+                    if not target then fail_c=fail_c+1; task.wait(.3)
                     else
-                        ok, err = pcall(function()
-                            GiftRemote:FireServer({ productId=item.productId, targetUserId=item.targetUserId })
-                        end)
-                        if ok then succeeded=succeeded+1 else failed=failed+1 end
-                        task.wait(0.6)
+                        local ok,_=pcall(function() GiftRemote:FireServer({productId=item.productId,targetUserId=item.targetUserId}) end)
+                        if ok then ok_c=ok_c+1 else fail_c=fail_c+1 end; task.wait(Settings.QueueDelay)
                     end
                 else
-                    ok, err = pcall(function() PurchaseRemote:InvokeServer(item.productId) end)
-                    if ok then succeeded=succeeded+1 else failed=failed+1 end
-                    task.wait(0.6)
+                    local ok,_=pcall(function() PurchaseRemote:InvokeServer(item.productId) end)
+                    if ok then ok_c=ok_c+1 else fail_c=fail_c+1 end; task.wait(Settings.QueueDelay)
                 end
             end
-
-            cartRunning = false
-            CartRunBtn.Text = "▶ Run Queue"; CartRunBtn.Active = true
-            CartStatusLabel.Text = string.format("Done: %d ok, %d failed", succeeded, failed)
-            showToast(string.format("Queue done: %d purchased, %d failed.", succeeded, failed),
-                failed>0 and Color3.fromRGB(200,130,50) or Color3.fromRGB(50,180,90))
-            task.delay(4, function() CartStatusLabel.Text="" end)
+            cartRunning=false; QRunBtn.Text="▶ Run All"; QRunBtn.Active=true
+            QStatusLabel.Text=string.format("Done · %d ok · %d failed",ok_c,fail_c)
+            local col=fail_c>0 and Color3.fromRGB(200,130,50) or Color3.fromRGB(50,200,90)
+            showToast(string.format("Queue done: %d purchased, %d failed.",ok_c,fail_c),col,fail_c>0 and "⚠" or "✓")
+            refreshBal()
+            task.delay(5,function() QStatusLabel.Text="" end)
         end)
     end)
 
     --------------------------------------------------------
+    -- SETTINGS PANEL  (overlays, slides from right of Main)
+    --------------------------------------------------------
+    local SettingsPanel=Instance.new("Frame",Main)
+    SettingsPanel.Size=UDim2.new(0,320,1,-52); SettingsPanel.Position=UDim2.new(1,0,0,52)
+    SettingsPanel.BackgroundColor3=Color3.fromRGB(12,12,16); SettingsPanel.BorderSizePixel=0; SettingsPanel.ZIndex=20
+    Instance.new("UICorner",SettingsPanel).CornerRadius=UDim.new(0,10)
+    local sps=Instance.new("UIStroke",SettingsPanel); sps.Color=Color3.fromRGB(80,60,180); sps.Transparency=.6; sps.Thickness=1
+
+    local SettingsOpen=false
+    local function setSettingsOpen(open)
+        SettingsOpen=open
+        tw(SettingsPanel,MED,{Position=open and UDim2.new(1,-320,0,52) or UDim2.new(1,0,0,52)})
+        SettingsBtn.BackgroundColor3=open and Color3.fromRGB(40,30,70) or Color3.fromRGB(32,32,42)
+        SettingsBtn.TextColor3=open and Color3.fromRGB(160,120,255) or Color3.fromRGB(180,180,180)
+    end
+    SettingsBtn.MouseEnter:Connect(function() tw(SettingsBtn,FAST,{BackgroundColor3=Color3.fromRGB(45,35,70)}) end)
+    SettingsBtn.MouseLeave:Connect(function() tw(SettingsBtn,FAST,{BackgroundColor3=SettingsOpen and Color3.fromRGB(40,30,70) or Color3.fromRGB(32,32,42)}) end)
+    SettingsBtn.MouseButton1Click:Connect(function() setSettingsOpen(not SettingsOpen) end)
+
+    local SHeader=Instance.new("Frame",SettingsPanel); SHeader.Size=UDim2.new(1,0,0,44); SHeader.BackgroundColor3=Color3.fromRGB(16,14,24); SHeader.BorderSizePixel=0; SHeader.ZIndex=21
+    Instance.new("UICorner",SHeader).CornerRadius=UDim.new(0,10)
+    local shc=Instance.new("Frame",SHeader); shc.Size=UDim2.new(1,0,.5,0); shc.Position=UDim2.new(0,0,.5,0); shc.BackgroundColor3=Color3.fromRGB(16,14,24); shc.BorderSizePixel=0; shc.ZIndex=21
+    local SHeaderL=Instance.new("TextLabel",SHeader); SHeaderL.Size=UDim2.new(1,-16,1,0); SHeaderL.Position=UDim2.new(0,14,0,0)
+    SHeaderL.BackgroundTransparency=1; SHeaderL.Text="⚙  Settings & Misc"; SHeaderL.TextColor3=Color3.fromRGB(160,140,220)
+    SHeaderL.Font=Enum.Font.GothamBold; SHeaderL.TextSize=13; SHeaderL.TextXAlignment=Enum.TextXAlignment.Left; SHeaderL.ZIndex=21
+
+    local SScroll=Instance.new("ScrollingFrame",SettingsPanel)
+    SScroll.Size=UDim2.new(1,0,1,-44); SScroll.Position=UDim2.new(0,0,0,44)
+    SScroll.BackgroundTransparency=1; SScroll.ScrollBarThickness=3; SScroll.ScrollBarImageColor3=Color3.fromRGB(70,50,140)
+    SScroll.ScrollingDirection=Enum.ScrollingDirection.Y; SScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y; SScroll.BorderSizePixel=0; SScroll.ZIndex=21
+    local sscl=Instance.new("UIListLayout",SScroll); sscl.Padding=UDim.new(0,4); sscl.SortOrder=Enum.SortOrder.LayoutOrder
+    local sscp=Instance.new("UIPadding",SScroll); sscp.PaddingTop,sscp.PaddingLeft,sscp.PaddingRight,sscp.PaddingBottom=UDim.new(0,8),UDim.new(0,8),UDim.new(0,8),UDim.new(0,8)
+
+    -- Section header helper
+    local sOrder=0
+    local function sSectionHeader(txt)
+        sOrder=sOrder+1
+        local f=Instance.new("Frame",SScroll); f.Size=UDim2.new(1,0,0,26); f.LayoutOrder=sOrder; f.BackgroundTransparency=1; f.BorderSizePixel=0; f.ZIndex=21
+        local l=Instance.new("TextLabel",f); l.Size=UDim2.new(1,0,1,0); l.BackgroundTransparency=1; l.Text=txt:upper()
+        l.TextColor3=Color3.fromRGB(90,70,150); l.Font=Enum.Font.GothamBold; l.TextSize=9; l.TextXAlignment=Enum.TextXAlignment.Left; l.ZIndex=21
+        local div=Instance.new("Frame",f); div.Size=UDim2.new(1,0,0,1); div.Position=UDim2.new(0,0,1,-1)
+        div.BackgroundColor3=Color3.fromRGB(80,60,150); div.BackgroundTransparency=.8; div.BorderSizePixel=0; div.ZIndex=21
+    end
+
+    -- Toggle row helper
+    local function sToggle(label,desc,key)
+        sOrder=sOrder+1
+        local row=Instance.new("Frame",SScroll); row.Size=UDim2.new(1,0,0,52); row.LayoutOrder=sOrder
+        row.BackgroundColor3=Color3.fromRGB(18,16,26); row.BorderSizePixel=0; row.ZIndex=21
+        Instance.new("UICorner",row).CornerRadius=UDim.new(0,8)
+        local lL=Instance.new("TextLabel",row); lL.Size=UDim2.new(1,-54,0,18); lL.Position=UDim2.new(0,12,0,8)
+        lL.BackgroundTransparency=1; lL.Text=label; lL.TextColor3=Color3.fromRGB(200,195,215)
+        lL.Font=Enum.Font.GothamBold; lL.TextSize=12; lL.TextXAlignment=Enum.TextXAlignment.Left; lL.ZIndex=21
+        local dL=Instance.new("TextLabel",row); dL.Size=UDim2.new(1,-54,0,14); dL.Position=UDim2.new(0,12,0,28)
+        dL.BackgroundTransparency=1; dL.Text=desc; dL.TextColor3=Color3.fromRGB(75,70,95)
+        dL.Font=Enum.Font.Gotham; dL.TextSize=10; dL.TextXAlignment=Enum.TextXAlignment.Left; dL.TextWrapped=true; dL.ZIndex=21
+
+        local track=Instance.new("Frame",row); track.Size=UDim2.new(0,38,0,20); track.Position=UDim2.new(1,-50,.5,-10)
+        track.BackgroundColor3=Settings[key] and Color3.fromRGB(60,180,80) or Color3.fromRGB(45,45,55); track.BorderSizePixel=0; track.ZIndex=21
+        Instance.new("UICorner",track).CornerRadius=UDim.new(1,0)
+        local knob=Instance.new("Frame",track); knob.Size=UDim2.new(0,16,0,16); knob.Position=Settings[key] and UDim2.new(1,-18,.5,-8) or UDim2.new(0,2,.5,-8)
+        knob.BackgroundColor3=Color3.fromRGB(230,230,230); knob.BorderSizePixel=0; knob.ZIndex=22
+        Instance.new("UICorner",knob).CornerRadius=UDim.new(1,0)
+
+        local togBtn=Instance.new("TextButton",row); togBtn.Size=UDim2.new(1,0,1,0); togBtn.BackgroundTransparency=1
+        togBtn.Text=""; togBtn.AutoButtonColor=false; togBtn.ZIndex=22
+        togBtn.MouseButton1Click:Connect(function()
+            Settings[key]=not Settings[key]
+            local on=Settings[key]
+            tw(track,FAST,{BackgroundColor3=on and Color3.fromRGB(60,180,80) or Color3.fromRGB(45,45,55)})
+            tw(knob,FAST,{Position=on and UDim2.new(1,-18,.5,-8) or UDim2.new(0,2,.5,-8)})
+        end)
+        return row
+    end
+
+    -- Slider helper
+    local function sSlider(label,desc,key,minV,maxV,step)
+        sOrder=sOrder+1
+        local row=Instance.new("Frame",SScroll); row.Size=UDim2.new(1,0,0,60); row.LayoutOrder=sOrder
+        row.BackgroundColor3=Color3.fromRGB(18,16,26); row.BorderSizePixel=0; row.ZIndex=21
+        Instance.new("UICorner",row).CornerRadius=UDim.new(0,8)
+        local lL=Instance.new("TextLabel",row); lL.Size=UDim2.new(.7,0,0,18); lL.Position=UDim2.new(0,12,0,6)
+        lL.BackgroundTransparency=1; lL.Text=label; lL.TextColor3=Color3.fromRGB(200,195,215)
+        lL.Font=Enum.Font.GothamBold; lL.TextSize=12; lL.TextXAlignment=Enum.TextXAlignment.Left; lL.ZIndex=21
+        local valL=Instance.new("TextLabel",row); valL.Size=UDim2.new(.3,0,0,18); valL.Position=UDim2.new(.7,0,0,6)
+        valL.BackgroundTransparency=1; valL.Text=tostring(Settings[key]); valL.TextColor3=Color3.fromRGB(120,160,255)
+        valL.Font=Enum.Font.GothamBold; valL.TextSize=12; valL.TextXAlignment=Enum.TextXAlignment.Right; valL.ZIndex=21
+        local dL=Instance.new("TextLabel",row); dL.Size=UDim2.new(1,-24,0,12); dL.Position=UDim2.new(0,12,0,26)
+        dL.BackgroundTransparency=1; dL.Text=desc; dL.TextColor3=Color3.fromRGB(75,70,95)
+        dL.Font=Enum.Font.Gotham; dL.TextSize=9; dL.TextXAlignment=Enum.TextXAlignment.Left; dL.ZIndex=21
+        local track=Instance.new("Frame",row); track.Size=UDim2.new(1,-24,0,6); track.Position=UDim2.new(0,12,0,44)
+        track.BackgroundColor3=Color3.fromRGB(35,35,48); track.BorderSizePixel=0; track.ZIndex=21
+        Instance.new("UICorner",track).CornerRadius=UDim.new(1,0)
+        local fill=Instance.new("Frame",track); local pct=(Settings[key]-minV)/(maxV-minV)
+        fill.Size=UDim2.new(pct,0,1,0); fill.BackgroundColor3=Color3.fromRGB(80,120,255); fill.BorderSizePixel=0; fill.ZIndex=21
+        Instance.new("UICorner",fill).CornerRadius=UDim.new(1,0)
+        local knob=Instance.new("Frame",track); knob.Size=UDim2.new(0,12,0,12); knob.Position=UDim2.new(pct,0,.5,-6); knob.AnchorPoint=Vector2.new(.5,.5)
+        knob.BackgroundColor3=Color3.fromRGB(160,190,255); knob.BorderSizePixel=0; knob.ZIndex=22
+        Instance.new("UICorner",knob).CornerRadius=UDim.new(1,0)
+        -- Drag slider
+        local draggingSlider=false
+        local dragBtn=Instance.new("TextButton",track); dragBtn.Size=UDim2.new(1,0,3,0); dragBtn.Position=UDim2.new(0,0,-1,0)
+        dragBtn.BackgroundTransparency=1; dragBtn.Text=""; dragBtn.AutoButtonColor=false; dragBtn.ZIndex=23
+        dragBtn.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then draggingSlider=true end end)
+        UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then draggingSlider=false end end)
+        UserInputService.InputChanged:Connect(function(i)
+            if not draggingSlider or i.UserInputType~=Enum.UserInputType.MouseMovement then return end
+            local rel=(i.Position.X-track.AbsolutePosition.X)/track.AbsoluteSize.X
+            rel=math.clamp(rel,0,1)
+            local range=maxV-minV; local steps=math.round(rel*range/step)
+            local val=math.clamp(minV+steps*step,minV,maxV)
+            Settings[key]=val; valL.Text=tostring(val)
+            local p2=(val-minV)/(maxV-minV)
+            fill.Size=UDim2.new(p2,0,1,0); knob.Position=UDim2.new(p2,0,.5,-6)
+        end)
+    end
+
+    -- Action button helper
+    local function sAction(label,desc,btnTxt,color,action)
+        sOrder=sOrder+1
+        local row=Instance.new("Frame",SScroll); row.Size=UDim2.new(1,0,0,52); row.LayoutOrder=sOrder
+        row.BackgroundColor3=Color3.fromRGB(18,16,26); row.BorderSizePixel=0; row.ZIndex=21
+        Instance.new("UICorner",row).CornerRadius=UDim.new(0,8)
+        local lL=Instance.new("TextLabel",row); lL.Size=UDim2.new(1,-110,0,18); lL.Position=UDim2.new(0,12,0,8)
+        lL.BackgroundTransparency=1; lL.Text=label; lL.TextColor3=Color3.fromRGB(200,195,215)
+        lL.Font=Enum.Font.GothamBold; lL.TextSize=12; lL.TextXAlignment=Enum.TextXAlignment.Left; lL.ZIndex=21
+        local dL=Instance.new("TextLabel",row); dL.Size=UDim2.new(1,-110,0,14); dL.Position=UDim2.new(0,12,0,28)
+        dL.BackgroundTransparency=1; dL.Text=desc; dL.TextColor3=Color3.fromRGB(75,70,95)
+        dL.Font=Enum.Font.Gotham; dL.TextSize=10; dL.TextXAlignment=Enum.TextXAlignment.Left; dL.ZIndex=21
+        local btn=Instance.new("TextButton",row); btn.Size=UDim2.new(0,88,0,28); btn.Position=UDim2.new(1,-100,.5,-14)
+        btn.BackgroundColor3=color; btn.TextColor3=Color3.fromRGB(220,220,230); btn.Font=Enum.Font.GothamBold; btn.TextSize=11
+        btn.Text=btnTxt; btn.AutoButtonColor=false; btn.BorderSizePixel=0; btn.ZIndex=21
+        Instance.new("UICorner",btn).CornerRadius=UDim.new(0,6)
+        btn.MouseEnter:Connect(function() tw(btn,FAST,{BackgroundColor3=color:Lerp(Color3.fromRGB(255,255,255),.15)}) end)
+        btn.MouseLeave:Connect(function() tw(btn,FAST,{BackgroundColor3=color}) end)
+        btn.MouseButton1Click:Connect(action)
+        return row
+    end
+
+    -- Info row (non-interactive)
+    local function sInfo(label,value)
+        sOrder=sOrder+1
+        local row=Instance.new("Frame",SScroll); row.Size=UDim2.new(1,0,0,36); row.LayoutOrder=sOrder
+        row.BackgroundColor3=Color3.fromRGB(16,14,22); row.BorderSizePixel=0; row.ZIndex=21
+        Instance.new("UICorner",row).CornerRadius=UDim.new(0,8)
+        local lL=Instance.new("TextLabel",row); lL.Size=UDim2.new(.5,0,1,0); lL.Position=UDim2.new(0,12,0,0)
+        lL.BackgroundTransparency=1; lL.Text=label; lL.TextColor3=Color3.fromRGB(100,100,120)
+        lL.Font=Enum.Font.Gotham; lL.TextSize=11; lL.TextXAlignment=Enum.TextXAlignment.Left; lL.ZIndex=21
+        local vL=Instance.new("TextLabel",row); vL.Size=UDim2.new(.5,-12,1,0); vL.Position=UDim2.new(.5,0,0,0)
+        vL.BackgroundTransparency=1; vL.Text=value; vL.TextColor3=Color3.fromRGB(150,150,180)
+        vL.Font=Enum.Font.GothamBold; vL.TextSize=11; vL.TextXAlignment=Enum.TextXAlignment.Right; vL.ZIndex=21
+        return row,vL
+    end
+
+    -- Build settings content
+    sSectionHeader("🎛  General")
+    sToggle("Show Balance Warning","Per-card deficit warning label","ShowBalanceOnCard")
+    sToggle("Highlight Unaffordable","Dim cards you can't afford","HighlightAfford")
+    sToggle("Auto-Refresh Balance","Update balance every 5 seconds","AutoRefreshBal")
+    sToggle("Confirm Before Buy","Require double-click to purchase","ConfirmBuy")
+
+    sSectionHeader("🛒  Purchase Queue")
+    sSlider("Queue Delay","Seconds between queue purchases","QueueDelay",0.1,3,0.1)
+    sToggle("Open Queue on Start","Show queue panel by default","QueuePanelOpen")
+
+    sSectionHeader("🗂  Catalog")
+    sToggle("Hide Pass Items","Hide Pass category from catalog","HidePassItems")
+    sToggle("Show Testing Category","Show Testing items in catalog","ShowTestingCat")
+
+    sSectionHeader("🔑  Key Info")
+    local _,keyRow=sInfo("Key",ActiveKeyData and ActiveKeyData.Key or "None")
+    local _,tierRow=sInfo("Tier",(ActiveKeyData and (TIER_DISPLAY[ActiveKeyData.Tier] or DEFAULT_TIER) or DEFAULT_TIER).Label)
+    local _,expRow=sInfo("Expires",ActiveKeyData and (ActiveKeyData.ExpiryLabel or "?") or "—")
+    local _,srcRow=sInfo("Source",ActiveKeyData and (ActiveKeyData.Source or "—") or "—")
+    if keyRow then keyRow.TextTruncate=Enum.TextTruncate.AtEnd end
+
+    sSectionHeader("🛠  Actions")
+    sAction("Refresh Balance","Force update token balance","↻ Refresh",Color3.fromRGB(30,80,140),function()
+        refreshBal(); showToast("Balance refreshed.",Color3.fromRGB(50,120,200),"↻")
+    end)
+    sAction("Copy Key","Copy your key to clipboard","⧉ Copy",Color3.fromRGB(40,50,90),function()
+        if ActiveKeyData then pcall(setclipboard,ActiveKeyData.Key); showToast("Key copied to clipboard!",Color3.fromRGB(60,100,200),"⧉")
+        else showToast("No active key.",Color3.fromRGB(180,80,80),"✗") end
+    end)
+    sAction("Clear Saved Key","Remove key from disk (requires re-entry)","🗑 Clear",Color3.fromRGB(80,30,30),function()
+        saveConfig({}); showToast("Saved key cleared. Reopen to re-enter.",Color3.fromRGB(180,80,80),"🗑")
+    end)
+    sAction("Clear Queue","Remove all queued purchases","✕ Clear",Color3.fromRGB(60,30,30),function()
+        clearCart(); showToast("Queue cleared.",Color3.fromRGB(160,70,70),"✕")
+    end)
+    sAction("Close GUI","Hide the shop window","✕ Close",Color3.fromRGB(50,20,20),function()
+        setVisible(false); setSettingsOpen(false)
+    end)
+    sAction("Destroy GUI","Completely remove this GUI","💣 Destroy",Color3.fromRGB(100,20,20),function()
+        Gui:Destroy()
+    end)
+
+    sSectionHeader("ℹ  About")
+    sInfo("Version","v3.0")
+    sInfo("Script","Shop GUI")
+
+    --------------------------------------------------------
     -- FILTER STATE
     --------------------------------------------------------
-    local ActiveFilter  = "All"
-    local FilterButtons = {}
-    -- ProductCards: { Card, Category, isGiftable, ref }
-    local ProductCards  = {}
+    local ActiveFilter="All"
+    local FilterBtns={}
+    local ProductCards={}  -- {Card, Category, isGiftable, updateBalWarn, updateLayout}
 
     local function applyFilter(cat)
-        ActiveFilter = cat
-        local isSelf = (SelectedPlayer == LocalPlayer)
-        for _, fb in pairs(FilterButtons) do
-            local active = (fb.Category == cat)
-            local col = active and (cat~="All" and categoryColor(cat) or Color3.fromRGB(90,90,105)) or Color3.fromRGB(36,36,36)
-            tw(fb.Button, FAST, { BackgroundColor3=col })
-            fb.Button.TextColor3 = active and Color3.fromRGB(240,240,240) or Color3.fromRGB(120,120,120)
+        ActiveFilter=cat
+        local isSelf=(SelectedPlayer==LocalPlayer)
+        for _,fb in pairs(FilterBtns) do
+            local active=(fb.Category==cat)
+            local col=active and (cat~="All" and catColor(cat) or Color3.fromRGB(90,90,105)) or Color3.fromRGB(36,36,36)
+            tw(fb.Button,FAST,{BackgroundColor3=col}); fb.Button.TextColor3=active and Color3.fromRGB(240,240,240) or Color3.fromRGB(120,120,120)
         end
-        for _, e in pairs(ProductCards) do
-            local catMatch = (cat=="All") or (e.Category==cat)
-            -- NEW: when another player selected, hide non-giftable items
-            local giftableOk = isSelf or e.isGiftable
-            e.Card.Visible = catMatch and giftableOk
+        for _,e in pairs(ProductCards) do
+            local catOk=(cat=="All") or (e.Category==cat)
+            local giftOk=isSelf or e.isGiftable
+            local passHide=Settings.HidePassItems and e.Category=="Pass"
+            local testHide=not Settings.ShowTestingCat and e.Category=="Testing"
+            e.Card.Visible=catOk and giftOk and not passHide and not testHide
         end
     end
 
-    -- Re-apply filter whenever player changes
-    table.insert(onPlayerChangedCallbacks, function(_)
-        applyFilter(ActiveFilter)
-    end)
+    table.insert(onPlayerChanged,function(_) applyFilter(ActiveFilter) end)
 
-    for i, cat in ipairs(Categories) do
+    for i,cat in ipairs(Categories) do
         local fb=Instance.new("TextButton",FilterScroll); fb.LayoutOrder=i; fb.AutoButtonColor=false
         fb.BackgroundColor3=cat=="All" and Color3.fromRGB(75,75,90) or Color3.fromRGB(36,36,36)
         fb.TextColor3=cat=="All" and Color3.fromRGB(240,240,240) or Color3.fromRGB(120,120,120)
@@ -1128,95 +1109,99 @@ local function bootShop()
         fb.MouseEnter:Connect(function() if ActiveFilter~=cat then tw(fb,FAST,{BackgroundColor3=Color3.fromRGB(48,48,54)}) end end)
         fb.MouseLeave:Connect(function() if ActiveFilter~=cat then tw(fb,FAST,{BackgroundColor3=Color3.fromRGB(36,36,36)}) end end)
         fb.MouseButton1Click:Connect(function() applyFilter(cat) end)
-        table.insert(FilterButtons, { Button=fb, Category=cat })
+        table.insert(FilterBtns,{Button=fb,Category=cat})
     end
 
     --------------------------------------------------------
     -- CARD BUILDER
     --------------------------------------------------------
-    local function setLoading(btn, loading, label)
-        btn.Active=not loading; btn.Text=loading and "…" or label; btn.BackgroundTransparency=loading and 0.55 or 0
-    end
+    local confirmPendingMap={}  -- card→bool for double-click confirm
 
     local function createCard(data)
-        local accent   = categoryColor(data.Category)
-        local variants = data.Variants or {}
-        local prices   = data.Prices   or {}
-        local giftable = data.isGiftable == true
+        local accent=catColor(data.Category)
+        local variants=data.Variants or {}; local prices=data.Prices or {}
+        local giftable=data.isGiftable==true
 
-        local usable = {}
+        local usable={}
         for _,v in ipairs(variants) do if v.NormalId then table.insert(usable,v) end end
 
-        local selIdx = #usable>0 and 1 or 0
+        local selIdx=#usable>0 and 1 or 0
 
-        local card=Instance.new("Frame",ProductScroll); card.BackgroundColor3=Color3.fromRGB(20,20,20); card.BorderSizePixel=0
+        local card=Instance.new("Frame",ProductScroll)
+        card.BackgroundColor3=Color3.fromRGB(20,20,20); card.BorderSizePixel=0
         Instance.new("UICorner",card).CornerRadius=UDim.new(0,10)
-        local stroke=Instance.new("UIStroke",card); stroke.Color=Color3.fromRGB(255,255,255); stroke.Transparency=0.88; stroke.Thickness=0.5
-        card.MouseEnter:Connect(function() tw(stroke,FAST,{Color=accent,Transparency=0.42}) end)
-        card.MouseLeave:Connect(function() tw(stroke,FAST,{Color=Color3.fromRGB(255,255,255),Transparency=0.88}) end)
+        local stroke=Instance.new("UIStroke",card); stroke.Color=Color3.fromRGB(255,255,255); stroke.Transparency=.88; stroke.Thickness=.5
+        card.MouseEnter:Connect(function() tw(stroke,FAST,{Color=accent,Transparency=.42}) end)
+        card.MouseLeave:Connect(function() tw(stroke,FAST,{Color=Color3.fromRGB(255,255,255),Transparency=.88}) end)
 
+        -- Top accent bar
         local topBar=Instance.new("Frame",card); topBar.Size=UDim2.new(1,0,0,3); topBar.BackgroundColor3=accent; topBar.BorderSizePixel=0
         Instance.new("UICorner",topBar).CornerRadius=UDim.new(0,10)
-        local topCover=Instance.new("Frame",topBar); topCover.Size=UDim2.new(1,0,0.5,0); topCover.Position=UDim2.new(0,0,0.5,0)
-        topCover.BackgroundColor3=accent; topCover.BorderSizePixel=0
+        local topCover=Instance.new("Frame",topBar); topCover.Size=UDim2.new(1,0,.5,0); topCover.Position=UDim2.new(0,0,.5,0); topCover.BackgroundColor3=accent; topCover.BorderSizePixel=0
 
+        -- Badge
         local badge=Instance.new("TextLabel",card); badge.Size=UDim2.new(0,0,0,16); badge.AutomaticSize=Enum.AutomaticSize.X
-        badge.Position=UDim2.new(0,10,0,10); badge.BackgroundColor3=accent; badge.BackgroundTransparency=0.78
+        badge.Position=UDim2.new(0,10,0,10); badge.BackgroundColor3=accent; badge.BackgroundTransparency=.78
         badge.Text=data.Category; badge.TextColor3=accent; badge.Font=Enum.Font.GothamBold; badge.TextSize=9; badge.BorderSizePixel=0
         Instance.new("UICorner",badge).CornerRadius=UDim.new(1,0)
-        local badgePad=Instance.new("UIPadding",badge); badgePad.PaddingLeft,badgePad.PaddingRight=UDim.new(0,6),UDim.new(0,6)
+        local bp=Instance.new("UIPadding",badge); bp.PaddingLeft,bp.PaddingRight=UDim.new(0,6),UDim.new(0,6)
 
-        local titleL=Instance.new("TextLabel",card); titleL.Size=UDim2.new(1,-16,0,38); titleL.Position=UDim2.new(0,8,0,30)
+        local titleL=Instance.new("TextLabel",card); titleL.Size=UDim2.new(1,-16,0,36); titleL.Position=UDim2.new(0,8,0,30)
         titleL.BackgroundTransparency=1; titleL.Text=data.Display; titleL.TextColor3=Color3.fromRGB(215,215,215)
-        titleL.Font=Enum.Font.GothamBold; titleL.TextSize=13; titleL.TextXAlignment=Enum.TextXAlignment.Left
+        titleL.Font=Enum.Font.GothamBold; titleL.TextSize=12; titleL.TextXAlignment=Enum.TextXAlignment.Left
         titleL.TextYAlignment=Enum.TextYAlignment.Top; titleL.TextWrapped=true
 
-        local priceL=Instance.new("TextLabel",card); priceL.Size=UDim2.new(1,-16,0,16); priceL.Position=UDim2.new(0,8,0,70)
+        local priceL=Instance.new("TextLabel",card); priceL.Size=UDim2.new(1,-16,0,14); priceL.Position=UDim2.new(0,8,0,68)
         priceL.BackgroundTransparency=1; priceL.TextColor3=Color3.fromRGB(90,200,90); priceL.Font=Enum.Font.GothamBold
-        priceL.TextSize=12; priceL.TextXAlignment=Enum.TextXAlignment.Left
+        priceL.TextSize=11; priceL.TextXAlignment=Enum.TextXAlignment.Left
 
-        -- ┌──────────────────────────────────────┐
-        -- │  NEW: Balance warning label per card │
-        -- └──────────────────────────────────────┘
-        local balWarnL=Instance.new("TextLabel",card); balWarnL.Size=UDim2.new(1,-16,0,12); balWarnL.Position=UDim2.new(0,8,0,87)
-        balWarnL.BackgroundTransparency=1; balWarnL.TextColor3=Color3.fromRGB(220,130,50); balWarnL.Font=Enum.Font.Gotham
-        balWarnL.TextSize=9; balWarnL.TextXAlignment=Enum.TextXAlignment.Left; balWarnL.Text=""
+        -- Balance warning label (per card)
+        local balWarn=Instance.new("TextLabel",card); balWarn.Size=UDim2.new(1,-16,0,11); balWarn.Position=UDim2.new(0,8,0,84)
+        balWarn.BackgroundTransparency=1; balWarn.TextColor3=Color3.fromRGB(215,100,50); balWarn.Font=Enum.Font.Gotham
+        balWarn.TextSize=9; balWarn.TextXAlignment=Enum.TextXAlignment.Left; balWarn.Text=""
 
-        local qtyRow=Instance.new("Frame",card); qtyRow.Size=UDim2.new(1,-16,0,26); qtyRow.Position=UDim2.new(0,8,0,104)
+        -- Qty row
+        local qtyRow=Instance.new("Frame",card); qtyRow.Size=UDim2.new(1,-16,0,24); qtyRow.Position=UDim2.new(0,8,0,99)
         qtyRow.BackgroundTransparency=1; qtyRow.BorderSizePixel=0
-        local qtyLayout=Instance.new("UIListLayout",qtyRow); qtyLayout.FillDirection=Enum.FillDirection.Horizontal
-        qtyLayout.Padding=UDim.new(0,4); qtyLayout.VerticalAlignment=Enum.VerticalAlignment.Center
-
+        local ql=Instance.new("UIListLayout",qtyRow); ql.FillDirection=Enum.FillDirection.Horizontal; ql.Padding=UDim.new(0,4); ql.VerticalAlignment=Enum.VerticalAlignment.Center
         local qtyBtns={}
 
-        local function getCurrentPrice()
+        local function getCurPrice()
             if selIdx==0 then return nil end
-            local v=usable[selIdx]; if not v then return nil end
-            return prices[v.Qty]
+            local v=usable[selIdx]; return v and prices[v.Qty] or nil
         end
 
         local function updateBalWarn()
-            local p = getCurrentPrice()
-            if not p then balWarnL.Text=""; return end
-            local bal = getTokenBalance()
-            if bal and p > bal then
-                balWarnL.Text = string.format("⚠ Need %d more", math.ceil(p-bal))
+            if not Settings.ShowBalanceOnCard then balWarn.Text=""; return end
+            local p=getCurPrice(); if not p then balWarn.Text=""; return end
+            local bal=getTokenBalance()
+            if bal then
+                if p>bal then
+                    local deficit=math.ceil(p-bal)
+                    balWarn.Text="⚠ Need "..fmtNum(deficit).." more tokens"
+                    balWarn.TextColor3=Color3.fromRGB(215,100,50)
+                else
+                    balWarn.Text=""
+                end
             else
-                balWarnL.Text = ""
+                balWarn.Text=""
+            end
+            -- Dim card if can't afford and setting on
+            if Settings.HighlightAfford and bal then
+                card.BackgroundColor3=p>bal and Color3.fromRGB(16,14,14) or Color3.fromRGB(20,20,20)
+            else
+                card.BackgroundColor3=Color3.fromRGB(20,20,20)
             end
         end
 
         local function updateSelection(idx)
             selIdx=idx
             local v=usable[idx]; local qty=v and v.Qty or 1; local p=prices[qty]
-            priceL.Text = p and formatPrice(p) or "Free"
+            priceL.Text=p and fmtPrice(p) or "Free"
             updateBalWarn()
             for i2,qb in ipairs(qtyBtns) do
                 local active=(i2==idx)
-                tw(qb,FAST,{
-                    BackgroundColor3=active and accent or Color3.fromRGB(36,36,36),
-                    TextColor3=active and Color3.fromRGB(20,20,20) or Color3.fromRGB(140,140,140),
-                })
+                tw(qb,FAST,{BackgroundColor3=active and accent or Color3.fromRGB(36,36,36),TextColor3=active and Color3.fromRGB(20,20,20) or Color3.fromRGB(140,140,140)})
             end
         end
 
@@ -1225,9 +1210,9 @@ local function bootShop()
                 local label=v.Label or ("×"..tostring(v.Qty))
                 local qb=Instance.new("TextButton",qtyRow); qb.Size=UDim2.new(0,0,1,0); qb.AutomaticSize=Enum.AutomaticSize.X
                 qb.BackgroundColor3=Color3.fromRGB(36,36,36); qb.TextColor3=Color3.fromRGB(140,140,140)
-                qb.Font=Enum.Font.GothamBold; qb.TextSize=11; qb.Text=label; qb.AutoButtonColor=false; qb.BorderSizePixel=0
+                qb.Font=Enum.Font.GothamBold; qb.TextSize=10; qb.Text=label; qb.AutoButtonColor=false; qb.BorderSizePixel=0
                 Instance.new("UICorner",qb).CornerRadius=UDim.new(1,0)
-                local qp=Instance.new("UIPadding",qb); qp.PaddingLeft,qp.PaddingRight=UDim.new(0,8),UDim.new(0,8)
+                local qp=Instance.new("UIPadding",qb); qp.PaddingLeft,qp.PaddingRight=UDim.new(0,7),UDim.new(0,7)
                 local _i=i2; qb.MouseButton1Click:Connect(function() updateSelection(_i) end)
                 table.insert(qtyBtns,qb)
             end
@@ -1237,22 +1222,16 @@ local function bootShop()
 
         if #usable>0 then updateSelection(1) else priceL.Text="See Store"; qtyRow.Visible=false end
 
-        -- Refresh balance warn on interval (cards persist)
-        task.spawn(function()
-            while card.Parent do task.wait(6); updateBalWarn() end
-        end)
+        -- refresh balance warning on interval
+        task.spawn(function() while card.Parent do task.wait(6); updateBalWarn() end end)
 
-        local btnH = 28
-        if #usable > 0 then
-            -- ── Button row (Buy, Gift, +Queue) ──────────────────────────
-            local btnFrame=Instance.new("Frame",card); btnFrame.Size=UDim2.new(1,-16,0,btnH)
-            btnFrame.Position=UDim2.new(0,8,1,-(btnH+8)); btnFrame.BackgroundTransparency=1; btnFrame.BorderSizePixel=0
+        if #usable>0 then
+            local BH=28  -- button height
+            local btnFrame=Instance.new("Frame",card)
+            btnFrame.Size=UDim2.new(1,-16,0,BH); btnFrame.Position=UDim2.new(0,8,1,-(BH+8))
+            btnFrame.BackgroundTransparency=1; btnFrame.BorderSizePixel=0
 
-            -- Determine slot widths based on giftable
-            -- We always want a "+Queue" button on the right (optional small btn)
-            -- Layout: [Buy or Gift (varies)] [+Q]
-            local queueBtnW = 32  -- fixed px for "+Q" cart button
-
+            local QW=30  -- +Q button width
             local buyBtn=Instance.new("TextButton",btnFrame)
             buyBtn.BackgroundColor3=Color3.fromRGB(28,58,130); buyBtn.TextColor3=Color3.fromRGB(210,210,210)
             buyBtn.Font=Enum.Font.GothamBold; buyBtn.TextSize=11; buyBtn.Text="Buy"
@@ -1272,197 +1251,160 @@ local function bootShop()
                 giftBtn.MouseLeave:Connect(function() tw(giftBtn,FAST,{BackgroundColor3=Color3.fromRGB(90,30,80)}) end)
             end
 
-            local addQueueBtn=Instance.new("TextButton",btnFrame)
-            addQueueBtn.BackgroundColor3=Color3.fromRGB(30,55,30); addQueueBtn.TextColor3=Color3.fromRGB(80,200,80)
-            addQueueBtn.Font=Enum.Font.GothamBold; addQueueBtn.TextSize=10; addQueueBtn.Text="+Q"
-            addQueueBtn.AutoButtonColor=false; addQueueBtn.BorderSizePixel=0
-            Instance.new("UICorner",addQueueBtn).CornerRadius=UDim.new(0,6)
-            addQueueBtn.MouseEnter:Connect(function() tw(addQueueBtn,FAST,{BackgroundColor3=Color3.fromRGB(40,75,40)}) end)
-            addQueueBtn.MouseLeave:Connect(function() tw(addQueueBtn,FAST,{BackgroundColor3=Color3.fromRGB(30,55,30)}) end)
+            local addQBtn=Instance.new("TextButton",btnFrame)
+            addQBtn.BackgroundColor3=Color3.fromRGB(25,48,25); addQBtn.TextColor3=Color3.fromRGB(70,190,70)
+            addQBtn.Font=Enum.Font.GothamBold; addQBtn.TextSize=9; addQBtn.Text="+Q"
+            addQBtn.AutoButtonColor=false; addQBtn.BorderSizePixel=0; addQBtn.Size=UDim2.new(0,QW,1,0)
+            Instance.new("UICorner",addQBtn).CornerRadius=UDim.new(0,6)
+            addQBtn.MouseEnter:Connect(function() tw(addQBtn,FAST,{BackgroundColor3=Color3.fromRGB(35,65,35)}) end)
+            addQBtn.MouseLeave:Connect(function() tw(addQBtn,FAST,{BackgroundColor3=Color3.fromRGB(25,48,25)}) end)
 
-            -- Layout function: called whenever player changes
-            local function layoutButtons(plr)
+            local function layoutBtns(plr)
                 if not card.Parent then return end
                 local isSelf=(plr==LocalPlayer)
-
-                -- Non-giftable: only show Buy + Queue always (card visibility handled by filter)
-                -- Giftable + self: Buy + Queue (gift hidden)
-                -- Giftable + other: Gift + Queue (buy hidden)
-
+                local gap=4
+                addQBtn.Position=UDim2.new(1,-QW,0,0)
                 if not giftable then
-                    -- no gift button exists
                     buyBtn.Visible=true
-                    buyBtn.Size=UDim2.new(1,-(queueBtnW+6),1,0); buyBtn.Position=UDim2.new(0,0,0,0)
-                    addQueueBtn.Size=UDim2.new(0,queueBtnW,1,0); addQueueBtn.Position=UDim2.new(0,btnFrame.AbsoluteSize.X-queueBtnW,0,0)
+                    buyBtn.Position=UDim2.new(0,0,0,0); buyBtn.Size=UDim2.new(1,-(QW+gap),1,0)
                 elseif isSelf then
-                    buyBtn.Visible=true
-                    if giftBtn then giftBtn.Visible=false end
-                    buyBtn.Size=UDim2.new(1,-(queueBtnW+6),1,0); buyBtn.Position=UDim2.new(0,0,0,0)
-                    addQueueBtn.Size=UDim2.new(0,queueBtnW,1,0); addQueueBtn.Position=UDim2.new(1,-(queueBtnW),0,0)
+                    buyBtn.Visible=true; if giftBtn then giftBtn.Visible=false end
+                    buyBtn.Position=UDim2.new(0,0,0,0); buyBtn.Size=UDim2.new(1,-(QW+gap),1,0)
                 else
                     buyBtn.Visible=false
                     if giftBtn then
                         giftBtn.Visible=true
-                        giftBtn.Size=UDim2.new(1,-(queueBtnW+6),1,0); giftBtn.Position=UDim2.new(0,0,0,0)
+                        giftBtn.Position=UDim2.new(0,0,0,0); giftBtn.Size=UDim2.new(1,-(QW+gap),1,0)
                     end
-                    addQueueBtn.Size=UDim2.new(0,queueBtnW,1,0); addQueueBtn.Position=UDim2.new(1,-(queueBtnW),0,0)
                 end
             end
-            layoutButtons(SelectedPlayer)
-            table.insert(onPlayerChangedCallbacks, layoutButtons)
+            layoutBtns(SelectedPlayer)
+            table.insert(onPlayerChanged,layoutBtns)
 
-            -- BUY click
+            -- BUY
+            local confirmPending=false
             buyBtn.MouseButton1Click:Connect(function()
                 if selIdx==0 then return end
-                local v=usable[selIdx]; if not v or not v.NormalId then showToast("No purchasable ID.",Color3.fromRGB(200,80,80)); return end
-
-                -- Balance check
-                local p=getCurrentPrice(); local bal=getTokenBalance()
+                local v=usable[selIdx]; if not v or not v.NormalId then showToast("No ID for this item.",Color3.fromRGB(200,80,80),"✗"); return end
+                local p=getCurPrice(); local bal=getTokenBalance()
                 if bal and p and p>bal then
-                    showToast(string.format("⚠ Not enough tokens! Need %d, have %d.", math.ceil(p), math.floor(bal)), Color3.fromRGB(200,100,50))
-                    return
+                    local deficit=math.ceil(p-bal)
+                    showToast("Not enough tokens! Need "..fmtNum(deficit).." more.",Color3.fromRGB(220,100,50),"⚠"); return
                 end
-
-                setLoading(buyBtn,true,"Buy")
+                -- Confirm double-click
+                if Settings.ConfirmBuy then
+                    if not confirmPending then
+                        confirmPending=true; buyBtn.Text="Confirm?"; buyBtn.BackgroundColor3=Color3.fromRGB(180,100,20)
+                        task.delay(2,function() if confirmPending then confirmPending=false; buyBtn.Text="Buy"; buyBtn.BackgroundColor3=Color3.fromRGB(28,58,130) end end)
+                        return
+                    end
+                    confirmPending=false
+                end
+                buyBtn.Active=false; buyBtn.Text="…"; buyBtn.BackgroundTransparency=.5
                 task.spawn(function()
-                    local ok,err=pcall(function() PurchaseRemote:InvokeServer(v.NormalId) end)
-                    setLoading(buyBtn,false,"Buy")
-                    if ok then showToast("Purchased "..data.Display, accent)
-                    else showToast("Purchase failed: "..tostring(err), Color3.fromRGB(200,80,80)) end
-                    task.wait(1); updateBalWarn(); refreshBalanceDisplay()
+                    local ok,_=pcall(function() PurchaseRemote:InvokeServer(v.NormalId) end)
+                    buyBtn.Active=true; buyBtn.Text="Buy"; buyBtn.BackgroundTransparency=0
+                    if ok then showToast("Purchased "..data.Display,accent,"✓") else showToast("Purchase failed.",Color3.fromRGB(200,80,80),"✗") end
+                    task.wait(1); updateBalWarn(); refreshBal()
                 end)
             end)
 
-            -- GIFT click
+            -- GIFT
             if giftable and giftBtn then
                 giftBtn.MouseButton1Click:Connect(function()
-                    if SelectedPlayer==LocalPlayer then showToast("You can't gift to yourself.",Color3.fromRGB(200,80,80)); return end
+                    if SelectedPlayer==LocalPlayer then showToast("Can't gift to yourself.",Color3.fromRGB(200,80,80),"✗"); return end
                     local target=Players:GetPlayerByUserId(SelectedPlayer.UserId)
-                    if not target then showToast("That player has left the game.",Color3.fromRGB(200,80,80)); return end
-                    local v=usable[selIdx]; if not v or not v.NormalId then showToast("This item cannot be gifted.",Color3.fromRGB(200,80,80)); return end
-
-                    -- Balance check
-                    local p=getCurrentPrice(); local bal=getTokenBalance()
+                    if not target then showToast("Player has left.",Color3.fromRGB(200,80,80),"✗"); return end
+                    local v=usable[selIdx]; if not v or not v.NormalId then showToast("This item can't be gifted.",Color3.fromRGB(200,80,80),"✗"); return end
+                    local p=getCurPrice(); local bal=getTokenBalance()
                     if bal and p and p>bal then
-                        showToast(string.format("⚠ Not enough tokens! Need %d, have %d.", math.ceil(p), math.floor(bal)), Color3.fromRGB(200,100,50))
-                        return
+                        local deficit=math.ceil(p-bal)
+                        showToast("Not enough tokens! Need "..fmtNum(deficit).." more.",Color3.fromRGB(220,100,50),"⚠"); return
                     end
-
-                    setLoading(giftBtn,true,"🎁 Gift")
+                    giftBtn.Active=false; giftBtn.Text="…"; giftBtn.BackgroundTransparency=.5
                     task.spawn(function()
-                        local ok,err=pcall(function() GiftRemote:FireServer({ productId=v.NormalId, targetUserId=target.UserId }) end)
-                        setLoading(giftBtn,false,"🎁 Gift")
-                        if ok then showToast("Gifted "..data.Display.." → "..target.Name, accent)
-                        else showToast("Gift failed: "..tostring(err), Color3.fromRGB(200,80,80)) end
-                        task.wait(1); updateBalWarn(); refreshBalanceDisplay()
+                        local ok,_=pcall(function() GiftRemote:FireServer({productId=v.NormalId,targetUserId=target.UserId}) end)
+                        giftBtn.Active=true; giftBtn.Text="🎁 Gift"; giftBtn.BackgroundTransparency=0
+                        if ok then showToast("Gifted "..data.Display.." → "..target.Name,accent,"🎁") else showToast("Gift failed.",Color3.fromRGB(200,80,80),"✗") end
+                        task.wait(1); updateBalWarn(); refreshBal()
                     end)
                 end)
             end
 
-            -- ADD TO QUEUE click
-            addQueueBtn.MouseButton1Click:Connect(function()
+            -- ADD TO QUEUE
+            addQBtn.MouseButton1Click:Connect(function()
                 if selIdx==0 then return end
-                local v=usable[selIdx]; if not v or not v.NormalId then showToast("Can't queue this item.",Color3.fromRGB(200,80,80)); return end
+                local v=usable[selIdx]; if not v or not v.NormalId then showToast("Can't queue this item.",Color3.fromRGB(200,80,80),"✗"); return end
                 local isSelf=(SelectedPlayer==LocalPlayer)
-                local isGift = giftable and not isSelf
-
-                if isGift and SelectedPlayer==LocalPlayer then isGift=false end
+                local isGift=giftable and not isSelf
                 if isGift then
                     local target=Players:GetPlayerByUserId(SelectedPlayer.UserId)
-                    if not target then showToast("Player has left.",Color3.fromRGB(200,80,80)); return end
+                    if not target then showToast("Player has left.",Color3.fromRGB(200,80,80),"✗"); return end
                 end
-
-                local p=getCurrentPrice()
-                addToCart({
-                    display      = data.Display.." (×"..(v.Qty or 1)..")",
-                    productId    = v.NormalId,
-                    price        = p or 0,
-                    isGift       = isGift,
-                    targetName   = isGift and SelectedPlayer.Name or "",
-                    targetUserId = isGift and SelectedPlayer.UserId or 0,
+                local p=getCurPrice()
+                table.insert(Cart,{
+                    display=data.Display.." (×"..(v.Qty or 1)..")",
+                    productId=v.NormalId; price=p or 0; isGift=isGift;
+                    targetName=isGift and SelectedPlayer.Name or "";
+                    targetUserId=isGift and SelectedPlayer.UserId or 0;
                 })
-                -- Flash button
-                local origColor=Color3.fromRGB(30,55,30)
-                tw(addQueueBtn,FAST,{BackgroundColor3=Color3.fromRGB(20,80,20)})
-                task.delay(0.4, function() tw(addQueueBtn,FAST,{BackgroundColor3=origColor}) end)
-                showToast("Added to queue: "..data.Display, Color3.fromRGB(50,160,80))
+                notifyCart()
+                tw(addQBtn,FAST,{BackgroundColor3=Color3.fromRGB(20,80,20)}); task.delay(.4,function() tw(addQBtn,FAST,{BackgroundColor3=Color3.fromRGB(25,48,25)}) end)
+                showToast("Added to queue: "..data.Display,Color3.fromRGB(50,170,80),"✓")
+                -- Auto-open queue panel
+                if not QueueOpen then setQueueOpen(true) end
             end)
-
         else
-            -- Pass store items (no NormalId)
-            local passL=Instance.new("TextLabel",card); passL.Size=UDim2.new(1,-16,0,btnH)
-            passL.Position=UDim2.new(0,8,1,-(btnH+8)); passL.BackgroundTransparency=1
-            passL.Text="Available in Game Pass Store"; passL.TextColor3=Color3.fromRGB(100,100,100)
-            passL.Font=Enum.Font.Gotham; passL.TextSize=11; passL.TextXAlignment=Enum.TextXAlignment.Center
+            local passL=Instance.new("TextLabel",card); passL.Size=UDim2.new(1,-16,0,28); passL.Position=UDim2.new(0,8,1,-36)
+            passL.BackgroundTransparency=1; passL.Text="Available in Game Pass Store"
+            passL.TextColor3=Color3.fromRGB(80,80,80); passL.Font=Enum.Font.Gotham; passL.TextSize=10; passL.TextXAlignment=Enum.TextXAlignment.Center
         end
 
-        table.insert(ProductCards, { Card=card, Category=data.Category, isGiftable=giftable })
+        table.insert(ProductCards,{Card=card,Category=data.Category,isGiftable=giftable})
     end
 
-    for _,data in ipairs(Products) do createCard(data) end
+    for _,d in ipairs(Products) do createCard(d) end
     applyFilter("All")
 
     -- Entry animation
-    Main.Position=UDim2.new(0.5,0,0.56,0); Main.BackgroundTransparency=1
-    tw(Main, MED, { Position=UDim2.new(0.5,0,0.5,0), BackgroundTransparency=0 })
-end  -- end bootShop()
+    Main.Position=UDim2.new(.5,0,.56,0); Main.BackgroundTransparency=1
+    tw(Main,MED,{Position=UDim2.new(.5,0,.5,0),BackgroundTransparency=0})
+end -- bootShop
 
 -- ┌─────────────────────────────────────────────────────┐
 -- │            KEY VALIDATION HANDLER                   │
 -- └─────────────────────────────────────────────────────┘
 
-local validating = false
-
+local validating=false
 local function runValidation(rawKey)
     if validating then return end
     if rawKey=="" then keyStatus.Text="Please enter a key."; keyStatus.TextColor3=Color3.fromRGB(180,80,80); return end
     validating=true; keyValidateBtn.Text="Checking…"; keyValidateBtn.Active=false
     keyStatus.Text="Contacting key server…"; keyStatus.TextColor3=Color3.fromRGB(80,80,120)
-
     task.spawn(function()
         local ok,result=validateKeyFull(rawKey)
         validating=false; keyValidateBtn.Text="Validate Key"; keyValidateBtn.Active=true
-
         if ok and type(result)=="table" then
-            tw(keyCardStroke,MED,{Color=Color3.fromRGB(60,200,100)})
-            tw(keyGlow,MED,{BackgroundColor3=Color3.fromRGB(60,200,100)})
-            tw(glowCover,MED,{BackgroundColor3=Color3.fromRGB(60,200,100)})
-            local tierCfg2=TIER_DISPLAY[result.Tier] or DEFAULT_TIER
-            keyStatus.Text="✓  "..tierCfg2.Label.."  ·  "..result.ExpiryLabel
-            keyStatus.TextColor3=tierCfg2.Color
-            result.SavedAt=unixNow(); saveConfig(result); ActiveKeyData=result
-            task.wait(0.8); bootShop()
+            tw(keyCardStroke,MED,{Color=Color3.fromRGB(60,200,100)}); tw(keyGlow,MED,{BackgroundColor3=Color3.fromRGB(60,200,100)}); tw(glowCover,MED,{BackgroundColor3=Color3.fromRGB(60,200,100)})
+            local tc2=TIER_DISPLAY[result.Tier] or DEFAULT_TIER
+            keyStatus.Text="✓  "..tc2.Label.."  ·  "..result.ExpiryLabel; keyStatus.TextColor3=tc2.Color
+            result.SavedAt=unixNow(); saveConfig(result); ActiveKeyData=result; task.wait(.8); bootShop()
         else
-            tw(keyCardStroke,MED,{Color=Color3.fromRGB(200,60,60)})
-            tw(keyGlow,MED,{BackgroundColor3=Color3.fromRGB(200,60,60)})
-            tw(glowCover,MED,{BackgroundColor3=Color3.fromRGB(200,60,60)})
-            local msg=type(result)=="string" and result or "Invalid key."
-            keyStatus.Text="✗  "..msg; keyStatus.TextColor3=Color3.fromRGB(220,70,70)
-            local origPos=KeyCard.Position
-            for _=1,3 do
-                tw(KeyCard,TweenInfo.new(0.06),{Position=UDim2.new(0.5,-8,0.5,0)}); task.wait(0.07)
-                tw(KeyCard,TweenInfo.new(0.06),{Position=UDim2.new(0.5,8,0.5,0)}); task.wait(0.07)
-            end
-            tw(KeyCard,TweenInfo.new(0.1),{Position=origPos})
-            task.delay(1.5,function()
-                tw(keyCardStroke,MED,{Color=Color3.fromRGB(80,100,220)})
-                tw(keyGlow,MED,{BackgroundColor3=Color3.fromRGB(80,120,255)})
-                tw(glowCover,MED,{BackgroundColor3=Color3.fromRGB(80,120,255)})
-            end)
+            tw(keyCardStroke,MED,{Color=Color3.fromRGB(200,60,60)}); tw(keyGlow,MED,{BackgroundColor3=Color3.fromRGB(200,60,60)}); tw(glowCover,MED,{BackgroundColor3=Color3.fromRGB(200,60,60)})
+            local msg=type(result)=="string" and result or "Invalid key."; keyStatus.Text="✗  "..msg; keyStatus.TextColor3=Color3.fromRGB(220,70,70)
+            local op=KeyCard.Position
+            for _=1,3 do tw(KeyCard,TweenInfo.new(.06),{Position=UDim2.new(.5,-8,.5,0)}); task.wait(.07); tw(KeyCard,TweenInfo.new(.06),{Position=UDim2.new(.5,8,.5,0)}); task.wait(.07) end
+            tw(KeyCard,TweenInfo.new(.1),{Position=op})
+            task.delay(1.5,function() tw(keyCardStroke,MED,{Color=Color3.fromRGB(80,100,220)}); tw(keyGlow,MED,{BackgroundColor3=Color3.fromRGB(80,120,255)}); tw(glowCover,MED,{BackgroundColor3=Color3.fromRGB(80,120,255)}) end)
         end
     end)
 end
 
 keyValidateBtn.MouseButton1Click:Connect(function() runValidation(keyInput.Text) end)
-keyInput.FocusLost:Connect(function(enterPressed) if enterPressed then runValidation(keyInput.Text) end end)
-
--- ┌─────────────────────────────────────────────────────┐
--- │       AUTO-BOOT IF SAVED KEY ALREADY VALID          │
--- └─────────────────────────────────────────────────────┘
+keyInput.FocusLost:Connect(function(ep) if ep then runValidation(keyInput.Text) end end)
 
 if keyAlreadyValid then
     keyStatus.Text="✓ Saved key loaded · "..(ActiveKeyData.ExpiryLabel or "")
-    keyStatus.TextColor3=Color3.fromRGB(60,200,100)
-    tw(keyCardStroke,MED,{Color=Color3.fromRGB(60,200,100)})
-    task.delay(0.6, bootShop)
+    keyStatus.TextColor3=Color3.fromRGB(60,200,100); tw(keyCardStroke,MED,{Color=Color3.fromRGB(60,200,100)})
+    task.delay(.6,bootShop)
 end
