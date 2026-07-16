@@ -89,7 +89,7 @@ local ClientSettings = {
 }
 
 local ClientSecrets = {
-    groq = "sk-b5367127958dae53d3183648ff486580",
+    groq = "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",
     groq2 = "wwww",
     groq3 = "awwasybau",
 }
