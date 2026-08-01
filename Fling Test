@@ -1,0 +1,260 @@
+local ScreenGui = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local Frame_2 = Instance.new("Frame")
+local TextLabel = Instance.new("TextLabel")
+
+-- Setup modern UI Containers
+ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.ResetOnSpawn = false
+
+Frame.Parent = ScreenGui
+Frame.BackgroundColor3 = Color3.fromRGB(34, 34, 34)
+Frame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+Frame.BorderSizePixel = 0
+Frame.Position = UDim2.new(0.388, 0, 0.427, 0)
+Frame.Size = UDim2.new(0, 180, 0, 120)
+
+Frame_2.Parent = Frame
+Frame_2.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+Frame_2.BorderColor3 = Color3.fromRGB(0, 0, 0)
+Frame_2.BorderSizePixel = 0
+Frame_2.Size = UDim2.new(0, 180, 0, 25)
+
+TextLabel.Parent = Frame_2
+TextLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+TextLabel.BackgroundTransparency = 1.000
+TextLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
+TextLabel.BorderSizePixel = 0
+TextLabel.Position = UDim2.new(0.05, 0, -0.015, 0)
+TextLabel.Size = UDim2.new(0, 160, 0, 26)
+TextLabel.Font = Enum.Font.Sarpanch
+TextLabel.Text = "Advanced Punch Fling"
+TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextLabel.TextSize = 16.000
+
+-- Slider Label
+local SliderLabel = Instance.new("TextLabel")
+SliderLabel.Parent = Frame
+SliderLabel.BackgroundTransparency = 1
+SliderLabel.Position = UDim2.new(0.05, 0, 0.28, 0)
+SliderLabel.Size = UDim2.new(0.5, 0, 0.2, 0)
+SliderLabel.Font = Enum.Font.SourceSansBold
+SliderLabel.Text = "Push Power:"
+SliderLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+SliderLabel.TextSize = 14
+SliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Adjustable Numeric TextBox Input
+local PowerInput = Instance.new("TextBox")
+PowerInput.Parent = Frame
+PowerInput.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+PowerInput.BorderSizePixel = 0
+PowerInput.Position = UDim2.new(0.6, 0, 0.28, 0)
+PowerInput.Size = UDim2.new(0.35, 0, 0.2, 0)
+PowerInput.Font = Enum.Font.Code
+PowerInput.Text = "100"
+PowerInput.TextColor3 = Color3.fromRGB(0, 255, 150)
+PowerInput.TextSize = 14
+PowerInput.ClearTextOnFocus = false
+
+-- Slider Background Track
+local SliderTrack = Instance.new("Frame")
+SliderTrack.Parent = Frame
+SliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+SliderTrack.BorderSizePixel = 0
+SliderTrack.Position = UDim2.new(0.05, 0, 0.58, 0)
+SliderTrack.Size = UDim2.new(0.9, 0, 0.08, 0)
+
+-- Interactive Slider Button Pin
+local SliderPin = Instance.new("TextButton")
+SliderPin.Parent = SliderTrack
+SliderPin.BackgroundColor3 = Color3.fromRGB(0, 255, 150)
+SliderPin.BorderSizePixel = 0
+SliderPin.Position = UDim2.new(0.8, -5, -0.75, 0)
+SliderPin.Size = UDim2.new(0, 10, 2.5, 0)
+SliderPin.Text = ""
+
+-- Live Status Monitor Sublabel
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Parent = Frame
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Position = UDim2.new(0, 0, 0.78, 0)
+StatusLabel.Size = UDim2.new(1, 0, 0.2, 0)
+StatusLabel.Font = Enum.Font.SourceSansItalic
+StatusLabel.Text = "Equip Tool & Click to Punch"
+StatusLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
+StatusLabel.TextSize = 13.000
+
+-- Global Controller Logic
+local function IndependentSystemController()
+	local RunService = game:GetService("RunService")
+	local Players = game:GetService("Players")
+	local UserInputService = game:GetService("UserInputService")
+	
+	local lp = Players.LocalPlayer
+	local currentTool = nil
+	local isFlinging = false
+	local flingConnection = nil
+	local punchTrack = nil
+
+	-- PHASE CONTROL SYSTEM
+	local FLING_POWER = 100000 -- Drastically raised for rotational velocity flinging stability
+	local FLING_DURATION = 0.35 
+
+	local PunchAnim = Instance.new("Animation")
+	PunchAnim.AnimationId = "rbxassetid://50777045" 
+
+	local function stopFling()
+		isFlinging = false
+		StatusLabel.Text = "Ready"
+		StatusLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
+		if flingConnection then
+			flingConnection:Disconnect()
+			flingConnection = nil
+		end
+		
+		-- Safely revert velocities to zero to prevent self-tripping
+		local character = lp.Character
+		local hrp = character and character:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+		end
+	end
+
+	local function startFling()
+		local startTime = os.clock()
+		StatusLabel.Text = "⚡ EXECUTING HIGH VELOCITY FLING ⚡"
+		StatusLabel.TextColor3 = Color3.fromRGB(255, 150, 0)
+		
+		flingConnection = RunService.PreSimulation:Connect(function()
+			if not isFlinging then return end
+			
+			local character = lp.Character
+			local hrp = character and character:FindFirstChild("HumanoidRootPart")
+			
+			if hrp then
+				local elapsed = os.clock() - startTime
+				if elapsed <= FLING_DURATION then
+					-- Apply high-speed angular rotation to destabilize targets on contact
+					hrp.AssemblyAngularVelocity = Vector3.new(0, FLING_POWER, 0)
+				else
+					stopFling()
+				end
+			else
+				stopFling()
+			end
+		end)
+	end
+
+	-- Function to safely inject a brand new tool object into inventory
+	local function supplyFlingTool()
+		if currentTool and currentTool.Parent then currentTool:Destroy() end
+		
+		local backpack = lp:WaitForChild("Backpack", 5)
+		if not backpack then return end
+		
+		local Tool = Instance.new("Tool")
+		Tool.Name = "Punch Fling"
+		Tool.RequiresHandle = false
+		Tool.CanBeDropped = false
+		
+		Tool.Activated:Connect(function()
+			if isFlinging then return end
+			
+			local character = lp.Character
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			
+			if humanoid and humanoid.Health > 0 then
+				local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+				
+				if punchTrack then punchTrack:Stop() punchTrack:Destroy() end
+				
+				punchTrack = animator:LoadAnimation(PunchAnim)
+				-- Set priority to upper-body action so walking remains uninterrupted
+				punchTrack.Priority = Enum.AnimationPriority.Action
+				punchTrack.Looped = false
+				punchTrack:Play(0.01)
+				
+				isFlinging = true
+				startFling()
+			end
+		end)
+		
+		Tool.Unequipped:Connect(function()
+			if punchTrack then punchTrack:Stop() end
+			stopFling()
+		end)
+		
+		currentTool = Tool
+		Tool.Parent = backpack
+	end
+
+	-- Re-supply tool inventory loop
+	lp.CharacterAdded:Connect(function(char)
+		stopFling()
+		task.wait(0.3)
+		supplyFlingTool()
+		
+		local hum = char:WaitForChild("Humanoid", 5)
+		if hum then
+			hum.Died:Connect(function()
+				stopFling()
+				if punchTrack then punchTrack:Stop() end
+			end)
+		end
+	end)
+
+	if lp.Character then
+		supplyFlingTool()
+		local hum = lp.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			hum.Died:Connect(function() stopFling() if punchTrack then punchTrack:Stop() end end)
+		end
+	end
+
+	-- POWER MANAGEMENT CONTROLLER
+	local MAX_POWER_LIMIT = 500
+	
+	local function updatePowerValue(newValue)
+		local num = tonumber(newValue)
+		if num then
+			num = math.clamp(num, 0, MAX_POWER_LIMIT)
+			FLING_POWER = num * 1000 -- Scaling multiplier for physics engine efficiency
+			PowerInput.Text = tostring(num)
+			
+			local percentage = num / MAX_POWER_LIMIT
+			SliderPin.Position = UDim2.new(percentage, -5, -0.75, 0)
+		end
+	end
+
+	PowerInput.FocusLost:Connect(function(enterPressed)
+		updatePowerValue(PowerInput.Text)
+	end)
+
+	-- Basic slider functional framework
+	local dragging = false
+	SliderPin.MouseButton1Down:Connect(function()
+		dragging = true
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	RunService.RenderStepped:Connect(function()
+		if dragging then
+			local mousePos = UserInputService:GetMouseLocation().X
+			local trackLeft = SliderTrack.AbsolutePosition.X
+			local trackWidth = SliderTrack.AbsoluteSize.X
+			local percentage = math.clamp((mousePos - trackLeft) / trackWidth, 0, 1)
+			
+			local calculatedValue = math.round(percentage * MAX_POWER_LIMIT)
+			updatePowerValue(calculatedValue)
+		end
+	end)
+end
+
+IndependentSystemController()
