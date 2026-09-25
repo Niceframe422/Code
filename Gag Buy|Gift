@@ -276,6 +276,7 @@ local function bootShop()
     --------------------------------------------------------
     -- PRODUCT DATABASE
     --------------------------------------------------------
+
  local Products = {
 	--==============================================================
 	-- SEED PACKS
@@ -1611,6 +1612,232 @@ local function bootShop()
 		};
 	},
 }
+
+
+	--==============================================================
+	-- NEW SEEDS / ITEMS
+	--==============================================================
+
+	{
+		Group = "Nimbus Seed";
+		Display = "Nimbus Seed";
+		Category = "Seeds";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3710045234};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Aurum Spire Seed";
+		Display = "Aurum Spire Seed";
+		Category = "Seeds";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3710045294};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Wheatcap Seed";
+		Display = "Wheatcap Seed";
+		Category = "Seeds";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3704522375};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Moongrain Meadow Seed";
+		Display = "Moongrain Meadow Seed";
+		Category = "Seeds";
+		isGiftable = true;
+
+		Variants = {
+			{Qty = 1; NormalId = 3612306093; GiftId = 3612306124};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Tidal Orchid Seed";
+		Display = "Tidal Orchid Seed";
+		Category = "Seeds";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3611370762};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Okra Seed";
+		Display = "Okra Seed";
+		Category = "Seeds";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3610288548};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Tiki Totem Seed";
+		Display = "Tiki Totem Seed";
+		Category = "Seeds";
+		isGiftable = true;
+
+		Variants = {
+			{Qty = 1; NormalId = 3607717910; GiftId = 3607717935};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Smoke Stalk Seed";
+		Display = "Smoke Stalk Seed";
+		Category = "Seeds";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3605258681};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Shadow Spine Seed";
+		Display = "Shadow Spine Seed";
+		Category = "Seeds";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3605258615};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Firefly Spiral Seed";
+		Display = "Firefly Spiral Seed";
+		Category = "Seeds";
+		isGiftable = true;
+
+		Variants = {
+			{Qty = 1; NormalId = 3602742364; GiftId = 3602742410};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Pinkfruit Palm Seed";
+		Display = "Pinkfruit Palm Seed";
+		Category = "Seeds";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3596485110};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Season 5 Seedpack";
+		Display = "Season 5 Seedpack";
+		Category = "Seed Pack";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3596484464};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Pet Shard Royal Jelly";
+		Display = "Pet Shard Royal Jelly";
+		Category = "Pet Shard";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3593053446};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Pohutukawa Seed";
+		Display = "Pohutukawa Seed";
+		Category = "Seeds";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3593052869};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Pollenvine Seed";
+		Display = "Pollenvine Seed";
+		Category = "Seeds";
+		isGiftable = true;
+
+		Variants = {
+			{Qty = 1; NormalId = 3584075576; GiftId = 3584105603};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Bird of Paradise Seed";
+		Display = "Bird of Paradise Seed";
+		Category = "Seeds";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3584075352};
+		};
+
+		Prices = {};
+	},
+
+	{
+		Group = "Spirecrest Seed";
+		Display = "Spirecrest Seed";
+		Category = "Seeds";
+		isGiftable = false;
+
+		Variants = {
+			{Qty = 1; NormalId = 3627199928};
+		};
+
+		Prices = {};
+	},
 
 --==============================================================
 -- EXOTIC SEED PACKS
