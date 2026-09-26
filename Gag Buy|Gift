@@ -143,8 +143,8 @@ local SLOW = TweenInfo.new(0.45,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
 
 local function getTokenBalance()
     local pg=LocalPlayer:FindFirstChild("PlayerGui"); if not pg then return nil end
-    local ui=pg:FindFirstChild("TradeTokenCurrency_UI",true); if not ui then return nil end
-    for _,d in ipairs(ui:GetDescendants()) do
+    local ui=pg:FindFirstChild("CurrencyHolder",true); if not ui then return nil end
+    for _,d in ipairs(ui:FindFirstChild("TradeTokens"):GetDescendants()) do
         if d.Name=="val" and d:IsA("NumberValue") then return d.Value end
     end
     return nil
@@ -1611,7 +1611,8 @@ local function bootShop()
 			[1] = 99;
 		};
 	},
-}
+
+
 
 
 	--==============================================================
@@ -1838,7 +1839,7 @@ local function bootShop()
 
 		Prices = {};
 	},
-
+ }
 --==============================================================
 -- EXOTIC SEED PACKS
 --==============================================================
