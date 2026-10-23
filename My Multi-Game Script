@@ -1,0 +1,79 @@
+
+-- Configuration: Organize your scripts by game using their Universe IDs
+local gamesConfig = {
+    -- Murder Mystery 2 (Universe ID: 66654135)
+    [142823291] = {
+        {
+            url = "https://raw.smokingscripts.org/vertex.lua", 
+            name = "Vertex Hub"
+        },
+        {
+            url = "https://raw.githubusercontent.com/Bac0nHck/Scripts/refs/heads/main/BundleAnimations.lua", 
+            name = "Animations"
+        }
+    },
+    [126884695634066] = {
+        {
+            url = "https://exotichub.app/sc.lua",
+            name = "Exotic Hub"
+        },
+    },
+    
+    -- Universal category (Optional: Runs across absolutely every game you join)
+    ["Universal"] = {
+        -- Add global scripts here if needed
+    },
+    
+    -- To add another game, just copy the layout below:
+    -- [YOUR_GAME_UNIVERSE_ID] = {
+    --     {url = "SCRIPT_URL", name = "SCRIPT_NAME"}
+    -- }
+}
+
+-- Core dynamic execution logic
+task.spawn(function()
+    local httpMethod = game.HttpGetAsync or game.HttpGet
+    local currentUniverseId = game.PlaceId
+    
+    -- Build the execution queue based on the game you currently joined
+    local queue = {}
+    
+    -- 1. Grab Universal scripts if any exist
+    if gamesConfig["Universal"] then
+        for _, s in ipairs(gamesConfig["Universal"]) do table.insert(queue, s) end
+    end
+    
+    -- 2. Grab game-specific scripts if the game ID matches
+    if gamesConfig[currentUniverseId] then
+        for _, s in ipairs(gamesConfig[currentUniverseId]) do table.insert(queue, s) end
+    end
+    
+    -- 3. Sequentially run through the scripts to prevent execution frame drops
+    for _, scriptData in ipairs(queue) do
+        local success, data = pcall(httpMethod, game, scriptData.url)
+        
+        if success and data and #data > 0 then
+            -- Micro-yield to safely clear network lag before compiling
+            task.wait(0.1) 
+            
+            local compiled, err = loadstring(data, "=" .. scriptData.name)
+            
+            if compiled then
+                -- Bind execution context to global executor environment
+                setfenv(compiled, getgenv())
+                
+                -- Micro-yield to let frame rates stabilize after compiling large chunks
+                task.wait(0.1) 
+                
+                -- Fire the script inside its own safe thread
+                task.spawn(compiled)
+                print("[Loader] Successfully executed: " .. scriptData.name)
+            else
+                warn("[Loader Error] Compile failed for " .. scriptData.name .. ": " .. tostring(err))
+            end
+        else
+            warn("[Loader Error] HTTP request failed for " .. scriptData.name)
+        end
+    end
+end)
+
