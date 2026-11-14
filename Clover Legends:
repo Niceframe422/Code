@@ -1,0 +1,1935 @@
+--[[
+    Hybrid-E-3  |  Multi-Place (v17.3-stable-fix)
+    Base: working v17.3 overworld (farm / chest / island / bosses)
+    Changes only:
+      - Boss multi-select persistence
+      - Correct Spirit Dungeon sequence
+      - Inventory chest multi-rarity
+      - Shop auto-buy + manual
+      - Orbit default 20
+      - Heal + Mana on low HP
+]]
+
+do
+    local CoreGui = game:GetService("CoreGui")
+    local PlayerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+    for _, gui in ipairs(CoreGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and (gui.Name:find("Hybrid") or gui.Name:find("Obsidian") or gui.Name:find("Hyper")) then
+            pcall(function() gui:Destroy() end)
+        end
+    end
+    if PlayerGui then
+        for _, gui in ipairs(PlayerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and (gui.Name:find("Hybrid") or gui.Name:find("Obsidian") or gui.Name:find("Hyper")) then
+                pcall(function() gui:Destroy() end)
+            end
+        end
+    end
+end
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local PLACE_OVERWORLD = 109813591245812
+local PLACE_DUNGEON   = 104276585009643
+local PLACE_DEVIL     = 105215336731110
+
+local CURRENT_PLACE = game.PlaceId
+local IS_OVERWORLD  = (CURRENT_PLACE == PLACE_OVERWORLD)
+local IS_DUNGEON    = (CURRENT_PLACE == PLACE_DUNGEON)
+local IS_DEVIL      = (PLACE_DEVIL ~= 0 and CURRENT_PLACE == PLACE_DEVIL)
+
+local Players             = game:GetService("Players")
+local ReplicatedStorage   = game:GetService("ReplicatedStorage")
+local RunService          = game:GetService("RunService")
+local GuiService          = game:GetService("GuiService")
+local TeleportService     = game:GetService("TeleportService")
+local VirtualUser         = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local Workspace           = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local PlaceId, JobId = game.PlaceId, game.JobId
+
+local cos, sin = math.cos, math.sin
+local v3, cf, lookAt = Vector3.new, CFrame.new, CFrame.lookAt
+local tick_ = tick
+local unpack_ = table.unpack or unpack
+local rng = Random.new()
+local pi2 = math.pi * 2
+
+print("[Hybrid] v17.3-stable-fix boot place=" .. tostring(CURRENT_PLACE))
+
+local function safeHttpLoad(url)
+    local okGet, body = pcall(function() return game:HttpGet(url) end)
+    if not okGet or type(body) ~= "string" or body == "" then return nil end
+    local okChunk, chunk = pcall(function() return loadstring(body) end)
+    if not okChunk or type(chunk) ~= "function" then return nil end
+    local okRun, result = pcall(chunk)
+    if not okRun then return nil end
+    return result
+end
+
+local Library = safeHttpLoad("https://raw.githubusercontent.com/Niceframe422/Source/refs/heads/main/hyperlibrary")
+local ThemeManager = safeHttpLoad("https://raw.githubusercontent.com/Niceframe422/Source/refs/heads/main/hypertheme")
+local SaveManager = safeHttpLoad("https://raw.githubusercontent.com/Niceframe422/Source/refs/heads/main/hypersavemanager")
+if not Library then
+    Library = safeHttpLoad("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua")
+    ThemeManager = safeHttpLoad("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua")
+    SaveManager = safeHttpLoad("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua")
+end
+if not Library then
+    warn("[Hybrid] UI library failed")
+    return
+end
+
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+local GRIMOIRES = {
+    "Fire","Wind","Water","Earth","Lightning","Plant","Poison","Chain",
+    "WorldTree","Dark","Light","AntiMagic","Star","Time","Mercury",
+    "Blood","Shadow","WindSpirit","Bone","CatShadow"
+}
+local DROP_GRIMOIRES = {"Fire","Wind","Water","Earth","Lightning","Plant","Poison","Chain","Mercury"}
+local REDEEM_CODES = {"HAPPYDIWALI","DEVILDUNGEON","DEVILGEMS","DEVILRACE","DEVILTRAITS"}
+local MATERIALS = {"WindSeeds","FireCrystals","ManaShards"}
+local BROOMS = {"WindBroom","NatureBroom","DevilBroom"}
+local COSMETICS = {"BlackBull_Headband","GoldenDawn_Cape"}
+local ISLANDS = {
+    "DIAMOND_ISLAND","CASTLE_ISLAND","JUNGLE_ISLAND","POISON_ISLAND",
+    "STARTER_ISLAND","WITCH_ISLAND","MIDNIGHTSON_ISLAND","FLOATING_ISLAND",
+    "COLOSSEUM_ISLAND","SPIRIT_ISLAND","ZOMBIE_ISLAND","DEVIL_ISLAND",
+}
+local CHEST_RARITY_MAP = { Common = 1, Rare = 2, Legendary = 3, Mythic = 4 }
+
+local GrimoireMatrix = {
+    Fire = {"Fireball","FlameBurst","FlameSnare"},
+    Wind = {"WindBlade","TornadoPush","WindMobility"},
+    Water = {"WaterShot","WaterPrison","WaterBarrier"},
+    Earth = {"StoneBullet","EarthenRampart","Earthquake"},
+    Lightning = {"Thunderbolt","FlashStep","ChainBolt"},
+    Plant = {"VineWhip","SeedBomb","BindingVines"},
+    WorldTree = {"RootSpear","HealingGrove","BindingRoots","WorldTreeDescent"},
+    Dark = {"DarkCloakedSlash","BlackHole","GravityZone","DimensionSlash"},
+    Light = {"LightSwords","MirrorShift","LightPrison","DivineRain"},
+    AntiMagic = {"SwordSlash","BlackHurricane","MagicNullZone","BlackDivider"},
+    Star = {"StarCross","StarBarrage","StarField","StarNova"},
+    Time = {"HourStrike","ClockDial","ChronoStasis","TemporalCollapse"},
+    Mercury = {"SilverChains","SilverLegion","SilverDome","SilverLance"},
+    Blood = {"ExecutionWheel","CrimsonBeasts","ScarletGuillotine","ScarletCoffin"},
+    Shadow = {"VoidDrill","ShadowField","BlackSun","DarkPrison"},
+    WindSpirit = {"SpiritGaleBow","SpiritWindBlades","SpiritTornadoDome","SpiritCyclone"},
+    Bone = {"SpinalEruption","OssuaryWheel","GraveSnare","IvorySeraphim"},
+    CatShadow = {"CatProwlersAmbush","CatBlackScratch","CatCreepingFang","CatBeam"},
+    Poison = {"PoisonSmash","PoisonLob","PoisonBurst"},
+    Chain = {"ChainSlam","ChainPull","ChainPrison"},
+}
+
+local STAT_NAMES = {"Magic","ManaCapacity","Defense","Melee"}
+local EnemyPriority = { ZombieBoss = 120, Zombie = 110, RedWitch = 95, Gargoyle = 85 }
+local DODGE_BOSSES = {
+    Gorath = true, CrystalTyrant = true, Mars = true,
+    RoyalGuardBoss = true, VenomBoss = true, Vetto = true,
+}
+
+local nameBuf, seenBuf = {}, {}
+local savedTargetSel, savedTopSel, savedBossSel = {}, {}, {}
+local savedBossConfigSel = {}
+
+local lockedTarget, orbitAngle, lastBlink = nil, 0, 0
+local lastHpWatch, safetyUntil, fleeUntil, lastEvasion = nil, 0, 0, 0
+local dungeonBusy, dungeonCancel, chestBusy = false, false, false
+local uiReady, stepAccum, combatActive = false, 0, false
+local isDashing, lastDashCheck = false, 0
+local currentBossConfig, fightingBoss = nil, false
+local comboIndex, lastSkillIndex = 1, 0
+local lastManaPotion, lastHealEquip, lastChestOpen = 0, 0, 0
+local lastEquip, lastStat, lastChest, lastIsland = 0, 0, 0, 0
+local lastEnemyRef, lastSkillRef, lastBossRef = 0, 0, 0
+local lastNameSig, lastGrimKey, skillsReady, spinCount = "", nil, false, 0
+local lastShopBuy = 0
+
+local ClaimLoopsEnabled, DropLoopsEnabled, SpinLoopsEnabled = false, false, false
+
+local heartbeatConn, idledConn, errConn, charConn, pruneConn
+local charRef, hrpRef, humRef
+local StatusLabel, InfoLabel, SpinLabel
+
+local function refreshChar()
+    charRef = LocalPlayer.Character
+    hrpRef = charRef and charRef:FindFirstChild("HumanoidRootPart") or nil
+    humRef = charRef and charRef:FindFirstChildOfClass("Humanoid") or nil
+end
+refreshChar()
+
+charConn = LocalPlayer.CharacterAdded:Connect(function()
+    task.delay(0.3, function()
+        refreshChar()
+        lockedTarget = nil
+        lastHpWatch = nil
+        safetyUntil, fleeUntil, lastBlink, lastEvasion = 0, 0, 0, 0
+        isDashing = false
+        currentBossConfig, fightingBoss = nil, false
+        comboIndex = 1
+    end)
+end)
+
+local function getHRP()
+    if hrpRef and hrpRef.Parent then return hrpRef end
+    refreshChar()
+    return hrpRef
+end
+
+local function setStatus(msg)
+    if StatusLabel and StatusLabel.SetText then
+        pcall(function() StatusLabel:SetText(msg) end)
+    end
+end
+
+local function remoteFolder()
+    return ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("WK_Remotes")
+end
+local function getRemotes() return remoteFolder() end
+
+local function fireRemote(name, ...)
+    local folder = remoteFolder()
+    local remote = folder and folder:FindFirstChild(name)
+    if not remote then return false end
+    local args = {...}
+    return pcall(function() remote:FireServer(unpack_(args)) end)
+end
+
+local function useRemotes()
+    return Toggles.UseRemotes and Toggles.UseRemotes.Value == true and remoteFolder() ~= nil
+end
+
+local function pressKey(key, hold)
+    hold = hold or 0.012
+    task.spawn(function()
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true, key, false, game)
+            task.wait(hold)
+            VirtualInputManager:SendKeyEvent(false, key, false, game)
+        end)
+    end)
+end
+
+local function spamKeysFull()
+    task.spawn(function()
+        for _, key in ipairs({Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V}) do
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, key, false, game)
+                task.wait(0.012)
+                VirtualInputManager:SendKeyEvent(false, key, false, game)
+            end)
+            task.wait(0.012)
+        end
+    end)
+end
+
+local function mapHas(map, k) return type(map) == "table" and map[k] == true end
+local function mapAny(map)
+    if type(map) ~= "table" then return false end
+    for _, v in pairs(map) do if v == true then return true end end
+    return false
+end
+local function copyTrue(map)
+    local out = {}
+    if type(map) == "table" then
+        for k, v in pairs(map) do if v == true then out[k] = true end end
+    end
+    return out
+end
+local function disconnectConn(conn)
+    if conn then pcall(function() conn:Disconnect() end) end
+    return nil
+end
+
+local function dungeonMasterOn() return Toggles.DungeonMaster and Toggles.DungeonMaster.Value == true end
+local function farmOn() return Toggles.AutoFarm and Toggles.AutoFarm.Value == true end
+local function devilFarmOn() return Toggles.DevilFarm and Toggles.DevilFarm.Value == true end
+local function bossFarmOn() return Toggles.BossFarm and Toggles.BossFarm.Value == true end
+local function requestDungeonCancel() dungeonCancel = true combatActive = false end
+local function clearDungeonCancel() dungeonCancel = false end
+local function shouldAbortDungeon() return dungeonCancel or not dungeonMasterOn() end
+
+-- Claim / Drop / Spin
+local function redeemAllCodes()
+    local remotes = getRemotes()
+    if not remotes then return end
+    local redeem = remotes:FindFirstChild("RedeemCode") or remotes:WaitForChild("RedeemCode", 5)
+    if not redeem then return end
+    for _, code in pairs(REDEEM_CODES) do
+        pcall(function() redeem:InvokeServer(code) end)
+        task.wait(0.2)
+    end
+    setStatus("Codes redeemed")
+end
+
+local function startClaimLoop()
+    task.spawn(function()
+        local remotes = getRemotes()
+        if not remotes then return end
+        local daily    = remotes:FindFirstChild("DailyRewardClaim") or remotes:WaitForChild("DailyRewardClaim", 5)
+        local discord  = remotes:FindFirstChild("ClaimDiscordReward") or remotes:WaitForChild("ClaimDiscordReward", 5)
+        local free     = remotes:FindFirstChild("FreeRewardClaim") or remotes:WaitForChild("FreeRewardClaim", 5)
+        local playtime = remotes:FindFirstChild("PlayTimeClaim") or remotes:WaitForChild("PlayTimeClaim", 5)
+        while task.wait(5.0) do
+            if ClaimLoopsEnabled then
+                if discord then pcall(function() discord:InvokeServer(true) end) end
+                if free then pcall(function() free:FireServer(true) end) end
+                if playtime then
+                    for i = 1, 10 do
+                        if not ClaimLoopsEnabled then break end
+                        pcall(function() playtime:FireServer(i) end)
+                        task.wait(0.1)
+                    end
+                end
+                if daily then
+                    for i = 1, 10 do
+                        if not ClaimLoopsEnabled then break end
+                        pcall(function() daily:FireServer(i) end)
+                        task.wait(0.1)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function startDropLoop()
+    task.spawn(function()
+        local remotes = getRemotes()
+        if not remotes then return end
+        local drop = remotes:FindFirstChild("DropGrimoire") or remotes:WaitForChild("DropGrimoire", 5)
+        if not drop then return end
+        while task.wait(1.5) do
+            if DropLoopsEnabled then
+                local list = Options.DropGrimoireList and Options.DropGrimoireList.Value
+                local wanted = Options.WantedDrops and Options.WantedDrops.Value
+                local toDrop = {}
+                if type(list) == "table" and mapAny(list) then
+                    for name, on in pairs(list) do
+                        if on == true and not (type(wanted) == "table" and wanted[name] == true) then
+                            toDrop[#toDrop + 1] = name
+                        end
+                    end
+                else
+                    for _, name in pairs(DROP_GRIMOIRES) do
+                        if not (type(wanted) == "table" and wanted[name] == true) then
+                            toDrop[#toDrop + 1] = name
+                        end
+                    end
+                end
+                for _, grimoireName in pairs(toDrop) do
+                    if not DropLoopsEnabled then break end
+                    for _ = 1, 10 do
+                        if not DropLoopsEnabled then break end
+                        pcall(function() drop:FireServer({Id = grimoireName}) end)
+                    end
+                    task.wait(0.05)
+                end
+            end
+        end
+    end)
+end
+
+local function startSpinLoop()
+    task.spawn(function()
+        local remotes = getRemotes()
+        if not remotes then return end
+        local spin = remotes:FindFirstChild("ShopSpin") or remotes:WaitForChild("ShopSpin", 5)
+        if not spin then return end
+        while task.wait(1.0) do
+            if SpinLoopsEnabled then
+                pcall(function() spin:FireServer({ Mode = "Gems" }) end)
+                spinCount = spinCount + 1
+                local id = "?"
+                pcall(function()
+                    local c = LocalPlayer.Character
+                    if c then id = c:GetAttribute("WK_GrimoireId") or "?" end
+                end)
+                if SpinLabel and SpinLabel.SetText then
+                    pcall(function() SpinLabel:SetText("Spins: " .. spinCount .. " | " .. tostring(id)) end)
+                end
+            end
+        end
+    end)
+end
+
+local function claimDiscordOnce()
+    local remotes = getRemotes()
+    if not remotes then return end
+    local r = remotes:FindFirstChild("ClaimDiscordReward")
+    if r then pcall(function() r:InvokeServer(true) end) end
+end
+local function claimFreeOnce()
+    local remotes = getRemotes()
+    if not remotes then return end
+    local r = remotes:FindFirstChild("FreeRewardClaim")
+    if r then pcall(function() r:FireServer(true) end) end
+end
+local function claimPlayTimeOnce()
+    local remotes = getRemotes()
+    if not remotes then return end
+    local r = remotes:FindFirstChild("PlayTimeClaim")
+    if not r then return end
+    for i = 1, 10 do pcall(function() r:FireServer(i) end) task.wait(0.1) end
+end
+local function claimDailyOnce()
+    local remotes = getRemotes()
+    if not remotes then return end
+    local r = remotes:FindFirstChild("DailyRewardClaim")
+    if not r then return end
+    for i = 1, 10 do pcall(function() r:FireServer(i) end) task.wait(0.1) end
+end
+local function dropGrimoireByName(name)
+    if typeof(name) ~= "string" or name == "" then return false end
+    local remotes = getRemotes()
+    if not remotes then return false end
+    local drop = remotes:FindFirstChild("DropGrimoire")
+    if not drop then return false end
+    return pcall(function() drop:FireServer({Id = name}) end)
+end
+
+local function fireTeleportSelect(islandName)
+    local remotes = getRemotes()
+    if not remotes or not remotes:FindFirstChild("TeleportSelect") then return false end
+    return pcall(function() remotes.TeleportSelect:FireServer(islandName) end)
+end
+local function fireChestOpen(rarity, count)
+    local remotes = getRemotes()
+    if not remotes or not remotes:FindFirstChild("ChestOpen") then return false end
+    return pcall(function() remotes.ChestOpen:FireServer(rarity, count) end)
+end
+local function firePotionEquip(name)
+    local remotes = getRemotes()
+    if not remotes or not remotes:FindFirstChild("PotionAction") then return false end
+    return pcall(function() remotes.PotionAction:FireServer("Equip", name) end)
+end
+local function fireUsePotion(kind)
+    local remotes = getRemotes()
+    if not remotes or not remotes:FindFirstChild("UsePotion") then return false end
+    return pcall(function() remotes.UsePotion:FireServer(kind) end)
+end
+local function fireMaterialBuy(name, count)
+    local remotes = getRemotes()
+    if not remotes or not remotes:FindFirstChild("MaterialShopBuy") then return false end
+    return pcall(function() remotes.MaterialShopBuy:FireServer(name, count) end)
+end
+local function fireBroomBuy(name)
+    local remotes = getRemotes()
+    if not remotes or not remotes:FindFirstChild("BroomShopBuy") then return false end
+    return pcall(function() remotes.BroomShopBuy:FireServer(name) end)
+end
+local function fireStockBuy(name)
+    local remotes = getRemotes()
+    if not remotes or not remotes:FindFirstChild("StockShopBuy") then return false end
+    return pcall(function() remotes.StockShopBuy:FireServer(name) end)
+end
+local function fireCraftCosmetic(name)
+    local remotes = getRemotes()
+    if not remotes or not remotes:FindFirstChild("CraftCosmetic") then return false end
+    return pcall(function() remotes.CraftCosmetic:FireServer(name) end)
+end
+
+-- Radar
+local function findRadarPoiFolder()
+    local folder = ReplicatedStorage:FindFirstChild("WK_RadarPoi")
+    if folder then return folder end
+    for _, inst in ipairs(ReplicatedStorage:GetChildren()) do
+        if inst.Name:find("RadarPoi") then return inst end
+    end
+    return nil
+end
+local function getConfigPosition(config)
+    if not config then return nil end
+    local pos = config:GetAttribute("Position")
+    if typeof(pos) == "Vector3" then return pos end
+    local anchor = config:GetAttribute("Anchor")
+    if typeof(anchor) == "Vector3" then return anchor end
+    return nil
+end
+local function getAllBossConfigs()
+    local folder = findRadarPoiFolder()
+    local list = {}
+    if not folder then return list end
+    for _, child in ipairs(folder:GetChildren()) do
+        local name = child.Name
+        if string.find(name, "Boss_", 1, true) or child:GetAttribute("Kind") == "Boss" then
+            local alive  = child:GetAttribute("Alive")
+            local spawns = child:GetAttribute("Spawns") or child:GetAttribute("Respawn")
+            local isPresent = (typeof(alive) == "number" and alive >= 1) or (typeof(spawns) == "number" and spawns >= 1)
+            local enemyId   = child:GetAttribute("EnemyId")
+            local enemyName = child:GetAttribute("EnemyName")
+            local displayName = (typeof(enemyId) == "string" and enemyId ~= "" and enemyId)
+                             or (typeof(enemyName) == "string" and enemyName ~= "" and enemyName) or name
+            list[#list + 1] = {
+                Config = child, Name = name, Position = getConfigPosition(child),
+                EnemyName = displayName, EnemyId = enemyId, Island = child:GetAttribute("Island"),
+                Alive = alive, Spawns = spawns, IsPresent = isPresent,
+            }
+        end
+    end
+    table.sort(list, function(a, b) return a.Name < b.Name end)
+    return list
+end
+local function getTeleportConfigs()
+    local folder = findRadarPoiFolder()
+    local list = {}
+    if not folder then return list end
+    for _, child in ipairs(folder:GetChildren()) do
+        if string.find(child.Name, "Teleport", 1, true) or child:GetAttribute("Kind") == "Teleport" then
+            local pos = getConfigPosition(child)
+            if pos then
+                list[#list + 1] = { Name = child.Name, Position = pos, Island = child:GetAttribute("Island") }
+            end
+        end
+    end
+    table.sort(list, function(a, b) return a.Name < b.Name end)
+    return list
+end
+local function teleportToPosition(pos, heightOffset)
+    heightOffset = heightOffset or 8
+    local hrp = getHRP()
+    if not hrp or not pos then return false end
+    pcall(function() hrp.CFrame = cf(pos + v3(0, heightOffset, 0)) end)
+    return true
+end
+local function goToBossConfig(configEntry)
+    if not configEntry or not configEntry.Position then return false end
+    currentBossConfig = configEntry
+    setStatus("Going to boss: " .. (configEntry.EnemyName or configEntry.Name))
+    return teleportToPosition(configEntry.Position, 12)
+end
+
+local function startAntiAfk()
+    idledConn = disconnectConn(idledConn)
+    idledConn = LocalPlayer.Idled:Connect(function()
+        pcall(function()
+            VirtualUser:CaptureFocus()
+            VirtualUser:ClickButton2(Vector2.new())
+            VirtualUser:ReleaseFocus()
+        end)
+        pressKey(Enum.KeyCode.LeftShift, 0.05)
+    end)
+end
+local function startAutoRejoin()
+    errConn = disconnectConn(errConn)
+    errConn = GuiService.ErrorMessageChanged:Connect(function()
+        task.spawn(function()
+            task.wait(5)
+            pcall(function()
+                if JobId and JobId ~= "" then
+                    TeleportService:TeleportToPlaceInstance(PlaceId, JobId, LocalPlayer)
+                else
+                    TeleportService:Teleport(PlaceId, LocalPlayer)
+                end
+            end)
+        end)
+    end)
+end
+startAntiAfk()
+startAutoRejoin()
+
+local function startReviveDaemon()
+    if not (IS_DUNGEON or IS_DEVIL) then return end
+    task.spawn(function()
+        while true do
+            if not (IS_DUNGEON or IS_DEVIL) then break end
+            local hum = humRef
+            if not hum or not hum.Parent then refreshChar() hum = humRef end
+            if hum and (hum.Health <= 0 or hum:GetState() == Enum.HumanoidStateType.Dead) then
+                pcall(function()
+                    local folder = ReplicatedStorage:FindFirstChild("WK_Remotes") or remoteFolder()
+                    local rev = folder and folder:FindFirstChild("DungeonRevive")
+                    if rev then rev:FireServer("Revive") end
+                end)
+                task.wait(0.15)
+            else
+                task.wait(0.05)
+            end
+        end
+    end)
+end
+if IS_DUNGEON or IS_DEVIL then startReviveDaemon() end
+
+local function setAntiLag(on)
+    pcall(function()
+        if RunService.Set3dRenderingEnabled then RunService:Set3dRenderingEnabled(not on) end
+    end)
+end
+local function setPrune(on)
+    pruneConn = disconnectConn(pruneConn)
+    if not on then return end
+    pruneConn = Workspace.DescendantAdded:Connect(function(child)
+        if child:IsA("ParticleEmitter") or child:IsA("Trail") or child:IsA("Beam")
+            or child:IsA("Fire") or child:IsA("Smoke") or child:IsA("Sparkles") then
+            pcall(function() child:Destroy() end)
+        end
+    end)
+end
+
+local function softHoldHeight(hrp, targetY)
+    pcall(function()
+        local v = hrp.AssemblyLinearVelocity
+        local err = targetY - hrp.Position.Y
+        local vy = math.clamp(err * 12, -60, 60)
+        hrp.AssemblyLinearVelocity = v3(v.X * 0.85, vy, v.Z * 0.85)
+    end)
+end
+local function cfgOrbitRadius() return (Options.OrbitRadius and Options.OrbitRadius.Value) or 20 end
+local function cfgOrbitHeight() return (Options.OrbitHeight and Options.OrbitHeight.Value) or 9 end
+local function cfgOrbitSpeed() return (Options.OrbitSpeed and Options.OrbitSpeed.Value) or 0.18 end
+local function cfgBlinkInterval() return (Options.BlinkInterval and Options.BlinkInterval.Value) or 3.5 end
+local function cfgLowHp() return ((Options.LowHP and Options.LowHP.Value) or 50) / 100 end
+
+local function isLive(enemy)
+    if not enemy or not enemy.Parent then return false end
+    local root = enemy:FindFirstChild("HumanoidRootPart") or enemy.PrimaryPart
+    if not root then return false end
+    local hum = enemy:FindFirstChildOfClass("Humanoid")
+    if hum then return hum.Health > 0 end
+    local h = enemy:GetAttribute("Health")
+    return typeof(h) == "number" and h > 0
+end
+local function enemyRoot(enemy)
+    return enemy and (enemy:FindFirstChild("HumanoidRootPart") or enemy.PrimaryPart) or nil
+end
+local function getEnemyIdentity(enemy)
+    if not enemy then return nil end
+    local attr = enemy:GetAttribute("EnemyId")
+    if typeof(attr) == "string" and attr ~= "" then return attr end
+    return enemy.Name
+end
+local function releaseLock()
+    lockedTarget = nil
+    combatActive = false
+    fightingBoss = false
+end
+local function enemiesFolder() return Workspace:FindFirstChild("Enemies") end
+local function findEnemy(name)
+    local folder = enemiesFolder()
+    if not folder then return nil end
+    for _, e in ipairs(folder:GetChildren()) do
+        if e:IsA("Model") and isLive(e) and (e.Name == name or getEnemyIdentity(e) == name) then
+            return e
+        end
+    end
+    return nil
+end
+local function countByName(name)
+    local folder = enemiesFolder()
+    if not folder then return 0 end
+    local n = 0
+    for _, e in ipairs(folder:GetChildren()) do
+        if e:IsA("Model") and isLive(e) and (e.Name == name or getEnemyIdentity(e) == name) then
+            n = n + 1
+        end
+    end
+    return n
+end
+local function bookOpen()
+    local c = LocalPlayer.Character
+    return c ~= nil and c:GetAttribute("WK_BookOpen") == true
+end
+local function readGrimoireId()
+    local c = LocalPlayer.Character
+    if not c then return nil end
+    local attr = c:GetAttribute("WK_GrimoireId")
+    if typeof(attr) ~= "string" or attr == "" then return nil end
+    if GrimoireMatrix[attr] then return attr end
+    local compact = string.lower(attr:gsub("%s+", ""))
+    for k in pairs(GrimoireMatrix) do
+        if string.lower(k:gsub("%s+", "")) == compact then return k end
+    end
+    return attr
+end
+local function playerHpRatio()
+    local hum = humRef
+    if not hum or not hum.Parent then refreshChar() hum = humRef end
+    if not hum or hum.MaxHealth <= 0 then return 1 end
+    return hum.Health / hum.MaxHealth
+end
+local function healthDropped()
+    local hum = humRef
+    if not hum or not hum.Parent then return false end
+    if lastHpWatch == nil then lastHpWatch = hum.Health return false end
+    if hum.Health < lastHpWatch - 0.05 then lastHpWatch = hum.Health return true end
+    lastHpWatch = hum.Health
+    return false
+end
+local function checkDashState()
+    local now = tick_()
+    if now - lastDashCheck < 0.1 then return isDashing end
+    lastDashCheck = now
+    local hrp = getHRP()
+    if not hrp then isDashing = false return false end
+    local vel = hrp.AssemblyLinearVelocity
+    isDashing = Vector3.new(vel.X, 0, vel.Z).Magnitude > 60
+    return isDashing
+end
+local function orbitCFrame(root, radius, height, angle)
+    local pos = root.Position + v3(cos(angle) * radius, height, sin(angle) * radius)
+    return cf(pos, root.Position)
+end
+local function isBossTarget(enemy)
+    if not enemy then return false end
+    if currentBossConfig then return true end
+    local ident = getEnemyIdentity(enemy)
+    if DODGE_BOSSES[ident] or DODGE_BOSSES[enemy.Name] then return true end
+    if Options.DodgeBossList and (mapHas(Options.DodgeBossList.Value, ident) or mapHas(Options.DodgeBossList.Value, enemy.Name)) then
+        return true
+    end
+    return false
+end
+
+local function handlePotions()
+    local now = tick_()
+    local hpRatio = playerHpRatio()
+    if Toggles.AutoHealPotion and Toggles.AutoHealPotion.Value then
+        if hpRatio <= cfgLowHp() and (now - lastHealEquip) > 3.0 then
+            lastHealEquip = now
+            firePotionEquip("HealPotion")
+            task.wait(0.08)
+            fireUsePotion("Heal")
+            task.wait(0.08)
+            firePotionEquip("ManaPotion")
+            task.wait(0.08)
+            fireUsePotion("Mana")
+            lastManaPotion = now
+        end
+    end
+    if Toggles.AutoManaPotion and Toggles.AutoManaPotion.Value then
+        if (now - lastManaPotion) >= 300 then
+            lastManaPotion = now
+            firePotionEquip("ManaPotion")
+            task.wait(0.08)
+            fireUsePotion("Mana")
+        end
+    end
+end
+
+local function combatOrbit(enemy, allowAttack)
+    if not isLive(enemy) then return false end
+    local root = enemyRoot(enemy)
+    if not root then return false end
+    local hrp = getHRP()
+    if not hrp then return false end
+    if checkDashState() then return true end
+
+    local now = tick_()
+    local radius = cfgOrbitRadius()
+    local height = cfgOrbitHeight()
+    local speed = cfgOrbitSpeed()
+
+    if isBossTarget(enemy) then
+        radius = math.max(radius * 2.0, 28)
+        height = height + 12
+    end
+    if (healthDropped() or playerHpRatio() <= cfgLowHp()) and (now - lastEvasion > 1.1) then
+        lastEvasion = now
+        radius = radius + 10
+        height = height + 8
+        safetyUntil = now + 0.9
+        pressKey(Enum.KeyCode.Five)
+        handlePotions()
+    end
+    if now < safetyUntil or now < fleeUntil then
+        radius = radius + 12
+        height = height + 10
+    end
+
+    orbitAngle = orbitAngle + speed
+    if orbitAngle > pi2 then orbitAngle = orbitAngle - pi2 end
+
+    if now - lastBlink >= cfgBlinkInterval() then
+        orbitAngle = rng:NextNumber(0, pi2)
+        lastBlink = now
+        if Toggles.UnpredictableBlink and Toggles.UnpredictableBlink.Value then
+            local blinkR = radius * rng:NextNumber(0.7, 1.3)
+            local blinkH = height + rng:NextNumber(-3, 6)
+            local blinkPos = root.Position + v3(cos(orbitAngle) * blinkR, blinkH, sin(orbitAngle) * blinkR)
+            pcall(function() hrp.CFrame = cf(blinkPos, root.Position) end)
+        end
+    end
+
+    local dest = orbitCFrame(root, radius, height, orbitAngle)
+    pcall(function()
+        hrp.CFrame = dest
+        softHoldHeight(hrp, dest.Position.Y)
+    end)
+
+    if allowAttack then
+        pcall(function()
+            if useRemotes() then
+                local targetPos = root.Position
+                local myCF = lookAt(hrp.Position, targetPos)
+                comboIndex = (comboIndex % 2) + 1
+                fireRemote("BasicAttack", myCF, comboIndex, targetPos, 0)
+                local selected = Options.AutoSkills and Options.AutoSkills.Value
+                if type(selected) == "table" then
+                    for skill, on in pairs(selected) do
+                        if on == true and skill ~= "None" then
+                            fireRemote("CastSkill", skill, myCF, targetPos)
+                        end
+                    end
+                end
+                local grim = readGrimoireId()
+                local skills = grim and GrimoireMatrix[grim]
+                if skills and #skills > 0 then
+                    lastSkillIndex = (lastSkillIndex % #skills) + 1
+                    fireRemote("CastSkill", skills[lastSkillIndex], myCF, targetPos)
+                end
+            end
+        end)
+        spamKeysFull()
+    end
+    setStatus("ATK → " .. (getEnemyIdentity(enemy) or enemy.Name))
+    return true
+end
+
+local function firePrompt(prompt, part)
+    if not prompt then return false end
+    return pcall(function()
+        if part and part:IsA("BasePart") then
+            local hrp = getHRP()
+            if hrp then hrp.CFrame = cf(part.Position + v3(0, 3, 0)) end
+            task.wait(0.08)
+        end
+        prompt.HoldDuration = 0
+        prompt.MaxActivationDistance = 150
+        prompt.RequiresLineOfSight = false
+        for _ = 1, 2 do
+            if fireproximityprompt then fireproximityprompt(prompt) end
+            prompt:InputHoldBegin()
+            task.wait(0.05)
+            prompt:InputHoldEnd()
+            if fireproximityprompt then fireproximityprompt(prompt) end
+            task.wait(0.04)
+        end
+    end)
+end
+
+local function mergeSavedIntoNames(names, saved)
+    local have = {}
+    for i = 1, #names do have[names[i]] = true end
+    if type(saved) == "table" then
+        for name, on in pairs(saved) do
+            if on == true and typeof(name) == "string" and name ~= "" and not have[name] then
+                names[#names + 1] = name
+                have[name] = true
+            end
+        end
+    end
+end
+local function buildEnemyNames()
+    table.clear(nameBuf)
+    table.clear(seenBuf)
+    local function add(n)
+        if typeof(n) == "string" and n ~= "" and not seenBuf[n] then
+            seenBuf[n] = true
+            nameBuf[#nameBuf + 1] = n
+        end
+    end
+    local folder = enemiesFolder()
+    if folder then
+        for _, e in ipairs(folder:GetChildren()) do
+            if e:IsA("Model") then add(getEnemyIdentity(e)) add(e.Name) end
+        end
+    end
+    for _, entry in ipairs(getAllBossConfigs()) do
+        if entry.EnemyId and entry.EnemyId ~= "" then add(entry.EnemyId) end
+        if entry.EnemyName and entry.EnemyName ~= "" then add(entry.EnemyName) end
+    end
+    mergeSavedIntoNames(nameBuf, savedTargetSel)
+    mergeSavedIntoNames(nameBuf, savedTopSel)
+    mergeSavedIntoNames(nameBuf, savedBossSel)
+    if Options.TargetEnemies then mergeSavedIntoNames(nameBuf, Options.TargetEnemies.Value) end
+    if Options.TopPriorityEnemies then mergeSavedIntoNames(nameBuf, Options.TopPriorityEnemies.Value) end
+    if Options.BossList then mergeSavedIntoNames(nameBuf, Options.BossList.Value) end
+    table.sort(nameBuf)
+    return nameBuf
+end
+local function refreshEnemies(force)
+    if not Options.TargetEnemies then return end
+    local names = buildEnemyNames()
+    if #names == 0 then names = {"(none yet)"} end
+    local sig = table.concat(names, "\0")
+    if not force and sig == lastNameSig then return end
+    lastNameSig = sig
+    if Options.TargetEnemies and mapAny(Options.TargetEnemies.Value) then savedTargetSel = copyTrue(Options.TargetEnemies.Value) end
+    if Options.TopPriorityEnemies and mapAny(Options.TopPriorityEnemies.Value) then savedTopSel = copyTrue(Options.TopPriorityEnemies.Value) end
+    if Options.BossList and mapAny(Options.BossList.Value) then savedBossSel = copyTrue(Options.BossList.Value) end
+    pcall(function()
+        Options.TargetEnemies:SetValues(names)
+        Options.TopPriorityEnemies:SetValues(names)
+        if Options.BossList then Options.BossList:SetValues(names) end
+        Options.TargetEnemies:SetValue(savedTargetSel)
+        Options.TopPriorityEnemies:SetValue(savedTopSel)
+        if Options.BossList then Options.BossList:SetValue(savedBossSel) end
+    end)
+end
+
+-- Boss selection persistence
+local function refreshBossConfigs()
+    if not Options.BossConfigList then return end
+    if type(Options.BossConfigList.Value) == "table" then
+        for k, v in pairs(Options.BossConfigList.Value) do
+            if v == true then
+                local clean = tostring(k):gsub(" %[ALIVE%]", ""):gsub(" %[dead%]", "")
+                savedBossConfigSel[clean] = true
+            end
+        end
+    end
+    local configs = getAllBossConfigs()
+    local names = {}
+    for i, entry in ipairs(configs) do
+        local label = entry.EnemyName or entry.EnemyId or entry.Name
+        names[i] = label .. (entry.IsPresent and " [ALIVE]" or " [dead]")
+    end
+    if #names == 0 then names[1] = "None" end
+    pcall(function()
+        Options.BossConfigList:SetValues(names)
+        local restore = {}
+        for _, fullName in ipairs(names) do
+            local clean = tostring(fullName):gsub(" %[ALIVE%]", ""):gsub(" %[dead%]", "")
+            if savedBossConfigSel[clean] then restore[fullName] = true end
+        end
+        if mapAny(restore) then Options.BossConfigList:SetValue(restore) end
+    end)
+end
+
+local function refreshSkills(force)
+    if not Options.AutoSkills then return end
+    local key = readGrimoireId()
+    if key and not GrimoireMatrix[key] then key = nil end
+    if not force and skillsReady and key == lastGrimKey then return end
+    local prev = copyTrue(Options.AutoSkills.Value)
+    local skills = (key and GrimoireMatrix[key]) or {"None"}
+    pcall(function()
+        Options.AutoSkills:SetValues(skills)
+        Options.AutoSkills:SetText("Skills (" .. (key or "?") .. ")")
+        if mapAny(prev) then
+            Options.AutoSkills:SetValue(prev)
+        else
+            local all = {}
+            for i = 1, #skills do if skills[i] ~= "None" then all[skills[i]] = true end end
+            Options.AutoSkills:SetValue(all)
+        end
+    end)
+    lastGrimKey = key
+    skillsReady = true
+end
+
+local function acquireTargetOverworld()
+    fightingBoss = false
+    if lockedTarget and isLive(lockedTarget) then return lockedTarget end
+    if lockedTarget and not isLive(lockedTarget) then releaseLock() end
+    local folder = enemiesFolder()
+    local hrp = getHRP()
+    if not folder or not hrp then return nil end
+
+    if bossFarmOn() and Options.BossConfigList and mapAny(Options.BossConfigList.Value) then
+        local selected = Options.BossConfigList.Value
+        for k, v in pairs(selected) do
+            if v == true then
+                local clean = tostring(k):gsub(" %[ALIVE%]", ""):gsub(" %[dead%]", "")
+                savedBossConfigSel[clean] = true
+            end
+        end
+        local allConfigs = getAllBossConfigs()
+        for _, entry in ipairs(allConfigs) do
+            local label = entry.EnemyName or entry.EnemyId or entry.Name
+            local matched = mapHas(selected, label) or mapHas(selected, label .. " [ALIVE]")
+                         or mapHas(selected, label .. " [dead]") or mapHas(selected, entry.Name)
+                         or mapHas(selected, entry.Name .. " [ALIVE]")
+                         or mapHas(savedBossConfigSel, label)
+                         or mapHas(savedBossConfigSel, entry.EnemyId)
+                         or mapHas(savedBossConfigSel, entry.Name)
+            if matched and entry.IsPresent and entry.Position then
+                local dist = (hrp.Position - entry.Position).Magnitude
+                if dist > 70 then
+                    goToBossConfig(entry)
+                    task.wait(0.4)
+                end
+                local bossModel = entry.EnemyId and findEnemy(entry.EnemyId) or nil
+                if not bossModel and entry.EnemyName then bossModel = findEnemy(entry.EnemyName) end
+                if bossModel and isLive(bossModel) then
+                    lockedTarget = bossModel
+                    currentBossConfig = entry
+                    fightingBoss = true
+                    combatActive = true
+                    lastHpWatch = humRef and humRef.Health
+                    lastBlink = tick_()
+                    return bossModel
+                end
+            end
+        end
+    end
+
+    if not farmOn() then return nil end
+    local top = Options.TopPriorityEnemies and Options.TopPriorityEnemies.Value or savedTopSel
+    local tgt = Options.TargetEnemies and Options.TargetEnemies.Value or savedTargetSel
+    local bosses = Options.BossList and Options.BossList.Value or savedBossSel
+    local hasFilter = mapAny(top) or mapAny(tgt) or mapAny(bosses)
+    local origin = hrp.Position
+    local best, bestDist = nil, 1e9
+    for _, e in ipairs(folder:GetChildren()) do
+        if e:IsA("Model") and isLive(e) then
+            local root = enemyRoot(e)
+            if root then
+                local ident = getEnemyIdentity(e)
+                local allowed = true
+                if hasFilter then
+                    allowed = mapHas(top, ident) or mapHas(tgt, ident) or mapHas(bosses, ident)
+                           or mapHas(top, e.Name) or mapHas(tgt, e.Name) or mapHas(bosses, e.Name)
+                end
+                if allowed then
+                    local d = (root.Position - origin).Magnitude
+                    local prio = EnemyPriority[ident] or EnemyPriority[e.Name] or 0
+                    if mapHas(top, ident) or mapHas(top, e.Name) then d = d * 0.4 end
+                    d = d - (prio * 0.5)
+                    if d < bestDist then best, bestDist = e, d end
+                end
+            end
+        end
+    end
+    if best then
+        lockedTarget = best
+        combatActive = true
+        lastHpWatch = humRef and humRef.Health
+        lastBlink = tick_()
+        return best
+    end
+    if not hasFilter then
+        for _, e in ipairs(folder:GetChildren()) do
+            if e:IsA("Model") and isLive(e) and enemyRoot(e) then
+                lockedTarget = e
+                combatActive = true
+                lastHpWatch = humRef and humRef.Health
+                lastBlink = tick_()
+                return e
+            end
+        end
+    end
+    return nil
+end
+
+local function collectWorldChests()
+    local folder = Workspace:FindFirstChild("WK_Chests")
+    if not folder then return end
+    for _, chest in ipairs(folder:GetChildren()) do
+        if chest:IsA("Model") then
+            local prompt = chest:FindFirstChildWhichIsA("ProximityPrompt", true)
+            local part = chest:FindFirstChild("Body") or chest:FindFirstChildWhichIsA("BasePart", true)
+            if prompt then
+                pcall(firePrompt, prompt, part)
+                task.wait(0.45)
+            end
+        end
+    end
+end
+local function visitIslandsFromRadar()
+    local teleports = getTeleportConfigs()
+    for _, entry in ipairs(teleports) do
+        if fightingBoss then break end
+        if not (Toggles.AutoChest and Toggles.AutoChest.Value) and not (Toggles.LoadIslands and Toggles.LoadIslands.Value) then break end
+        setStatus("Island: " .. (entry.Island or entry.Name))
+        if entry.Island and Toggles.UseTeleportSelect and Toggles.UseTeleportSelect.Value then
+            fireTeleportSelect(entry.Island)
+            task.wait(2.2)
+        else
+            teleportToPosition(entry.Position, 14)
+            task.wait(1.8)
+        end
+        collectWorldChests()
+        task.wait(1.2)
+    end
+end
+local function runChestTrip(doIslands)
+    if not IS_OVERWORLD then return end
+    if chestBusy or fightingBoss then return end
+    chestBusy = true
+    releaseLock()
+    local hrp = getHRP()
+    local savedCF = hrp and hrp.CFrame or nil
+    setStatus("Chest trip")
+    pcall(function()
+        if doIslands then visitIslandsFromRadar() else collectWorldChests() end
+    end)
+    task.wait(0.6)
+    local cur = getHRP()
+    if cur and savedCF then pcall(function() cur.CFrame = savedCF end) end
+    chestBusy = false
+    setStatus("Back from chest")
+end
+
+-- Multi-rarity inventory chests
+local function autoOpenInventoryChests()
+    if not (Toggles.AutoOpenChests and Toggles.AutoOpenChests.Value) then return end
+    local selected = Options.ChestRaritySelect and Options.ChestRaritySelect.Value
+    local count = (Options.ChestAmount and Options.ChestAmount.Value) or 50
+    if type(selected) ~= "table" or not mapAny(selected) then
+        fireChestOpen(3, count) -- default legendary
+        return
+    end
+    for name, on in pairs(selected) do
+        if on == true then
+            local rarity = CHEST_RARITY_MAP[name]
+            if rarity then
+                fireChestOpen(rarity, count)
+                task.wait(0.15)
+            end
+        end
+    end
+end
+
+local function handleAutoShopBuy()
+    if not IS_OVERWORLD then return end
+    local now = tick_()
+    if now - lastShopBuy < 8 then return end
+    lastShopBuy = now
+    if Toggles.AutoBuyMaterial and Toggles.AutoBuyMaterial.Value then
+        local name = Options.MaterialSelect and Options.MaterialSelect.Value
+        local count = Options.MaterialCount and Options.MaterialCount.Value or 10
+        if name then fireMaterialBuy(name, count) end
+    end
+    if Toggles.AutoBuyBroom and Toggles.AutoBuyBroom.Value then
+        local name = Options.BroomSelect and Options.BroomSelect.Value
+        if name then fireBroomBuy(name) end
+    end
+    if Toggles.AutoBuyBook and Toggles.AutoBuyBook.Value then
+        local name = Options.BookSelect and Options.BookSelect.Value
+        if name then fireStockBuy(name) end
+    end
+end
+
+local function getChestPrompt(objectText)
+    local folder = Workspace:FindFirstChild("WK_DungeonChests")
+    if not folder then return nil, nil end
+    for _, inst in ipairs(folder:GetDescendants()) do
+        if inst:IsA("ProximityPrompt") and tostring(inst.ObjectText) == objectText then
+            return inst, inst.Parent
+        end
+    end
+    return nil, nil
+end
+local function getVaultPrompt()
+    local vault = Workspace:FindFirstChild("DungeonArea") and Workspace.DungeonArea:FindFirstChild("ElementalVault")
+    if not vault then return nil, nil end
+    return vault:FindFirstChild("WK_VaultPrompt", true), vault
+end
+local function triggerPromptFew(prompt, part, times)
+    times = times or 3
+    for _ = 1, times do
+        if shouldAbortDungeon() then return end
+        firePrompt(prompt, part)
+        task.wait(0.35)
+    end
+end
+local function goVaultAndTrigger(times)
+    times = times or 3
+    local vaultPrompt, vaultModel = getVaultPrompt()
+    if not vaultPrompt then return end
+    local part = vaultModel and (vaultModel:FindFirstChild("WK_VaultPrompt") or vaultModel.PrimaryPart)
+    local hrp = getHRP()
+    if hrp and part and part:IsA("BasePart") then
+        hrp.CFrame = cf(part.Position + v3(0, 4, 0))
+        task.wait(0.3)
+    end
+    triggerPromptFew(vaultPrompt, part, times)
+end
+local function clearAllEnemies(timeout)
+    timeout = timeout or 90
+    local deadline = tick_() + timeout
+    while tick_() < deadline do
+        if shouldAbortDungeon() then return end
+        local target = nil
+        local folder = enemiesFolder()
+        if folder then
+            for _, prefer in ipairs({"RedWitch", "ZombieBoss", "Zombie"}) do
+                for _, e in ipairs(folder:GetChildren()) do
+                    if e:IsA("Model") and isLive(e) and (e.Name == prefer or getEnemyIdentity(e) == prefer) then
+                        target = e
+                        break
+                    end
+                end
+                if target then break end
+            end
+            if not target then
+                for _, e in ipairs(folder:GetChildren()) do
+                    if e:IsA("Model") and isLive(e) then target = e break end
+                end
+            end
+        end
+        if not target then break end
+        combatOrbit(target, true)
+        task.wait(0.05)
+    end
+end
+
+-- CORRECT Spirit Dungeon sequence
+local function runSpiritDungeonSequence()
+    if dungeonBusy then return end
+    dungeonBusy = true
+    clearDungeonCancel()
+    setStatus("Dungeon start")
+
+    -- 1) Wind Chest
+    local windPrompt, windBody = getChestPrompt("Wind Chest")
+    if windPrompt then
+        setStatus("1. Wind Chest")
+        local hrp = getHRP()
+        if hrp and windBody and windBody:IsA("BasePart") then
+            hrp.CFrame = cf(windBody.Position + v3(0, 3, 0))
+            task.wait(0.3)
+        end
+        triggerPromptFew(windPrompt, windBody, 3)
+    end
+    if shouldAbortDungeon() then dungeonBusy = false return end
+
+    -- 2) Wait for Zombies and clear them
+    setStatus("2. Waiting for Zombies...")
+    task.wait(1.2)
+    local waited = 0
+    while waited < 8 do
+        if shouldAbortDungeon() then dungeonBusy = false return end
+        if countByName("Zombie") > 0 or countByName("ZombieBoss") > 0 then break end
+        task.wait(0.5)
+        waited = waited + 0.5
+    end
+    if countByName("Zombie") > 0 or countByName("ZombieBoss") > 0 then
+        setStatus("2. Clearing Zombies")
+        clearAllEnemies(70)
+    end
+    if shouldAbortDungeon() then dungeonBusy = false return end
+
+    -- 3) Retrigger Wind Chest
+    windPrompt, windBody = getChestPrompt("Wind Chest")
+    if windPrompt then
+        setStatus("3. Retrigger Wind Chest")
+        local hrp = getHRP()
+        if hrp and windBody and windBody:IsA("BasePart") then
+            hrp.CFrame = cf(windBody.Position + v3(0, 3, 0))
+            task.wait(0.25)
+        end
+        triggerPromptFew(windPrompt, windBody, 2)
+    end
+    if shouldAbortDungeon() then dungeonBusy = false return end
+
+    -- 4) Vault
+    setStatus("4. Vault")
+    goVaultAndTrigger(3)
+    if shouldAbortDungeon() then dungeonBusy = false return end
+
+    -- 5) Fire Chest
+    local firePrompt, fireBody = getChestPrompt("Fire Chest")
+    if firePrompt then
+        setStatus("5. Fire Chest")
+        local hrp = getHRP()
+        if hrp and fireBody and fireBody:IsA("BasePart") then
+            hrp.CFrame = cf(fireBody.Position + v3(0, 3, 0))
+            task.wait(0.3)
+        end
+        triggerPromptFew(firePrompt, fireBody, 2)
+    end
+    if shouldAbortDungeon() then dungeonBusy = false return end
+
+    -- 6) Vault
+    setStatus("6. Vault")
+    goVaultAndTrigger(3)
+    if shouldAbortDungeon() then dungeonBusy = false return end
+
+    -- 7) Water boss area → RedWitch spawns when you arrive
+    setStatus("7. Water boss area (spawn RedWitch)")
+    local bossesFolder = Workspace:FindFirstChild("DungeonArea") and Workspace.DungeonArea:FindFirstChild("Bosses")
+    if bossesFolder then
+        local waterPad = bossesFolder:FindFirstChild("WaterBoss")
+        if waterPad then
+            local part = waterPad:IsA("BasePart") and waterPad or waterPad:FindFirstChildWhichIsA("BasePart")
+            if part then
+                local hrp = getHRP()
+                if hrp then hrp.CFrame = cf(part.Position + v3(0, 5, 0)) end
+                task.wait(1.0) -- give time for RedWitch to spawn
+            end
+        end
+    end
+
+    -- 8) Defeat RedWitch
+    setStatus("8. Defeat RedWitch")
+    local deadline = tick_() + 100
+    while tick_() < deadline do
+        if shouldAbortDungeon() then break end
+        local witch = findEnemy("RedWitch")
+        if witch and isLive(witch) then
+            combatOrbit(witch, true)
+        else
+            -- if no witch and no other enemies, done with this phase
+            local any = false
+            local folder = enemiesFolder()
+            if folder then
+                for _, e in ipairs(folder:GetChildren()) do
+                    if e:IsA("Model") and isLive(e) then any = true break end
+                end
+            end
+            if not any then break end
+            clearAllEnemies(15)
+        end
+        task.wait(0.05)
+    end
+    if shouldAbortDungeon() then dungeonBusy = false return end
+
+    -- 9) Vault after RedWitch key drop
+    setStatus("9. Vault (RedWitch key)")
+    goVaultAndTrigger(4)
+    if shouldAbortDungeon() then dungeonBusy = false return end
+
+    -- 10) Final boss ONLY after vault
+    setStatus("10. Final boss")
+    if bossesFolder then
+        local finalPad = bossesFolder:FindFirstChild("FinalBoss")
+        if finalPad then
+            local part = finalPad:IsA("BasePart") and finalPad or finalPad:FindFirstChildWhichIsA("BasePart")
+            if part then
+                local hrp = getHRP()
+                if hrp then hrp.CFrame = cf(part.Position + v3(0, 5, 0)) end
+            end
+        end
+    end
+    task.wait(0.5)
+    local hrp = getHRP()
+    if hrp then hrp.CFrame = hrp.CFrame + v3(0, 50, 0) end
+    clearAllEnemies(120)
+
+    goVaultAndTrigger(2)
+    setStatus("Dungeon complete")
+    dungeonBusy = false
+end
+
+local function runDevilDungeon()
+    if not IS_DEVIL then return end
+    local folder = enemiesFolder()
+    if not folder then return end
+    for _, e in ipairs(folder:GetChildren()) do
+        if e:IsA("Model") and isLive(e) then
+            combatOrbit(e, true)
+            return
+        end
+    end
+    setStatus("Devil clear")
+end
+
+local function oneButtonDebug()
+    print("========== Hybrid Debug ==========")
+    print("PlaceId=", CURRENT_PLACE)
+    print("Grimoire=", readGrimoireId())
+    print("=================================")
+end
+
+local function unloadAll()
+    requestDungeonCancel()
+    ClaimLoopsEnabled, DropLoopsEnabled, SpinLoopsEnabled = false, false, false
+    combatActive = false
+    setAntiLag(false)
+    setPrune(false)
+    heartbeatConn = disconnectConn(heartbeatConn)
+    idledConn = disconnectConn(idledConn)
+    errConn = disconnectConn(errConn)
+    charConn = disconnectConn(charConn)
+    pruneConn = disconnectConn(pruneConn)
+    dungeonBusy = false
+    releaseLock()
+    pcall(function() Library:Unload() end)
+end
+
+local function addGroupbox(tab, side, name)
+    side = (side == "Right") and "Right" or "Left"
+    if tab.AddGroupbox then
+        local ok, box = pcall(function() return tab:AddGroupbox({ Side = side, Name = name }) end)
+        if ok and box then return box end
+    end
+    if side == "Right" and tab.AddRightGroupbox then
+        local ok, box = pcall(function() return tab:AddRightGroupbox(name) end)
+        if ok and box then return box end
+    end
+    if tab.AddLeftGroupbox then
+        local ok, box = pcall(function() return tab:AddLeftGroupbox(name) end)
+        if ok and box then return box end
+    end
+    return tab:AddLeftGroupbox(name)
+end
+local function rejoinPlace(id)
+    pcall(function() TeleportService:Teleport(id, LocalPlayer) end)
+end
+
+-- UI
+local okUI, uiErr = pcall(function()
+    local Window = Library:CreateWindow({
+        Title = IS_DUNGEON and "Hybrid-E-3 | Spirit Dungeon"
+            or IS_DEVIL and "Hybrid-E-3 | Devil Dungeon"
+            or "Hybrid-E-3 | Overworld",
+        Footer = "v17.3-stable-fix",
+        NotifySide = "Right",
+        ShowCustomCursor = true,
+    })
+
+    if IS_DUNGEON then
+        local Tabs = {
+            Dungeon = Window:AddTab("Spirit Dungeon", "swords"),
+            Claim = Window:AddTab("Claim / Redeem", "gift"),
+            ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
+        }
+        local D = addGroupbox(Tabs.Dungeon, "Left", "Master Automation")
+        D:AddToggle("DungeonMaster", {
+            Text = "Spirit Dungeon Master", Default = false,
+            Callback = function(v)
+                if not v then requestDungeonCancel() combatActive = false setStatus("Dungeon OFF")
+                else clearDungeonCancel() end
+            end,
+        })
+        D:AddToggle("UseRemotes", { Text = "Use Remotes", Default = true })
+        D:AddSlider("OrbitRadius", { Text = "Orbit Radius", Default = 20, Min = 6, Max = 100, Rounding = 0 })
+        D:AddSlider("OrbitHeight", { Text = "Orbit Height", Default = 9, Min = 1, Max = 100, Rounding = 0 })
+        D:AddSlider("OrbitSpeed", { Text = "Orbit Speed", Default = 0.18, Min = 0.05, Max = 0.5, Rounding = 2 })
+        D:AddSlider("BlinkInterval", { Text = "Blink Interval (s)", Default = 3.6, Min = 1.0, Max = 10, Rounding = 1 })
+        D:AddSlider("LowHP", { Text = "Safe HP %", Default = 50, Min = 10, Max = 90, Rounding = 0 })
+        D:AddToggle("UnpredictableBlink", { Text = "Unpredictable Blink", Default = true })
+        D:AddToggle("AutoHealPotion", { Text = "Auto Heal + Mana", Default = true })
+        D:AddButton({
+            Text = "Run Sequence Now",
+            Func = function()
+                if dungeonBusy then return end
+                if not dungeonMasterOn() then pcall(function() Toggles.DungeonMaster:SetValue(true) end) end
+                clearDungeonCancel()
+                task.spawn(runSpiritDungeonSequence)
+            end,
+        })
+        D:AddButton({
+            Text = "Force Stop",
+            Func = function()
+                requestDungeonCancel()
+                if Toggles.DungeonMaster then pcall(function() Toggles.DungeonMaster:SetValue(false) end) end
+            end,
+        })
+        D:AddButton({ Text = "Rejoin Spirit Dungeon", Func = function() rejoinPlace(PLACE_DUNGEON) end })
+        StatusLabel = D:AddLabel("Status: Idle")
+        InfoLabel = D:AddLabel("Wind→Zombies→Wind→Vault→Fire→Vault→RedWitch→Vault→Final")
+
+        local CL = addGroupbox(Tabs.Claim, "Left", "Auto Claim")
+        CL:AddToggle("AutoClaimLoops", {
+            Text = "Enable Claim Loops", Default = false,
+            Callback = function(v) ClaimLoopsEnabled = v end,
+        })
+        CL:AddButton({Text = "Redeem Codes Now", Func = function() task.spawn(redeemAllCodes) end })
+        CL:AddButton({Text = "Claim Daily Now", Func = function() task.spawn(claimDailyOnce) end })
+        CL:AddButton({Text = "Claim PlayTime Now", Func = function() task.spawn(claimPlayTimeOnce) end })
+        CL:AddButton({Text = "Claim Free Now", Func = function() task.spawn(claimFreeOnce) end })
+        CL:AddButton({Text = "Claim Discord Now", Func = function() task.spawn(claimDiscordOnce) end })
+
+        local P = addGroupbox(Tabs["UI Settings"], "Left", "Performance")
+        P:AddToggle("AntiLag", {
+            Text = "Performance Mode", Default = false,
+            Callback = function(v) setAntiLag(v) setPrune(v) end,
+        })
+        local M = addGroupbox(Tabs["UI Settings"], "Right", "Menu")
+        M:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", {
+            Default = "LeftControl", NoUI = true, Text = "Menu keybind",
+        })
+        M:AddButton({Text = "Unload", Func = unloadAll })
+        if Options.MenuKeybind then Library.ToggleKeybind = Options.MenuKeybind end
+
+    elseif IS_DEVIL then
+        local Tabs = {
+            Devil = Window:AddTab("Devil Dungeon", "swords"),
+            Claim = Window:AddTab("Claim / Redeem", "gift"),
+            ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
+        }
+        local D = addGroupbox(Tabs.Devil, "Left", "Devil Farm")
+        D:AddToggle("DevilFarm", { Text = "Auto Clear Enemies", Default = false })
+        D:AddToggle("UseRemotes", { Text = "Use Remotes", Default = true })
+        D:AddSlider("OrbitRadius", { Text = "Orbit Radius", Default = 20, Min = 6, Max = 100, Rounding = 0 })
+        D:AddSlider("OrbitHeight", { Text = "Orbit Height", Default = 14, Min = 1, Max = 100, Rounding = 0 })
+        D:AddSlider("OrbitSpeed", { Text = "Orbit Speed", Default = 0.18, Min = 0.05, Max = 0.5, Rounding = 2 })
+        D:AddSlider("BlinkInterval", { Text = "Blink Interval (s)", Default = 3.6, Min = 1.0, Max = 10, Rounding = 1 })
+        D:AddSlider("LowHP", {Text = "Safe HP %", Default = 50, Min = 10, Max = 90, Rounding = 0 })
+        D:AddToggle("UnpredictableBlink", { Text = "Unpredictable Blink", Default = true })
+        D:AddToggle("AutoHealPotion", { Text = "Auto Heal + Mana", Default = true })
+        D:AddButton({Text = "Rejoin Devil Dungeon", Func = function() if PLACE_DEVIL ~= 0 then rejoinPlace(PLACE_DEVIL) end end })
+        StatusLabel = D:AddLabel("Status: Idle")
+        InfoLabel = D:AddLabel("Fight until clear")
+
+        local CL = addGroupbox(Tabs.Claim, "Left", "Auto Claim")
+        CL:AddToggle("AutoClaimLoops", {
+            Text = "Enable Claim Loops", Default = false,
+            Callback = function(v) ClaimLoopsEnabled = v end,
+        })
+        CL:AddButton({Text = "Redeem Codes Now", Func = function() task.spawn(redeemAllCodes) end })
+        CL:AddButton({Text = "Claim Daily Now", Func = function() task.spawn(claimDailyOnce) end })
+        CL:AddButton({Text = "Claim PlayTime Now", Func = function() task.spawn(claimPlayTimeOnce) end })
+        CL:AddButton({Text = "Claim Free Now", Func = function() task.spawn(claimFreeOnce) end })
+        CL:AddButton({Text = "Claim Discord Now", Func = function() task.spawn(claimDiscordOnce) end })
+
+        local P = addGroupbox(Tabs["UI Settings"], "Left", "Performance")
+        P:AddToggle("AntiLag", {
+            Text = "Performance Mode", Default = false,
+            Callback = function(v) setAntiLag(v) setPrune(v) end,
+        })
+        local M = addGroupbox(Tabs["UI Settings"], "Right", "Menu")
+        M:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", {
+            Default = "LeftControl", NoUI = true, Text = "Menu keybind",
+        })
+        M:AddButton({Text = "Unload", Func = unloadAll })
+        if Options.MenuKeybind then Library.ToggleKeybind = Options.MenuKeybind end
+
+    else
+        -- OVERWORLD
+        local Tabs = {
+            Main     = Window:AddTab("Main", "user"),
+            Bosses   = Window:AddTab("Bosses", "swords"),
+            Grimoire = Window:AddTab("Grimoire", "book"),
+            Shop     = Window:AddTab("Shop", "shopping-cart"),
+            Craft    = Window:AddTab("Craft", "hammer"),
+            Claim    = Window:AddTab("Claim / Redeem", "gift"),
+            Stats    = Window:AddTab("Stats", "bar-chart"),
+            ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
+        }
+
+        local C = addGroupbox(Tabs.Main, "Left", "Combat")
+        C:AddToggle("AutoFarm", {
+            Text = "Auto Farm", Default = false,
+            Callback = function(v) if not v then combatActive = false releaseLock() end end,
+        })
+        C:AddToggle("UseRemotes", { Text = "Use Remotes", Default = true })
+        C:AddDropdown("TopPriorityEnemies", {
+            Values = {}, Default = {}, Multi = true, Text = "Top Priority", Searchable = true,
+        })
+        C:AddDropdown("TargetEnemies", {
+            Values = {}, Default = {}, Multi = true, Text = "Targets", Searchable = true,
+        })
+        C:AddDropdown("AutoSkills", {
+            Values = {"None"}, Default = {}, Multi = true, Text = "Skills (while farming)", Searchable = true,
+        })
+        C:AddSlider("OrbitRadius", { Text = "Orbit Radius", Default = 20, Min = 6, Max = 100, Rounding = 0 })
+        C:AddSlider("OrbitHeight", { Text = "Orbit Height", Default = 15, Min = 1, Max = 100, Rounding = 0 })
+        C:AddSlider("OrbitSpeed", { Text = "Orbit Speed", Default = 0.18, Min = 0.05, Max = 0.5, Rounding = 2 })
+        C:AddSlider("BlinkInterval", { Text = "Blink Interval (s)", Default = 3.5, Min = 1.0, Max = 10, Rounding = 1 })
+        C:AddSlider("LowHP", {Text = "Safe HP %", Default = 50, Min = 10, Max = 90, Rounding = 0 })
+        C:AddToggle("UnpredictableBlink", { Text = "Unpredictable Blink", Default = true })
+        C:AddToggle("AutoHealPotion", { Text = "Auto Heal + Mana on low HP", Default = true })
+        C:AddToggle("AutoManaPotion", {Text = "Auto Mana Potion (every 5 min)", Default = true })
+        StatusLabel = C:AddLabel("Status: Idle")
+        InfoLabel = C:AddLabel("Select enemies / bosses")
+
+        local R = addGroupbox(Tabs.Main, "Right", "World / Chests")
+        R:AddToggle("AutoChest", { Text = "Auto Chest (slow/safe)", Default = false })
+        R:AddToggle("LoadIslands", { Text = "Load Islands (Teleport_*)", Default = false })
+        R:AddToggle("UseTeleportSelect", { Text = "Use TeleportSelect for Islands", Default = true })
+        R:AddSlider("ChestCooldown", { Text = "Chest Cooldown (s)", Default = 70, Min = 30, Max = 180, Rounding = 0 })
+        R:AddSlider("IslandInterval", {Text = "Island Interval (s)", Default = 120, Min = 60, Max = 300, Rounding = 0 })
+        R:AddButton({
+            Text = "Force Chest + Island Trip",
+            Func = function()
+                if chestBusy or fightingBoss then return end
+                task.spawn(function()
+                    pcall(runChestTrip, Toggles.LoadIslands and Toggles.LoadIslands.Value)
+                end)
+            end,
+        })
+        R:AddButton({Text = "Refresh Enemy List", Func = function() refreshEnemies(true) end })
+        R:AddButton({Text = "1-Button Debug", Func = oneButtonDebug })
+
+        local B = addGroupbox(Tabs.Bosses, "Left", "Boss Config Priority")
+        B:AddToggle("BossFarm", {Text = "Enable Boss Priority Farm", Default = false })
+        B:AddDropdown("BossConfigList", {
+            Values = {"None"}, Default = {}, Multi = true,
+            Text = "Boss Configs (selection saved)", Searchable = true,
+        })
+        B:AddDropdown("BossList", {
+            Values = {}, Default = {}, Multi = true, Text = "Extra Boss Names", Searchable = true,
+        })
+        B:AddDropdown("DodgeBossList", {
+            Values = {"Gorath","CrystalTyrant","Mars","RoyalGuardBoss","VenomBoss","Vetto"},
+            Default = {Gorath = true, CrystalTyrant = true}, Multi = true,
+            Text = "Wide-Orbit Bosses", Searchable = true,
+        })
+        B:AddButton({
+            Text = "Refresh Boss Configs",
+            Func = function()
+                refreshBossConfigs()
+                refreshEnemies(true)
+                setStatus("Boss configs refreshed")
+            end,
+        })
+        B:AddButton({
+            Text = "TP to First Selected Alive Boss",
+            Func = function()
+                local selected = Options.BossConfigList and Options.BossConfigList.Value
+                if not mapAny(selected) then return end
+                local all = getAllBossConfigs()
+                for _, entry in ipairs(all) do
+                    local label = entry.EnemyName or entry.EnemyId or entry.Name
+                    if entry.IsPresent and (mapHas(selected, label) or mapHas(selected, label .. " [ALIVE]")
+                        or mapHas(selected, entry.Name) or mapHas(selected, entry.Name .. " [ALIVE]")) then
+                        goToBossConfig(entry)
+                        break
+                    end
+                end
+            end,
+        })
+
+        local BI = addGroupbox(Tabs.Bosses, "Right", "Island Quick TP")
+        BI:AddDropdown("IslandSelect", {
+            Values = ISLANDS, Default = 1, Multi = false, Text = "Island", Searchable = true,
+        })
+        BI:AddButton({
+            Text = "TeleportSelect Island",
+            Func = function()
+                local island = Options.IslandSelect and Options.IslandSelect.Value
+                if island then fireTeleportSelect(island) setStatus("TP → " .. tostring(island)) end
+            end,
+        })
+        BI:AddButton({
+            Text = "Visit All Teleport Positions",
+            Func = function()
+                task.spawn(function()
+                    visitIslandsFromRadar()
+                    setStatus("Finished Teleport sweep")
+                end)
+            end,
+        })
+
+        local G = addGroupbox(Tabs.Grimoire, "Left", "Spin & Drop")
+        G:AddToggle("AutoSpin", {
+            Text = "Auto Spin", Default = false,
+            Callback = function(v) SpinLoopsEnabled = v end,
+        })
+        G:AddToggle("AutoDrop", {
+            Text = "Auto Drop Grimoire", Default = false,
+            Callback = function(v) DropLoopsEnabled = v end,
+        })
+        G:AddDropdown("DropGrimoireList", {
+            Values = GRIMOIRES, Default = {}, Multi = true, Text = "Drop These", Searchable = true,
+        })
+        G:AddDropdown("WantedDrops", {
+            Values = GRIMOIRES, Default = {}, Multi = true, Text = "Keep / Wanted", Searchable = true,
+        })
+        G:AddDropdown("TargetGrimoire", {
+            Values = GRIMOIRES, Default = {}, Multi = true, Text = "Target Grimoires (stop spin)", Searchable = true,
+        })
+        G:AddToggle("SpinUntilTarget", { Text = "Stop Spin on Target", Default = false })
+        G:AddButton({
+            Text = "Force Drop Current",
+            Func = function()
+                local id = readGrimoireId()
+                if id then dropGrimoireByName(id) setStatus("Force dropped: " .. id) end
+            end,
+        })
+        SpinLabel = G:AddLabel("Spins: 0")
+
+        local GC = addGroupbox(Tabs.Grimoire, "Right", "Inventory Chests")
+        GC:AddToggle("AutoOpenChests", {Text = "Auto Open Inventory Chests", Default = false })
+        GC:AddDropdown("ChestRaritySelect", {
+            Values = {"Common", "Rare", "Legendary", "Mythic"},
+            Default = {Legendary = true},
+            Multi = true,
+            Text = "Rarities (select one or all)",
+        })
+        GC:AddSlider("ChestAmount", {
+            Text = "Amount per rarity", Default = 50, Min = 1, Max = 100, Rounding = 0,
+        })
+        GC:AddButton({
+            Text = "Open Selected Chests Now",
+            Func = function()
+                autoOpenInventoryChests()
+                setStatus("Opened selected inventory chests")
+            end,
+        })
+
+        local SH = addGroupbox(Tabs.Shop, "Left", "Buy")
+        SH:AddDropdown("MaterialSelect", {
+            Values = MATERIALS, Default = 1, Multi = false, Text = "Material",
+        })
+        SH:AddSlider("MaterialCount", {
+            Text = "Material Count", Default = 10, Min = 1, Max = 999, Rounding = 0,
+        })
+        SH:AddToggle("AutoBuyMaterial", {Text = "Auto Buy Material", Default = false })
+        SH:AddButton({
+            Text = "Buy Material Now",
+            Func = function()
+                local name = Options.MaterialSelect and Options.MaterialSelect.Value
+                local count = Options.MaterialCount and Options.MaterialCount.Value or 10
+                if name then fireMaterialBuy(name, count) end
+            end,
+        })
+        SH:AddDropdown("BroomSelect", {
+            Values = BROOMS, Default = 1, Multi = false, Text = "Broom",
+        })
+        SH:AddToggle("AutoBuyBroom", {Text = "Auto Buy Broom", Default = false })
+        SH:AddButton({
+            Text = "Buy Broom Now",
+            Func = function()
+                local name = Options.BroomSelect and Options.BroomSelect.Value
+                if name then fireBroomBuy(name) end
+            end,
+        })
+        SH:AddDropdown("BookSelect", {
+            Values = GRIMOIRES, Default = 1, Multi = false, Text = "Book",
+        })
+        SH:AddToggle("AutoBuyBook", {Text = "Auto Buy Book", Default = false })
+        SH:AddButton({
+            Text = "Buy Book Now",
+            Func = function()
+                local name = Options.BookSelect and Options.BookSelect.Value
+                if name then fireStockBuy(name) end
+            end,
+        })
+
+        local CR = addGroupbox(Tabs.Craft, "Left", "Cosmetics")
+        CR:AddDropdown("CosmeticSelect", {
+            Values = COSMETICS, Default = 1, Multi = false, Text = "Cosmetic",
+        })
+        CR:AddButton({
+            Text = "Craft Cosmetic",
+            Func = function()
+                local name = Options.CosmeticSelect and Options.CosmeticSelect.Value
+                if name then fireCraftCosmetic(name) end
+            end,
+        })
+
+        local CL = addGroupbox(Tabs.Claim, "Left", "Auto Claim Loops")
+        CL:AddToggle("AutoClaimLoops", {
+            Text = "Enable Claim Loops", Default = false,
+            Callback = function(v)
+                ClaimLoopsEnabled = v
+                if v and Toggles.AutoRedeem and Toggles.AutoRedeem.Value then
+                    task.spawn(redeemAllCodes)
+                end
+            end,
+        })
+        CL:AddToggle("AutoRedeem", {Text = "Auto Redeem when Claim turns ON", Default = true })
+        CL:AddButton({Text = "Redeem Codes Now", Func = function() task.spawn(redeemAllCodes) end })
+        CL:AddButton({Text = "Claim Daily Now", Func = function() task.spawn(claimDailyOnce) end })
+        CL:AddButton({Text = "Claim PlayTime Now", Func = function() task.spawn(claimPlayTimeOnce) end })
+        CL:AddButton({Text = "Claim Free Now", Func = function() task.spawn(claimFreeOnce) end })
+        CL:AddButton({Text = "Claim Discord Now", Func = function() task.spawn(claimDiscordOnce) end })
+
+        local CLR = addGroupbox(Tabs.Claim, "Right", "Chest / Island + Codes")
+        CLR:AddToggle("AutoChest", {Text = "Auto Chest", Default = false })
+        CLR:AddToggle("LoadIslands", {Text = "Load Islands with Auto Chest", Default = false })
+        CLR:AddButton({
+            Text = "Force Chest + Island Trip Now",
+            Func = function()
+                if chestBusy or fightingBoss then return end
+                task.spawn(function()
+                    pcall(runChestTrip, Toggles.LoadIslands and Toggles.LoadIslands.Value)
+                end)
+            end,
+        })
+        CLR:AddLabel("HAPPYDIWALI / DEVILDUNGEON / DEVILGEMS")
+        CLR:AddLabel("DEVILRACE / DEVILTRAITS")
+
+        local S = addGroupbox(Tabs.Stats, "Left", "Stats")
+        S:AddDropdown("SelectedStats", {
+            Values = STAT_NAMES, Default = {}, Multi = true, Text = "Stats",
+        })
+        S:AddToggle("AutoStat", {Text = "Auto Stat", Default = false })
+        S:AddSlider("AutoStatAmount", {Text = "Amount", Default = 8, Min = 1, Max = 999, Rounding = 0 })
+        S:AddSlider("StatInterval", {Text = "Interval", Default = 1.5, Min = 0.6, Max = 10, Rounding = 1 })
+
+        local P = addGroupbox(Tabs["UI Settings"], "Left", "Performance")
+        P:AddToggle("AntiLag", {
+            Text = "Performance Mode", Default = false,
+            Callback = function(v) setAntiLag(v) setPrune(v) end,
+        })
+        local M = addGroupbox(Tabs["UI Settings"], "Right", "Menu")
+        M:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", {
+            Default = "LeftControl", NoUI = true, Text = "Menu keybind",
+        })
+        M:AddButton({Text = "Unload", Func = unloadAll })
+        if Options.MenuKeybind then Library.ToggleKeybind = Options.MenuKeybind end
+
+        pcall(function()
+            if Options.WantedDrops then
+                Options.WantedDrops:SetValue({
+                    Light = true, Dark = true, AntiMagic = true,
+                    WorldTree = true, Star = true, Time = true,
+                })
+            end
+            if Options.DropGrimoireList then
+                Options.DropGrimoireList:SetValue({
+                    Fire = true, Water = true, Earth = true, Wind = true,
+                    Poison = true, Chain = true, Plant = true,
+                    Lightning = true, Mercury = true,
+                })
+            end
+            if Options.SelectedStats then
+                Options.SelectedStats:SetValue({
+                    Magic = true, ManaCapacity = true, Defense = true,
+                })
+            end
+            if Options.ChestRaritySelect then
+                Options.ChestRaritySelect:SetValue({ Legendary = true })
+            end
+        end)
+    end
+
+    pcall(function()
+        if ThemeManager and SaveManager and ThemeManager.SetLibrary then
+            ThemeManager:SetLibrary(Library)
+            SaveManager:SetLibrary(Library)
+            if SaveManager.IgnoreThemeSettings then SaveManager:IgnoreThemeSettings() end
+            if SaveManager.SetIgnoreIndexes then SaveManager:SetIgnoreIndexes({"MenuKeybind"}) end
+            if ThemeManager.SetFolder then ThemeManager:SetFolder("HybridE3") end
+            if SaveManager.SetFolder then SaveManager:SetFolder("HybridE3/configs") end
+            if SaveManager.LoadAutoloadConfig then SaveManager:LoadAutoloadConfig() end
+        end
+    end)
+end)
+
+if not okUI then
+    warn("[Hybrid] UI failed:", uiErr)
+    print("[Hybrid] Exact UI error:", tostring(uiErr))
+    return
+end
+uiReady = true
+print("[Hybrid] UI ready")
+
+startClaimLoop()
+startDropLoop()
+startSpinLoop()
+
+if IS_OVERWORLD then
+    task.defer(function()
+        task.wait(1.0)
+        pcall(refreshEnemies, true)
+        pcall(refreshSkills, true)
+        pcall(refreshBossConfigs)
+    end)
+end
+
+local function stepOverworld()
+    local now = tick_()
+    if now - lastEnemyRef >= 2.5 then lastEnemyRef = now pcall(refreshEnemies, false) end
+    if now - lastSkillRef >= 2.5 then lastSkillRef = now pcall(refreshSkills, false) end
+    if now - lastBossRef  >= 4.5 then lastBossRef  = now pcall(refreshBossConfigs) end
+
+    handlePotions()
+    handleAutoShopBuy()
+
+    if Toggles.AutoOpenChests and Toggles.AutoOpenChests.Value and (now - lastChestOpen) >= 30 then
+        lastChestOpen = now
+        autoOpenInventoryChests()
+    end
+
+    if chestBusy then return end
+
+    if not fightingBoss and Toggles.AutoChest and Toggles.AutoChest.Value then
+        local chestCD = (Options.ChestCooldown and Options.ChestCooldown.Value) or 70
+        local islandCD = (Options.IslandInterval and Options.IslandInterval.Value) or 120
+        local islandDue = Toggles.LoadIslands and Toggles.LoadIslands.Value and (now - lastIsland) >= islandCD
+        local chestDue = (now - lastChest) >= chestCD
+        if chestDue or islandDue then
+            lastChest = now
+            if islandDue then lastIsland = now end
+            task.spawn(function()
+                pcall(runChestTrip, Toggles.LoadIslands and Toggles.LoadIslands.Value)
+            end)
+            return
+        end
+    end
+
+    if Toggles.AutoStat and Toggles.AutoStat.Value and now - lastStat >= ((Options.StatInterval and Options.StatInterval.Value) or 1.5) then
+        lastStat = now
+        local picked = Options.SelectedStats and Options.SelectedStats.Value
+        local amount = (Options.AutoStatAmount and Options.AutoStatAmount.Value) or 8
+        if type(picked) == "table" then
+            for stat, on in pairs(picked) do
+                if on == true then fireRemote("AssignStatPoint", stat, amount) end
+            end
+        end
+    end
+
+    if SpinLoopsEnabled and Toggles.SpinUntilTarget and Toggles.SpinUntilTarget.Value then
+        local id = readGrimoireId()
+        if id and mapHas(Options.TargetGrimoire and Options.TargetGrimoire.Value, id) then
+            SpinLoopsEnabled = false
+            if Toggles.AutoSpin then pcall(function() Toggles.AutoSpin:SetValue(false) end) end
+        end
+    end
+
+    if not farmOn() and not bossFarmOn() then
+        if combatActive then releaseLock() end
+        setStatus("Status: Idle")
+        return
+    end
+
+    if not bookOpen() then
+        if now - lastEquip > 0.9 then
+            pressKey(Enum.KeyCode.Three)
+            lastEquip = now
+        end
+        setStatus("Status: equip book")
+        return
+    end
+
+    local target = acquireTargetOverworld()
+    if not target then
+        setStatus("Status: waiting / no target")
+        return
+    end
+    if not enemyRoot(target) then
+        releaseLock()
+        return
+    end
+
+    combatOrbit(target, true)
+
+    if InfoLabel and InfoLabel.SetText then
+        pcall(function()
+            local extra = currentBossConfig and (" | " .. currentBossConfig.Name) or ""
+            InfoLabel:SetText(string.format("Lock: %s%s", getEnemyIdentity(target) or target.Name, extra))
+        end)
+    end
+end
+
+local function stepDungeon()
+    if not dungeonMasterOn() then
+        if dungeonBusy then requestDungeonCancel() end
+        if not dungeonBusy then setStatus("Status: Dungeon idle") end
+        combatActive = false
+        return
+    end
+    if not dungeonBusy then
+        clearDungeonCancel()
+        task.spawn(runSpiritDungeonSequence)
+    end
+end
+
+local function stepDevil()
+    if not devilFarmOn() then
+        setStatus("Status: Devil idle")
+        combatActive = false
+        return
+    end
+    runDevilDungeon()
+end
+
+heartbeatConn = RunService.Heartbeat:Connect(function(dt)
+    if Library.Unloaded then return end
+    stepAccum = stepAccum + dt
+    if stepAccum < 0.05 then return end
+    stepAccum = 0
+    if not uiReady then return end
+    if IS_DUNGEON then
+        pcall(stepDungeon)
+    elseif IS_DEVIL then
+        pcall(stepDevil)
+    elseif IS_OVERWORLD then
+        pcall(stepOverworld)
+    else
+        setStatus("Unknown PlaceId " .. tostring(CURRENT_PLACE))
+    end
+end)
+
+print("[Hybrid-E-3] v17.3-stable-fix loaded")
