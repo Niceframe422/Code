@@ -88,10 +88,10 @@ local Toggles = Library.Toggles
 local GRIMOIRES = {
     "Fire","Wind","Water","Earth","Lightning","Plant","Poison","Chain",
     "WorldTree","Dark","Light","AntiMagic","Star","Time","Mercury",
-    "Blood","Shadow","WindSpirit","Bone","CatShadow"
+    "Blood","Shadow","WindSpirit","Bone","CatShadow","Flame"
 }
 local DROP_GRIMOIRES = {"Fire","Wind","Water","Earth","Lightning","Plant","Poison","Chain","Mercury"}
-local REDEEM_CODES = {"HAPPYDIWALI","DEVILDUNGEON","DEVILGEMS","DEVILRACE","DEVILTRAITS"}
+local REDEEM_CODES = {"HAPPYDIWALI","DEVILDUNGEON","DEVILGEMS","DEVILRACE","DEVILTRAITS","FLAMEGEMS","SADDLEUP","WILDHUNT"}
 local MATERIALS = {"WindSeeds","FireCrystals","ManaShards"}
 local BROOMS = {"WindBroom","NatureBroom","DevilBroom"}
 local COSMETICS = {"BlackBull_Headband","GoldenDawn_Cape"}
